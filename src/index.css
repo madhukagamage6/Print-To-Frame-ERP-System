@@ -1,0 +1,104 @@
+/**
+ * ============================================================
+ * Print To Frame ERP — Stylesheet (Tailwind CSS Source)
+ * ============================================================
+ * 
+ * This is the Tailwind CSS source file. When compiled via
+ * `npm run build`, Tailwind scans src for js/jsx files for class
+ * names and generates the optimized CSS in dist/assets/.
+ * 
+ * The compiled dist/assets/index-DgfS-bfm.css (52KB) contains
+ * the full production stylesheet used by the running app.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #0b0e14; /* Matches surface color */
+}
+
+/* ── Custom scrollbar styling ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ── Custom animations ────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out forwards;
+}
+
+/* ── Portal Login Styles ────────────────────────────────────── */
+.technical-grid {
+  background-image: linear-gradient(rgba(39, 39, 42, 0.5) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(39, 39, 42, 0.5) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+}
+.text-glow {
+  text-shadow: 0 0 15px rgba(0, 218, 243, 0.6), 0 0 5px rgba(0, 218, 243, 0.2);
+}
+
+/* Sidebar scrollbar styling */
+.sidebar-scroll {
+  direction: rtl;
+  overflow-x: hidden !important;
+}
+.sidebar-scroll > * {
+  direction: ltr;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 218, 243, 0.5); /* Primary color */
+}
