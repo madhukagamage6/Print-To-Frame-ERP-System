@@ -62,9 +62,9 @@ export const DEFAULT_PERMISSIONS = {
     agents: none(), calculator: none(), admin: none(),
   },
   Partner: {
-    dashboard: full(), notifications: full(), messages: full(),
-    leads: none(), pipeline: none(), customers: none(), partners: read(),
-    invoices: read(), projects: none(), logistics: none(),
+    dashboard: full(), notifications: full(), messages: none(),
+    leads: none(), pipeline: none(), customers: none(), partners: full(),
+    invoices: none(), projects: none(), logistics: none(),
     agents: none(), calculator: none(), admin: none(),
   },
   Customer: {

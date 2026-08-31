@@ -576,23 +576,23 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
                   {/* Partner Capabilities Grid */}
                   <div className="p-4 bg-surface-container-low rounded-2xl border border-outline space-y-3">
-                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">Active Partner Privileges</h4>
+                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">Active Partner Workspace Privileges</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                       <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
-                        <span className="font-medium text-on-surface">Fabrication Orders</span>
+                        <span className="font-medium text-on-surface">15% Discount QR Kit</span>
                       </div>
                       <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
-                        <span className="font-medium text-on-surface">Invoice Access</span>
+                        <span className="font-medium text-on-surface">5-Min Callback SLA</span>
                       </div>
                       <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
-                        <span className="font-medium text-on-surface">Direct Messaging</span>
+                        <span className="font-medium text-on-surface">Month-End Batch Payouts</span>
                       </div>
                       <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
-                        <span className="font-medium text-on-surface">Partner Directory</span>
+                        <span className="font-medium text-on-surface">Agreements & Vault</span>
                       </div>
                     </div>
                   </div>

@@ -25,6 +25,7 @@ import {
   Bell,
   Sun,
   Moon,
+  Handshake,
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
@@ -248,6 +249,16 @@ function App() {
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
+  // Route Protection for Partner Role (5 Modules Only)
+  useEffect(() => {
+    if (currentUser?.role === 'Partner') {
+      const allowedTabs = ['dashboard', 'notifications', 'partners', 'profile'];
+      if (!allowedTabs.includes(activeTab)) {
+        setActiveTab('partners');
+      }
+    }
+  }, [currentUser, activeTab]);
+
   const [activeTabRaw, setActiveTabRaw] = useState("dashboard");
   const activeTab = activeTabRaw;
   const setActiveTab = (tabId) => {
@@ -342,21 +353,7 @@ function App() {
   const handleMarkLeadInvoicePaid = async (leadId) => {
     if (!leadId) return;
     try {
-      // 1. Update the lead in Firestore and locally
-      const targetLead = leads.find(l => l.id === leadId || l._firestoreId === leadId);
-      if (targetLead) {
-        const leadDocId = targetLead._firestoreId || targetLead.id;
-        const newStage = targetLead.stage === '75% Invoice Submitted' ? 'Received' : targetLead.stage;
-        
-        setLeads(prev => prev.map(lead => (lead.id === leadId || lead._firestoreId === leadId) ? { ...lead, invoicePaid: true, stage: newStage } : lead));
-
-        await updateDocument(COLLECTIONS.LEADS, leadDocId, {
-          invoicePaid: true,
-          stage: newStage
-        });
-      }
-
-      // 2. Find and update any related invoice(s)
+      // 1. Find and update any related invoice(s)
       const relatedInvoices = invoices.filter(inv => inv.leadId === leadId);
       setInvoices(prev => prev.map(inv => 
         inv.leadId === leadId ? { ...inv, status: 'Paid' } : inv
@@ -368,6 +365,42 @@ function App() {
           await updateDocument(COLLECTIONS.INVOICES, invDocId, { status: 'Paid' });
         }
       }
+
+      // 2. Update the lead in Firestore and locally
+      const targetLead = leads.find(l => l.id === leadId || l._firestoreId === leadId);
+      if (targetLead) {
+        const leadDocId = targetLead._firestoreId || targetLead.id;
+        const newStage = targetLead.stage === '75% Invoice Submitted' ? 'Received' : targetLead.stage;
+        
+        // Check if full 100% payment is complete
+        const isPartnerReferral = Boolean(targetLead.partnerId || targetLead.partnerName || targetLead.source === 'Referral');
+        const commRate = Number(targetLead.commissionRate || 0.05);
+        const dealVal = Number(targetLead.value || 0);
+        const commAmount = dealVal * commRate;
+
+        const updatedLeadPayload = {
+          invoicePaid: true,
+          stage: newStage,
+          ...(isPartnerReferral ? { referralStatus: 'Eligible for Payout' } : {})
+        };
+
+        setLeads(prev => prev.map(lead => (lead.id === leadId || lead._firestoreId === leadId) ? { ...lead, ...updatedLeadPayload } : lead));
+        await updateDocument(COLLECTIONS.LEADS, leadDocId, updatedLeadPayload);
+
+        // 3. Emit notification for partner commission eligibility
+        if (isPartnerReferral) {
+          const notif = {
+            id: `notif_comm_${Date.now()}`,
+            title: 'Commission Eligible: Full Payment Cleared',
+            message: `100% payment cleared for client ${targetLead.name || 'Referred Client'} (Deal ${targetLead.id}). Commission of LKR ${commAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} is now eligible for month-end payout!`,
+            date: new Date().toISOString(),
+            type: 'commission',
+            partnerId: targetLead.partnerId || '',
+          };
+          setNotificationsList(prev => [notif, ...prev]);
+        }
+      }
+
       toast.success("Payment recorded and synchronized across Leads & Invoices!");
     } catch (err) {
       console.error("Error syncing paid status to lead/invoices:", err);
@@ -789,80 +822,105 @@ function App() {
         </div>
 
         <nav className={`flex-1 space-y-1 overflow-y-auto sidebar-scroll overflow-x-hidden pt-4 md:pt-0 pb-20 md:pb-0 ${effectivelyCollapsed ? "px-2" : "px-3 md:px-4"}`}>
-          {/* Overview Group */}
-          {(canAccess(currentUser?.role, 'dashboard') || canAccess(currentUser?.role, 'notifications')) && (
-            <NavGroup title="Overview" isOpen={navGroupsOpen.overview} onToggle={() => toggleGroup("overview")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'dashboard') && (
-                <NavLink icon={LayoutDashboard} label="Dashboard" id="dashboard" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+          {currentUser?.role === 'Partner' ? (
+            <div className="space-y-1">
+              <NavLink icon={LayoutDashboard} label="Dashboard" id="dashboard" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+              <NavLink
+                icon={Bell} label="Notifications" id="notifications" activeTab={activeTab}
+                setActiveTab={(id) => { setActiveTab(id); setUnreadNotificationsCount(0); }}
+                badge={unreadNotificationsCount} collapsed={effectivelyCollapsed}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <NavLink icon={Handshake} label="Partner Hub" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+              <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+              <NavLink
+                icon={LogOut}
+                label="Sign Out"
+                id="logout"
+                onClick={handleSignOut}
+                activeTab={activeTab}
+                collapsed={effectivelyCollapsed}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Overview Group */}
+              {(canAccess(currentUser?.role, 'dashboard') || canAccess(currentUser?.role, 'notifications')) && (
+                <NavGroup title="Overview" isOpen={navGroupsOpen.overview} onToggle={() => toggleGroup("overview")} collapsed={effectivelyCollapsed}>
+                  {canAccess(currentUser?.role, 'dashboard') && (
+                    <NavLink icon={LayoutDashboard} label="Dashboard" id="dashboard" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+                  )}
+                  {canAccess(currentUser?.role, 'notifications') && (
+                    <NavLink
+                      icon={Bell} label="Notifications" id="notifications" activeTab={activeTab}
+                      setActiveTab={(id) => { setActiveTab(id); setUnreadNotificationsCount(0); }}
+                      badge={unreadNotificationsCount} collapsed={effectivelyCollapsed}
+                      onNavigate={() => setMobileMenuOpen(false)}
+                    />
+                  )}
+                </NavGroup>
               )}
-              {canAccess(currentUser?.role, 'notifications') && (
+
+              {/* CRM Group */}
+              {(canAccess(currentUser?.role, 'leads') || canAccess(currentUser?.role, 'pipeline')) && (
+                <NavGroup title="CRM" isOpen={navGroupsOpen.crm} onToggle={() => toggleGroup("crm")} collapsed={effectivelyCollapsed}>
+                  {canAccess(currentUser?.role, 'leads') && <NavLink icon={Target} label="Leads" id="leads" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'pipeline') && <NavLink icon={Kanban} label="Deals" id="pipeline" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                </NavGroup>
+              )}
+
+              {/* Databases Group */}
+              {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices')) && (
+                <NavGroup title="Databases" isOpen={navGroupsOpen.databases} onToggle={() => toggleGroup("databases")} collapsed={effectivelyCollapsed}>
+                  {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customers" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partners" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                </NavGroup>
+              )}
+
+              {/* Operations Group */}
+              {(canAccess(currentUser?.role, 'projects') || canAccess(currentUser?.role, 'logistics')) && (
+                <NavGroup title="Operations" isOpen={navGroupsOpen.ops} onToggle={() => toggleGroup("ops")} collapsed={effectivelyCollapsed}>
+                  {canAccess(currentUser?.role, 'projects') && <NavLink icon={Hammer} label="Fabrication Works" id="projects" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'logistics') && <NavLink icon={Truck} label="Logistics" id="logistics" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                </NavGroup>
+              )}
+
+              {/* Tools Group */}
+              {(canAccess(currentUser?.role, 'calculator') || canAccess(currentUser?.role, 'messages')) && (
+                <NavGroup title="Tools" isOpen={navGroupsOpen.tools} onToggle={() => toggleGroup("tools")} collapsed={effectivelyCollapsed}>
+                  {canAccess(currentUser?.role, 'calculator') && <NavLink icon={Calculator} label="Cost Calculator" id="calculator" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'messages') && (
+                    <MessagesNavLink
+                      activeTab={activeTab}
+                      setActiveTab={setActiveTab}
+                      collapsed={effectivelyCollapsed}
+                      onNavigate={() => setMobileMenuOpen(false)}
+                    />
+                  )}
+                </NavGroup>
+              )}
+
+              {/* System & Profile Group */}
+              <NavGroup title="Settings" isOpen={navGroupsOpen.system} onToggle={() => toggleGroup("system")} collapsed={effectivelyCollapsed}>
+                <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+                {canAccess(currentUser?.role, 'admin') && (
+                  <NavLink icon={Shield} label="System Overview" id="admin" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+                )}
                 <NavLink
-                  icon={Bell} label="Notifications" id="notifications" activeTab={activeTab}
-                  setActiveTab={(id) => { setActiveTab(id); setUnreadNotificationsCount(0); }}
-                  badge={unreadNotificationsCount} collapsed={effectivelyCollapsed}
-                  onNavigate={() => setMobileMenuOpen(false)}
-                />
-              )}
-            </NavGroup>
-          )}
-
-          {/* CRM Group */}
-          {(canAccess(currentUser?.role, 'leads') || canAccess(currentUser?.role, 'pipeline')) && (
-            <NavGroup title="CRM" isOpen={navGroupsOpen.crm} onToggle={() => toggleGroup("crm")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'leads') && <NavLink icon={Target} label="Leads" id="leads" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'pipeline') && <NavLink icon={Kanban} label="Deals" id="pipeline" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-            </NavGroup>
-          )}
-
-          {/* Databases Group */}
-          {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices')) && (
-            <NavGroup title="Databases" isOpen={navGroupsOpen.databases} onToggle={() => toggleGroup("databases")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customers" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partners" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-            </NavGroup>
-          )}
-
-          {/* Operations Group */}
-          {(canAccess(currentUser?.role, 'projects') || canAccess(currentUser?.role, 'logistics')) && (
-            <NavGroup title="Operations" isOpen={navGroupsOpen.ops} onToggle={() => toggleGroup("ops")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'projects') && <NavLink icon={Hammer} label="Fabrication Works" id="projects" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'logistics') && <NavLink icon={Truck} label="Logistics" id="logistics" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-            </NavGroup>
-          )}
-
-          {/* Tools Group */}
-          {(canAccess(currentUser?.role, 'calculator') || canAccess(currentUser?.role, 'messages')) && (
-            <NavGroup title="Tools" isOpen={navGroupsOpen.tools} onToggle={() => toggleGroup("tools")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'calculator') && <NavLink icon={Calculator} label="Cost Calculator" id="calculator" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'messages') && (
-                <MessagesNavLink
+                  icon={LogOut}
+                  label="Sign Out"
+                  id="logout"
+                  onClick={handleSignOut}
                   activeTab={activeTab}
-                  setActiveTab={setActiveTab}
                   collapsed={effectivelyCollapsed}
                   onNavigate={() => setMobileMenuOpen(false)}
                 />
-              )}
-            </NavGroup>
+              </NavGroup>
+            </>
           )}
-
-          {/* System & Profile Group */}
-          <NavGroup title="Settings" isOpen={navGroupsOpen.system} onToggle={() => toggleGroup("system")} collapsed={effectivelyCollapsed}>
-            <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
-            {canAccess(currentUser?.role, 'admin') && (
-              <NavLink icon={Shield} label="System Overview" id="admin" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
-            )}
-            <NavLink
-              icon={LogOut}
-              label="Sign Out"
-              id="logout"
-              onClick={handleSignOut}
-              activeTab={activeTab}
-              collapsed={effectivelyCollapsed}
-              onNavigate={() => setMobileMenuOpen(false)}
-            />
-          </NavGroup>
         </nav>
         
         {/* User Session profile and Theme Switcher */}
@@ -1027,6 +1085,10 @@ function App() {
             <Partners
               partners={partners}
               setPartners={setPartners}
+              leads={leads}
+              setLeads={setLeads}
+              invoices={invoices}
+              projects={projects}
               dataStore={dataStore}
               currentUser={currentUser}
             />
