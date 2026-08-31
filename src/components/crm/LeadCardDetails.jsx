@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, User, Building, Phone, Mail, Link, FileText, 
   Trash2, Play, Check, Calculator, MapPin, 
-  FileSpreadsheet, Sparkles, Printer, Save, Clock
+  FileSpreadsheet, Sparkles, Printer, Save, Clock,
+  Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { calculateCost, determineTier } from '../../services/pricingEngine';
@@ -157,11 +158,28 @@ export default function LeadCardDetails({
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceError, setInvoiceError] = useState('');
   const [convertError, setConvertError] = useState('');
+
+  // AI Call Recording Analyzer states
   const [audioFile, setAudioFile] = useState(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState('idle'); // 'idle' | 'reading' | 'validating' | 'compressing' | 'ready' | 'error'
+  const [uploadStageText, setUploadStageText] = useState('');
+  const [preparedAudioData, setPreparedAudioData] = useState(null);
   const [isAnalyzingAudio, setIsAnalyzingAudio] = useState(false);
+  const [audioAnalysisStage, setAudioAnalysisStage] = useState('');
   const [audioAnalysisResult, setAudioAnalysisResult] = useState('');
   const [audioError, setAudioError] = useState('');
   const fileInputRef = useRef(null);
+
+  // Clean up object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      if (audioPreviewUrl) {
+        URL.revokeObjectURL(audioPreviewUrl);
+      }
+    };
+  }, [audioPreviewUrl]);
 
   // Cost calculator fields
   const [calcLength, setCalcLength] = useState(0);
@@ -263,27 +281,29 @@ export default function LeadCardDetails({
     });
   };
 
-  const handleAudioFileChange = (e) => {
+  const handleAudioFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setAudioFile(file);
-      setAudioAnalysisResult('');
-      setAudioError('');
+    if (!file) return;
+
+    // Reset previous audio state
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl);
+      setAudioPreviewUrl(null);
     }
-  };
-
-  // Call analyzer with simple words & emojis requirement
-  const analyzeCallRecording = async () => {
-    if (!audioFile) return;
-
-    setIsAnalyzingAudio(true);
-    setAudioError('');
+    setAudioFile(file);
     setAudioAnalysisResult('');
+    setAudioError('');
+    setPreparedAudioData(null);
+    setUploadProgress(10);
+    setUploadStage('reading');
+    setUploadStageText('Reading audio file...');
 
     try {
-      // ── Determine correct MIME type from the file BEFORE any processing ──
-      // Browser's file.type is unreliable (blank on some OS/browser combos for m4a, mp3).
-      // Fall back to extension-based detection instead of blindly defaulting to audio/wav.
+      // Step 1: Create local preview URL for immediate in-modal playback
+      const previewUrl = URL.createObjectURL(file);
+      setAudioPreviewUrl(previewUrl);
+
+      // Step 2: Validate audio extension and MIME
       const EXTENSION_MIME_MAP = {
         mp3: 'audio/mpeg',
         m4a: 'audio/mp4',
@@ -293,36 +313,105 @@ export default function LeadCardDetails({
         aac: 'audio/aac',
         flac: 'audio/flac',
       };
-      const ext = (audioFile.name || '').split('.').pop()?.toLowerCase();
-      const detectedMime = audioFile.type || EXTENSION_MIME_MAP[ext] || 'audio/mpeg';
+      const ext = (file.name || '').split('.').pop()?.toLowerCase();
+      const detectedMime = file.type || EXTENSION_MIME_MAP[ext] || 'audio/mpeg';
 
-      // ── Compress audio if it's too large for Vercel's 4.5MB body limit ──
-      // Base64 inflates size ~33%, so raw files > ~3MB will exceed the limit.
-      const MAX_RAW_SIZE = 3 * 1024 * 1024; // 3MB
-      let processedFile = audioFile;
+      setUploadProgress(35);
+      setUploadStage('validating');
+      setUploadStageText(`Validated format (${ext?.toUpperCase() || 'Audio'}) • Checking size...`);
+
+      // Micro-pause for smooth visual perception
+      await new Promise(r => setTimeout(r, 200));
+
+      // Step 3: Adaptive compression (if > 2.5MB)
+      const MAX_RAW_SIZE = 2.5 * 1024 * 1024; // 2.5MB
+      let processedBlob = file;
       let finalMime = detectedMime;
+      let isCompressed = false;
 
-      if (audioFile.size > MAX_RAW_SIZE) {
+      if (file.size > MAX_RAW_SIZE) {
+        setUploadProgress(60);
+        setUploadStage('compressing');
+        setUploadStageText(`Optimizing audio to 16kHz speech standard (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+        
         try {
-          processedFile = await downsampleAudio(audioFile);
-          finalMime = 'audio/wav'; // downsampleAudio always outputs WAV
-          console.log(`Audio downsampled: ${(audioFile.size / 1024 / 1024).toFixed(1)}MB → ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`);
+          processedBlob = await downsampleAudio(file);
+          finalMime = 'audio/wav';
+          isCompressed = true;
+          setUploadProgress(80);
+          setUploadStageText(`Optimized ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(processedBlob.size / 1024 / 1024).toFixed(1)}MB (WAV)`);
         } catch (dsErr) {
-          console.warn('Downsampling failed, using original file:', dsErr);
-          processedFile = audioFile;
+          console.warn('Downsampling fallback to original file:', dsErr);
+          processedBlob = file;
           finalMime = detectedMime;
         }
+      } else {
+        setUploadProgress(80);
+        setUploadStageText('Audio size verified • Encoding payload...');
       }
 
-      // 2. Convert audio to base64
+      await new Promise(r => setTimeout(r, 150));
+
+      // Step 4: Convert to Base64
       const reader = new FileReader();
       const base64Promise = new Promise((resolve, reject) => {
         reader.onload = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
       });
-      reader.readAsDataURL(processedFile);
+      reader.readAsDataURL(processedBlob);
       const base64Data = await base64Promise;
 
+      // Step 5: Ready
+      setPreparedAudioData({
+        base64Data,
+        mimeType: finalMime,
+        originalSizeMB: (file.size / 1024 / 1024).toFixed(2),
+        finalSizeMB: (processedBlob.size / 1024 / 1024).toFixed(2),
+        isCompressed,
+        fileName: file.name
+      });
+
+      setUploadProgress(100);
+      setUploadStage('ready');
+      setUploadStageText('Audio ready for AI extraction');
+      toast.success('Audio file verified & ready for analysis');
+    } catch (err) {
+      console.error('Audio ingestion failed:', err);
+      setUploadStage('error');
+      setUploadStageText('Failed to process audio file');
+      setAudioError(err.message || 'Failed to read audio file.');
+    }
+  };
+
+  const resetAudioFile = (e) => {
+    if (e) e.stopPropagation();
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl);
+      setAudioPreviewUrl(null);
+    }
+    setAudioFile(null);
+    setPreparedAudioData(null);
+    setUploadProgress(0);
+    setUploadStage('idle');
+    setUploadStageText('');
+    setAudioAnalysisResult('');
+    setAudioError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Call analyzer with simple words & emojis requirement
+  const analyzeCallRecording = async () => {
+    if (!preparedAudioData || uploadStage !== 'ready') {
+      toast.error('Please wait for the audio file to finish preparing.');
+      return;
+    }
+
+    setIsAnalyzingAudio(true);
+    setAudioError('');
+    setAudioAnalysisResult('');
+    setAudioAnalysisStage('Dispatching audio payload to Gemini AI...');
+
+    try {
       const clientInfo = { name: formData.name, company: formData.company };
       
       // Prompt for clean, professional technical engineering specification
@@ -332,15 +421,24 @@ export default function LeadCardDetails({
         Format specifications with clear technical bullet points (e.g. Dimensions, Steel Gauge, Material Type, Finish, Timeline).
       `;
       
-      const result = await extractCallScope(base64Data, finalMime, instructions, clientInfo);
+      setAudioAnalysisStage('Gemini AI is transcribing Sinhala/English speech & extracting specs...');
+      const result = await extractCallScope(
+        preparedAudioData.base64Data, 
+        preparedAudioData.mimeType, 
+        instructions, 
+        clientInfo
+      );
+
       if (result && result.scope) {
         result.scope = sanitizeTechnicalScope(result.scope);
       }
       setAudioAnalysisResult(result);
+      toast.success('AI extracted engineering scope successfully!');
     } catch (err) {
       setAudioError(err.message || 'Failed to analyze audio recording.');
     } finally {
       setIsAnalyzingAudio(false);
+      setAudioAnalysisStage('');
     }
   };
 
@@ -852,60 +950,149 @@ export default function LeadCardDetails({
 
             {/* OPTIMIZATION 5: Visual Audio Recording Scope Analyzer */}
             <div className="p-6 bg-error/10 rounded-2xl border border-error/30 space-y-4">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-error text-on-error text-on-surface rounded-xl">
-                  <Sparkles size={16} />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="p-2 bg-error text-on-error rounded-xl">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">AI Call Recording Analyzer</h3>
+                    <p className="text-[10px] text-on-surface-variant font-medium">Extract simple, visual scope drafts from caller recordings</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">AI Call Recording Analyzer</h3>
-                  <p className="text-[10px] text-on-surface-variant font-medium">Extract simple, visual scope drafts from caller recordings</p>
-                </div>
+                {audioFile && (
+                  <button 
+                    onClick={resetAudioFile}
+                    className="text-[10px] font-bold text-on-surface-variant hover:text-error flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-lg border border-outline-variant/60 transition-colors"
+                    title="Change / Remove Audio File"
+                  >
+                    <RefreshCw size={10} /> Replace File
+                  </button>
+                )}
               </div>
 
               <input 
                 ref={fileInputRef}
                 type="file"
-                accept="audio/*"
+                accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac"
                 onChange={handleAudioFileChange}
                 className="hidden"
               />
 
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-error/30 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:bg-error/10 hover:border-error/30 transition-all group"
-              >
-                {audioFile ? (
-                  <div className="text-center">
-                    <Play size={24} className="text-error mx-auto mb-2 animate-pulse" />
-                    <p className="text-xs font-bold text-on-surface">{audioFile.name}</p>
-                    <p className="text-[9px] text-on-surface-variant mt-1">{(audioFile.size / 1024 / 1024).toFixed(2)} MB - click to change</p>
+              {!audioFile ? (
+                /* Empty Dropzone State */
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-error/30 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-error/10 hover:border-error/50 transition-all group"
+                >
+                  <div className="text-center space-y-1.5">
+                    <div className="w-10 h-10 rounded-xl bg-error/15 text-error flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                      <Music size={20} />
+                    </div>
+                    <p className="text-xs font-bold text-on-surface group-hover:text-error transition-colors">Attach telephone call recording</p>
+                    <p className="text-[10px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG, AAC up to 25MB • Auto-optimized</p>
                   </div>
-                ) : (
-                  <div className="text-center space-y-1">
-                    <Sparkles size={24} className="text-error mx-auto group-hover:text-error transition-colors" />
-                    <p className="text-xs font-bold text-on-surface-variant group-hover:text-on-surface">Attach telephone call recording</p>
-                    <p className="text-[9px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG up to 20MB</p>
+                </div>
+              ) : (
+                /* File Ingestion & Preparation Stage */
+                <div className="p-4 bg-surface-container-low rounded-xl border border-outline-variant space-y-3">
+                  {/* File Info Bar */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-error/15 text-error rounded-lg flex-shrink-0">
+                        <Volume2 size={14} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-on-surface truncate">{audioFile.name}</p>
+                        <p className="text-[9px] text-on-surface-variant font-mono">
+                          Original: {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                          {preparedAudioData?.isCompressed && (
+                            <span className="text-primary font-bold ml-1.5">
+                              → Optimized: {preparedAudioData.finalSizeMB} MB (16kHz WAV)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    {uploadStage === 'ready' && (
+                      <span className="flex-shrink-0 inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                        <CheckCircle2 size={10} /> Ready
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
 
+                  {/* Upload & Compression Progress Bar */}
+                  {uploadStage !== 'ready' && uploadStage !== 'error' && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between text-[10px] font-bold">
+                        <span className="text-on-surface-variant flex items-center gap-1.5">
+                          <Loader2 size={10} className="animate-spin text-error" />
+                          {uploadStageText}
+                        </span>
+                        <span className="text-error font-mono">{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-outline-variant/50">
+                        <div 
+                          className="bg-gradient-to-r from-error to-primary h-full transition-all duration-300 ease-out rounded-full"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audio Preview Player */}
+                  {uploadStage === 'ready' && audioPreviewUrl && (
+                    <div className="pt-1">
+                      <p className="text-[9px] uppercase font-bold text-on-surface-variant mb-1 tracking-widest flex items-center gap-1">
+                        <Play size={10} /> Call Recording Audio Preview:
+                      </p>
+                      <audio 
+                        controls 
+                        src={audioPreviewUrl} 
+                        className="w-full h-8 rounded-lg bg-surface-container"
+                        preload="metadata"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Button */}
               {audioFile && !audioAnalysisResult && (
                 <button 
                   onClick={analyzeCallRecording}
-                  disabled={isAnalyzingAudio}
-                  className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
+                  disabled={uploadStage !== 'ready' || isAnalyzingAudio}
+                  className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
                     isAnalyzingAudio 
                       ? 'bg-error/50 text-on-surface cursor-wait' 
-                      : 'bg-error text-on-error hover:bg-error/80 text-on-error text-on-surface shadow-[0_4px_20px_rgba(0,218,243,0.05)]'
+                      : uploadStage !== 'ready'
+                        ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed opacity-60'
+                        : 'bg-error text-on-error hover:bg-error/90 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
                   }`}
                 >
-                  {isAnalyzingAudio ? 'AI is transcribing & analyzing audio...' : 'Extract Scope using Gemini AI'}
+                  {isAnalyzingAudio ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-1" />
+                      <span>{audioAnalysisStage || 'AI is transcribing & analyzing speech...'}</span>
+                    </>
+                  ) : uploadStage !== 'ready' ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin mr-1" />
+                      <span>Preparing audio file ({uploadProgress}%)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} />
+                      <span>Extract Scope using Gemini AI</span>
+                    </>
+                  )}
                 </button>
               )}
 
               {audioError && (
-                <div className="p-3 bg-error/20 text-error border border-error/30 rounded-xl text-[10px] font-bold">
-                  {audioError}
+                <div className="p-3 bg-error/20 text-error border border-error/30 rounded-xl text-[10px] font-bold flex items-start gap-2">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>{audioError}</span>
                 </div>
               )}
 
@@ -920,7 +1107,7 @@ export default function LeadCardDetails({
                   />
                   <button 
                     onClick={applyAudioAnalysisToScope}
-                    className="w-full py-2.5 bg-secondary text-on-secondary hover:bg-secondary/80 text-on-primary rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
+                    className="w-full py-2.5 bg-secondary text-on-secondary hover:bg-secondary/80 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
                   >
                     Confirm and Set as Job Scope
                   </button>
