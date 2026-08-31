@@ -1,9 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 
-const GEMINI_MODEL = 'gemini-3.7-flash';
+const CANDIDATE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash',
+  'gemini-3.7-flash'
+];
 
 export default async function handler(req, res) {
-  // CORS headers if needed
+  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -21,7 +26,7 @@ export default async function handler(req, res) {
   try {
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing' });
+      return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing on the server' });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -42,16 +47,34 @@ export default async function handler(req, res) {
       });
     }
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: contents,
-    });
+    let lastError = null;
+    let responseText = null;
 
-    if (!response.text) {
-      throw new Error('No text content in Gemini response');
+    for (const model of CANDIDATE_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+        });
+
+        if (response && response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        console.warn(`Model ${model} unavailable (${err.message}). Trying fallback...`);
+      }
     }
 
-    res.status(200).json({ text: response.text });
+    if (responseText) {
+      return res.status(200).json({ text: responseText });
+    }
+
+    const errorMsg = lastError?.message || 'Gemini models temporarily unavailable. Please try again shortly.';
+    console.error('All Gemini candidate models failed:', errorMsg);
+    return res.status(503).json({ error: errorMsg });
+
   } catch (err) {
     console.error('API Proxy Error:', err.message);
     res.status(502).json({ error: err.message });

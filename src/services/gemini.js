@@ -38,12 +38,28 @@ async function callProxy(prompt, mimeType = null, audioData = null) {
   }
 
   if (!response.ok) {
-    let errMsg = `API Proxy error (${response.status})`;
-    if (response.status === 429 || (data.error && typeof data.error === 'string' && data.error.includes('429'))) {
-      errMsg = "Google AI Free Tier rate limit reached. Please wait about 30 seconds and try again.";
-    } else {
-      errMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+    let errMsg = `AI Service unavailable (${response.status})`;
+    try {
+      if (typeof data.error === 'object' && data.error?.message) {
+        errMsg = data.error.message;
+      } else if (typeof data.error === 'string') {
+        try {
+          const parsed = JSON.parse(data.error);
+          if (parsed.error?.message) errMsg = parsed.error.message;
+          else if (parsed.message) errMsg = parsed.message;
+          else errMsg = data.error;
+        } catch (e) {
+          errMsg = data.error;
+        }
+      }
+    } catch (e) {}
+
+    if (response.status === 429 || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+      errMsg = "Google Gemini rate limit reached. Please wait about 30 seconds and try again.";
+    } else if (response.status === 503 || errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE')) {
+      errMsg = "Google AI models are currently experiencing temporary high traffic. Please try again in a few moments.";
     }
+
     throw new Error(errMsg);
   }
 
