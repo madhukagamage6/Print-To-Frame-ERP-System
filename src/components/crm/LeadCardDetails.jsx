@@ -36,8 +36,8 @@ const downsampleAudio = async (file) => {
     // Decode audio data
     const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     
-    // We target 16000Hz mono to drastically reduce size while keeping speech clarity
-    const targetSampleRate = 16000;
+    // We target 8000Hz (telecom speech standard, 16KB/sec) to keep payload under Vercel limits
+    const targetSampleRate = 8000;
     const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
       1, // 1 channel (mono)
       Math.round(decodedBuffer.duration * targetSampleRate),
@@ -316,23 +316,29 @@ export default function LeadCardDetails({
       const ext = (file.name || '').split('.').pop()?.toLowerCase();
       const detectedMime = file.type || EXTENSION_MIME_MAP[ext] || 'audio/mpeg';
 
+      // CRITICAL FIX: If the file is already a compressed format (MP3, M4A, AAC, OGG, WEBM)
+      // and under 3.2MB, NEVER decode it to uncompressed WAV (which expands 2.8MB MP3 to 10.2MB WAV).
+      // Keep it in its original compressed stream!
+      const COMPRESSED_FORMATS = ['mp3', 'm4a', 'aac', 'ogg', 'webm'];
+      const isAlreadyCompressed = COMPRESSED_FORMATS.includes(ext) || (file.type && !file.type.includes('wav'));
+      const MAX_PAYLOAD_RAW_SIZE = 3.2 * 1024 * 1024; // 3.2MB (translates to ~4.2MB Base64, fitting under Vercel's 4.5MB limit)
+
       setUploadProgress(35);
       setUploadStage('validating');
-      setUploadStageText(`Validated format (${ext?.toUpperCase() || 'Audio'}) • Checking size...`);
+      setUploadStageText(`Validated format (${ext?.toUpperCase() || 'Audio'}) • Checking payload size...`);
 
       // Micro-pause for smooth visual perception
       await new Promise(r => setTimeout(r, 200));
 
-      // Step 3: Adaptive compression (if > 2.5MB)
-      const MAX_RAW_SIZE = 2.5 * 1024 * 1024; // 2.5MB
       let processedBlob = file;
       let finalMime = detectedMime;
       let isCompressed = false;
 
-      if (file.size > MAX_RAW_SIZE) {
+      if (!isAlreadyCompressed && file.size > MAX_PAYLOAD_RAW_SIZE) {
+        // Large uncompressed WAV file: downsample to 8kHz mono WAV (telecom speech standard)
         setUploadProgress(60);
         setUploadStage('compressing');
-        setUploadStageText(`Optimizing audio to 16kHz speech standard (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+        setUploadStageText(`Optimizing uncompressed WAV audio (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
         
         try {
           processedBlob = await downsampleAudio(file);
@@ -347,7 +353,9 @@ export default function LeadCardDetails({
         }
       } else {
         setUploadProgress(80);
-        setUploadStageText('Audio size verified • Encoding payload...');
+        setUploadStageText(isAlreadyCompressed 
+          ? `Preserving compressed stream (${(file.size / 1024 / 1024).toFixed(2)} MB ${ext?.toUpperCase() || 'Audio'})` 
+          : 'Audio size verified • Encoding payload...');
       }
 
       await new Promise(r => setTimeout(r, 150));
@@ -368,7 +376,8 @@ export default function LeadCardDetails({
         originalSizeMB: (file.size / 1024 / 1024).toFixed(2),
         finalSizeMB: (processedBlob.size / 1024 / 1024).toFixed(2),
         isCompressed,
-        fileName: file.name
+        fileName: file.name,
+        formatLabel: ext?.toUpperCase() || 'AUDIO'
       });
 
       setUploadProgress(100);
@@ -1005,10 +1014,16 @@ export default function LeadCardDetails({
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-on-surface truncate">{audioFile.name}</p>
                         <p className="text-[9px] text-on-surface-variant font-mono">
-                          Original: {(audioFile.size / 1024 / 1024).toFixed(2)} MB
-                          {preparedAudioData?.isCompressed && (
-                            <span className="text-primary font-bold ml-1.5">
-                              → Optimized: {preparedAudioData.finalSizeMB} MB (16kHz WAV)
+                          {preparedAudioData?.isCompressed ? (
+                            <>
+                              Original: {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                              <span className="text-primary font-bold ml-1.5">
+                                → Optimized: {preparedAudioData.finalSizeMB} MB (8kHz WAV)
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-emerald-400 font-semibold">
+                              {(audioFile.size / 1024 / 1024).toFixed(2)} MB ({preparedAudioData?.formatLabel || 'Audio'} Native Stream)
                             </span>
                           )}
                         </p>

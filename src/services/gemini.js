@@ -32,6 +32,9 @@ async function callProxy(prompt, mimeType = null, audioData = null) {
     data = JSON.parse(text);
   } catch (e) {
     if (!response.ok) {
+      if (response.status === 413 || text.includes('FUNCTION_PAYLOAD_TOO_LARGE') || text.includes('Payload Too Large')) {
+        throw new Error("Audio payload exceeds maximum upload limit (3.2MB). Please use a compressed format (MP3/M4A) or a shorter recording.");
+      }
       throw new Error(`API Proxy error (${response.status}): ${text.substring(0, 100)}`);
     }
     throw new Error(`Invalid JSON from server. Status: ${response.status}. Body: ${text.substring(0, 100)}`);
