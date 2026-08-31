@@ -31,39 +31,39 @@ const PRESETS = [
 const MODULE_CATEGORIES = [
   {
     id: 'crm',
-    name: 'CRM & Sales',
+    name: 'CRM',
     modules: [
-      { id: 'leads', label: 'Leads (CRM)', desc: 'Client inquiries & pipeline intake' },
-      { id: 'pipeline', label: 'Pipeline (Deals)', desc: 'Stage tracking & negotiations' },
-      { id: 'customers', label: 'Customer DB', desc: 'Client directory & history' },
+      { id: 'leads', label: 'Leads', desc: 'Client inquiries & quotation intake' },
+      { id: 'pipeline', label: 'Deals', desc: 'Committed projects & stage tracking' },
+      { id: 'customers', label: 'Customers', desc: 'Centralized client registry & profiles' },
     ]
   },
   {
     id: 'operations',
-    name: 'Production & Delivery',
+    name: 'Operations',
     modules: [
-      { id: 'projects', label: 'Fabrication Works', desc: 'Factory work orders & jobs' },
+      { id: 'projects', label: 'Fabrication Works', desc: 'Factory work orders & manufacturing' },
       { id: 'logistics', label: 'Logistics', desc: 'Dispatch & driver delivery tracking' },
     ]
   },
   {
     id: 'finance',
-    name: 'Finance & Partners',
+    name: 'Databases & Tools',
     modules: [
-      { id: 'invoices', label: 'Invoices & Billing', desc: 'Advance & final payments' },
-      { id: 'partners', label: 'Partner Directory', desc: 'Subcontractors & craftsmen' },
-      { id: 'calculator', label: 'Cost Calculator', desc: 'Pricing engine & estimates' },
+      { id: 'invoices', label: 'Invoices', desc: 'Advance receipts & settlement billing ledger' },
+      { id: 'partners', label: 'Partners', desc: 'Creative agencies & referral partners' },
+      { id: 'calculator', label: 'Cost Calculator', desc: 'Algorithmic steel framing pricing & BOM' },
     ]
   },
   {
     id: 'system',
     name: 'System & Tools',
     modules: [
-      { id: 'dashboard', label: 'Dashboard', desc: 'Executive metric overviews' },
-      { id: 'notifications', label: 'Notifications', desc: 'System alerts & updates' },
-      { id: 'messages', label: 'Messages', desc: 'Internal staff chat' },
-      { id: 'agents', label: 'User Management', desc: 'Employee access & roster' },
-      { id: 'admin', label: 'Admin Panel', desc: 'Configuration & system logs' },
+      { id: 'dashboard', label: 'Dashboard', desc: 'Real-time enterprise overview & metrics' },
+      { id: 'notifications', label: 'Notifications', desc: 'System alerts & activity updates' },
+      { id: 'messages', label: 'Messages', desc: 'Direct 1-on-1 team messaging' },
+      { id: 'agents', label: 'User Management', desc: 'Identities, dynamic RBAC & approvals' },
+      { id: 'admin', label: 'System Overview', desc: 'Executive system analytics & audit logs' },
     ]
   }
 ];

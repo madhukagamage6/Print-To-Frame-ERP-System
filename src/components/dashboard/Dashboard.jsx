@@ -1122,21 +1122,21 @@ const Dashboard = ({
               </button>
               <button
                 onClick={() => setActiveTab("projects")}
-                className="w-full flex items-center p-3 bg-primary/10 hover:bg-yellow-500/20 rounded-xl text-primary font-bold transition-colors text-sm"
+                className="w-full flex items-center p-3 bg-primary/10 hover:bg-primary/20 rounded-xl text-primary font-bold transition-colors text-sm"
               >
-                <Hammer size={16} className="mr-3" /> New Fab Job
+                <Hammer size={16} className="mr-3" /> New Fabrication Job
               </button>
               <button
                 onClick={() => setActiveTab("logistics")}
                 className="w-full flex items-center p-3 bg-error/20 hover:bg-error/30 rounded-xl text-error font-bold transition-colors text-sm"
               >
-                <Truck size={16} className="mr-3" /> New Pickup/Delivery
+                <Truck size={16} className="mr-3" /> New Logistics Dispatch
               </button>
               <button
                 onClick={() => setActiveTab("customers")}
                 className="w-full flex items-center p-3 bg-surface-container-low hover:bg-surface-container rounded-xl text-on-surface font-bold transition-colors text-sm"
               >
-                <User size={16} className="mr-3" /> Add Customer
+                <User size={16} className="mr-3" /> Register Customer
               </button>
               <button
                 onClick={() => setActiveTab("calculator")}

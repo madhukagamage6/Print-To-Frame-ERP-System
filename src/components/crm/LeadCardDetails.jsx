@@ -974,7 +974,7 @@ export default function LeadCardDetails({
           <>
             <span>Source: <strong className="text-on-surface">{formData.source || 'Manual'}</strong></span>
             <span>•</span>
-            <span>Pipeline: <strong className="text-primary">{lead.isDeal ? "Deals Pipeline" : "CRM Leads"}</strong></span>
+            <span>Pipeline: <strong className="text-primary">{lead.isDeal ? "Deals" : "Leads"}</strong></span>
           </>
         }
         onClose={handleClose}
