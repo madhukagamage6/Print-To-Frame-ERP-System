@@ -212,26 +212,95 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
     return targetObj;
   }, [users]);
 
-  // 6. Action: Open Mini-Chat Drawer
-  const openMiniChat = useCallback((contact) => {
-    if (!contact) return;
-    const fullContact = resolveUserProfile(contact);
-    setMiniChatContact(fullContact);
+  // 6. Action: Open Mini-Chat Drawer (Direct conversation or General list)
+  const openMiniChat = useCallback((contact = null) => {
+    if (contact) {
+      const fullContact = resolveUserProfile(contact);
+      setMiniChatContact(fullContact);
+      markChatAsRead(fullContact.identifier);
+    } else {
+      setMiniChatContact(null);
+    }
     setIsMiniChatOpen(true);
-    markChatAsRead(fullContact.identifier);
     setActiveToastMessage(null);
   }, [resolveUserProfile, markChatAsRead]);
 
-  // 7. Action: Close Mini-Chat Drawer
+  // 7. Action: Toggle Messenger Window (Collapse / Expand)
+  const toggleMiniChat = useCallback(() => {
+    setIsMiniChatOpen(prev => !prev);
+  }, []);
+
+  // 8. Action: Close Mini-Chat Drawer
   const closeMiniChat = useCallback(() => {
     setIsMiniChatOpen(false);
+  }, []);
+
+  // 9. Action: Navigate Back to Recent Chats List
+  const clearActiveContact = useCallback(() => {
     setMiniChatContact(null);
   }, []);
 
-  // 8. Action: Dismiss Toast
+  // 10. Action: Dismiss Toast
   const dismissToast = useCallback(() => {
     setActiveToastMessage(null);
   }, []);
+
+  // 11. Selector: Recent Conversations Summary List
+  const recentConversations = useMemo(() => {
+    if (!currentUser?.identifier || !users.length) return [];
+
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const map = new Map();
+
+    // Scan all messages to extract latest message per partner
+    messages.forEach((msg) => {
+      const participants = (msg.participants || []).map(p => String(p).trim().toLowerCase());
+      const partnerId = participants.find(p => p !== myId) || (String(msg.fromId).toLowerCase() === myId ? String(msg.toId).toLowerCase() : String(msg.fromId).toLowerCase());
+
+      if (!partnerId || partnerId === myId) return;
+
+      const existing = map.get(partnerId);
+      const msgTime = Number(msg.timestamp) || 0;
+
+      if (!existing || msgTime > existing.lastTimestamp) {
+        const isUnread = String(msg.fromId).toLowerCase() === partnerId && !(msg.readBy || []).map(r => String(r).toLowerCase()).includes(myId);
+        map.set(partnerId, {
+          partnerId,
+          lastMessage: msg.text || 'Attachment / Photo',
+          lastTimestamp: msgTime,
+          isUnread
+        });
+      }
+    });
+
+    // Merge with user profile details
+    const result = [];
+    users.forEach((u) => {
+      const uId = String(u.identifier || '').trim().toLowerCase();
+      if (!uId || uId === myId) return;
+
+      const conv = map.get(uId);
+      const unreadCount = unreadCounts[u.identifier] || 0;
+
+      result.push({
+        user: resolveUserProfile(u),
+        lastMessage: conv?.lastMessage || null,
+        lastTimestamp: conv?.lastTimestamp || 0,
+        unreadCount,
+        hasHistory: !!conv
+      });
+    });
+
+    // Sort: Users with active conversations first (by timestamp descending), then others alphabetically
+    return result.sort((a, b) => {
+      if (a.hasHistory && b.hasHistory) {
+        return b.lastTimestamp - a.lastTimestamp;
+      }
+      if (a.hasHistory) return -1;
+      if (b.hasHistory) return 1;
+      return (a.user.name || '').localeCompare(b.user.name || '');
+    });
+  }, [messages, currentUser, users, unreadCounts, resolveUserProfile]);
 
   const value = {
     messages,
@@ -242,7 +311,10 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
     isMiniChatOpen,
     miniChatContact,
     openMiniChat,
+    toggleMiniChat,
     closeMiniChat,
+    clearActiveContact,
+    recentConversations,
     activeChatContactId,
     setActiveChatContactId,
     sendDirectMessage,

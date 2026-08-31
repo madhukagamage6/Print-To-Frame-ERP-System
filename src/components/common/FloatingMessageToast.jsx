@@ -77,7 +77,7 @@ export default function FloatingMessageToast({ setActiveTab }) {
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="fixed bottom-6 right-6 z-50 max-w-sm w-full sm:w-96 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto"
+      className="fixed bottom-22 right-4 sm:right-5 z-50 max-w-sm w-full sm:w-96 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto"
     >
       <div className="bg-surface-container/95 backdrop-blur-xl border border-primary/40 rounded-2xl shadow-[0_10px_35px_rgba(0,218,243,0.15)] overflow-hidden transition-all">
         {/* Top Header Bar */}
