@@ -281,8 +281,38 @@ export default function LeadCardDetails({
     setAudioAnalysisResult('');
 
     try {
-      // Send original audio file directly to avoid expanding MP3 into large WAV files
-      const processedFile = audioFile;
+      // ── Determine correct MIME type from the file BEFORE any processing ──
+      // Browser's file.type is unreliable (blank on some OS/browser combos for m4a, mp3).
+      // Fall back to extension-based detection instead of blindly defaulting to audio/wav.
+      const EXTENSION_MIME_MAP = {
+        mp3: 'audio/mpeg',
+        m4a: 'audio/mp4',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        webm: 'audio/webm',
+        aac: 'audio/aac',
+        flac: 'audio/flac',
+      };
+      const ext = (audioFile.name || '').split('.').pop()?.toLowerCase();
+      const detectedMime = audioFile.type || EXTENSION_MIME_MAP[ext] || 'audio/mpeg';
+
+      // ── Compress audio if it's too large for Vercel's 4.5MB body limit ──
+      // Base64 inflates size ~33%, so raw files > ~3MB will exceed the limit.
+      const MAX_RAW_SIZE = 3 * 1024 * 1024; // 3MB
+      let processedFile = audioFile;
+      let finalMime = detectedMime;
+
+      if (audioFile.size > MAX_RAW_SIZE) {
+        try {
+          processedFile = await downsampleAudio(audioFile);
+          finalMime = 'audio/wav'; // downsampleAudio always outputs WAV
+          console.log(`Audio downsampled: ${(audioFile.size / 1024 / 1024).toFixed(1)}MB → ${(processedFile.size / 1024 / 1024).toFixed(1)}MB`);
+        } catch (dsErr) {
+          console.warn('Downsampling failed, using original file:', dsErr);
+          processedFile = audioFile;
+          finalMime = detectedMime;
+        }
+      }
 
       // 2. Convert audio to base64
       const reader = new FileReader();
@@ -302,7 +332,7 @@ export default function LeadCardDetails({
         Format specifications with clear technical bullet points (e.g. Dimensions, Steel Gauge, Material Type, Finish, Timeline).
       `;
       
-      const result = await extractCallScope(base64Data, processedFile.type || 'audio/wav', instructions, clientInfo);
+      const result = await extractCallScope(base64Data, finalMime, instructions, clientInfo);
       if (result && result.scope) {
         result.scope = sanitizeTechnicalScope(result.scope);
       }

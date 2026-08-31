@@ -38,7 +38,7 @@ async function callProxy(prompt, mimeType = null, audioData = null) {
   }
 
   if (!response.ok) {
-    let errMsg = `AI Service unavailable (${response.status})`;
+    let errMsg = `AI Service error (${response.status})`;
     try {
       if (typeof data.error === 'object' && data.error?.message) {
         errMsg = data.error.message;
@@ -54,11 +54,13 @@ async function callProxy(prompt, mimeType = null, audioData = null) {
       }
     } catch (e) {}
 
-    if (response.status === 429 || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-      errMsg = "Google Gemini rate limit reached. Please wait about 30 seconds and try again.";
-    } else if (response.status === 503 || errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE')) {
-      errMsg = "Google AI models are currently experiencing temporary high traffic. Please try again in a few moments.";
+    // Add user-friendly context but KEEP the real error visible for debugging
+    if (response.status === 413) {
+      errMsg = `Audio file too large for processing. ${errMsg}`;
+    } else if (response.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')) {
+      errMsg = `Rate limit reached — please wait 30 seconds and retry. (${errMsg})`;
     }
+    // For 400, 502, 503 — pass through the real message unmodified
 
     throw new Error(errMsg);
   }
