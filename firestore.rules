@@ -135,23 +135,7 @@ service cloud.firestore {
 
     // ── Messages (Real-Time Internal Chat) ─────────────────
     match /messages/{messageId} {
-      // Any authenticated user who is a participant OR has messages access can read & write
-      allow read: if isAuthenticated() && (
-        checkPermission('messages', 'view') ||
-        checkPermission('messages', 'read') ||
-        (resource != null && request.auth.token.email in resource.data.participants)
-      );
-      allow create: if isAuthenticated() && (
-        checkPermission('messages', 'create') ||
-        checkPermission('messages', 'write') ||
-        checkPermission('messages', 'view') ||
-        request.auth.token.email in request.resource.data.participants
-      );
-      allow update: if isAuthenticated() && (
-        checkPermission('messages', 'edit') ||
-        checkPermission('messages', 'write') ||
-        request.auth.token.email in resource.data.participants
-      );
+      allow read, create, update: if isAuthenticated();
       allow delete: if isAdmin() || (
         isAuthenticated() &&
         resource.data.fromId == request.auth.token.email &&
@@ -161,8 +145,7 @@ service cloud.firestore {
 
     // ── Typing Indicators ────────────────────────────────
     match /typing_indicators/{indicatorId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if isAuthenticated();
     }
 
     // ── Audit Log ────────────────────────────────────────
