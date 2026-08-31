@@ -315,14 +315,14 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
 
       {/* Status pills */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[9px] uppercase font-bold text-on-surface-variant tracking-widest">Quote Status:</span>
+        <span className="text-xs uppercase font-extrabold text-on-surface tracking-wider">Quote Status:</span>
         {['Draft', 'Sent', 'Accepted', 'Rejected'].map(s => (
           <button
             key={s}
             type="button"
             onClick={() => isEditing && setStatus(s)}
             className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-              status === s ? STATUS_STYLES[s] : 'text-on-surface-variant/40 border-transparent bg-transparent'
+              status === s ? STATUS_STYLES[s] : 'text-on-surface bg-surface-container-highest border border-outline hover:border-primary/50'
             } ${isEditing ? 'cursor-pointer hover:border-outline-variant' : 'cursor-default'}`}
           >
             {s}
@@ -349,8 +349,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
 
       {/* Line Items Table */}
       <div className="rounded-xl border border-outline-variant overflow-hidden">
-        <div className="bg-surface-container-low px-3 py-2 border-b border-outline-variant flex justify-between items-center">
-          <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">Bill of Quantities / Line Items</span>
+        <div className="bg-surface-container-highest px-3.5 py-2.5 border-b border-outline flex justify-between items-center">
+          <span className="text-xs font-extrabold text-on-surface uppercase tracking-wider">Bill of Quantities / Line Items</span>
           {isEditing && (
             <button
               type="button"
@@ -365,16 +365,16 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
         <div className="overflow-x-auto">
           <table className="w-full text-xs min-w-[480px]">
             <thead>
-              <tr className="bg-surface-container/50">
-                <th className="text-left p-2 text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Description</th>
-                <th className="text-center p-2 text-[9px] font-bold text-on-surface-variant uppercase tracking-wider w-14">Qty</th>
-                <th className="text-center p-2 text-[9px] font-bold text-on-surface-variant uppercase tracking-wider w-16">Unit</th>
-                <th className="text-right p-2 text-[9px] font-bold text-on-surface-variant uppercase tracking-wider w-28">Unit Price</th>
-                <th className="text-right p-2 text-[9px] font-bold text-on-surface-variant uppercase tracking-wider w-28">Total</th>
+              <tr className="bg-surface-container-high border-b border-outline">
+                <th className="text-left p-2 text-xs font-extrabold text-on-surface uppercase tracking-wider">Description</th>
+                <th className="text-center p-2 text-xs font-extrabold text-on-surface uppercase tracking-wider w-14">Qty</th>
+                <th className="text-center p-2 text-xs font-extrabold text-on-surface uppercase tracking-wider w-16">Unit</th>
+                <th className="text-right p-2 text-xs font-extrabold text-on-surface uppercase tracking-wider w-28">Unit Price</th>
+                <th className="text-right p-2 text-xs font-extrabold text-on-surface uppercase tracking-wider w-28">Total</th>
                 {isEditing && <th className="w-8" />}
               </tr>
             </thead>
-            <tbody className="divide-y divide-outline-variant/30">
+            <tbody className="divide-y divide-outline">
               {lineItems.map(item => (
                 <tr key={item.id} className="hover:bg-surface-container/30">
                   <td className="p-2">
@@ -449,7 +449,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
         </div>
 
         {/* Totals Breakdown */}
-        <div className="bg-surface-container-low/80 border-t border-outline-variant p-3 space-y-1.5">
+        <div className="bg-surface-container-high border-t-2 border-outline p-4 space-y-2">
           <div className="flex justify-between text-xs text-on-surface-variant">
             <span>Subtotal:</span>
             <span className="font-mono">LKR {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>

@@ -28,7 +28,7 @@ export default function DetailCustomerCard({
   };
 
   return (
-    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 relative group hover:border-primary/40 transition-all">
+    <div className="p-4 bg-surface-container-high rounded-2xl border border-outline relative group hover:border-primary/50 transition-all shadow-sm">
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3">
           <UserAvatar 
@@ -40,7 +40,7 @@ export default function DetailCustomerCard({
               {customerName}
             </h4>
             {company && (
-              <p className="text-[11px] text-on-surface-variant font-medium flex items-center mt-0.5">
+              <p className="text-xs text-on-surface-variant font-medium flex items-center mt-0.5">
                 <Building size={10} className="mr-1 opacity-60" /> {company}
               </p>
             )}
@@ -59,7 +59,7 @@ export default function DetailCustomerCard({
         )}
       </div>
 
-      <div className={`mt-3 space-y-1.5 pt-3 border-t border-outline-variant/40 text-xs text-on-surface-variant ${compact ? 'text-[11px]' : ''}`}>
+      <div className={`mt-3 space-y-1.5 pt-3 border-t border-outline text-xs text-on-surface font-medium ${compact ? 'text-[11px]' : ''}`}>
         {phone && (
           <div className="flex items-center">
             <Phone size={11} className="mr-2 text-primary opacity-75 flex-shrink-0" />

@@ -26,7 +26,7 @@ export default function FilterBar({
   children
 }) {
   return (
-    <div className="bg-surface-container/60 p-3 sm:p-4 rounded-xl border border-outline-variant/60 mb-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-[0_2px_12px_rgba(0,0,0,0.15)]">
+    <div className="bg-surface-container-high p-3 sm:p-4 rounded-xl border border-outline mb-5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-sm">
       {/* Left: Search input & filter pills */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
         {/* Search Input */}
@@ -40,7 +40,7 @@ export default function FilterBar({
             value={searchQuery}
             onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full pl-9 pr-8 py-2 bg-surface-container-high/80 border border-outline-variant rounded-xl text-xs sm:text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 transition-all font-sans"
+            className="w-full pl-9 pr-8 py-2 bg-surface-container-highest border border-outline rounded-xl text-xs sm:text-sm text-on-surface placeholder:text-on-surface-variant font-medium focus:outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40 transition-all font-sans"
           />
           {searchQuery && (
             <button
@@ -68,7 +68,7 @@ export default function FilterBar({
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     isSelected
                       ? 'bg-primary text-on-primary shadow-[0_2px_8px_rgba(0,218,243,0.25)]'
-                      : 'bg-surface-container-high/60 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest border border-outline-variant/50'
+                      : 'bg-surface-container-highest text-on-surface hover:border-primary/50 border border-outline font-bold'
                   }`}
                 >
                   <span>{opt.label}</span>

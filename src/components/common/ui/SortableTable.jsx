@@ -94,11 +94,11 @@ export default function SortableTable({
       )}
 
       {/* Table Container */}
-      <div className="rounded-xl border border-outline-variant overflow-hidden bg-surface-container/60 shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
+      <div className="rounded-xl border border-outline overflow-hidden bg-surface-container shadow-md">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">
+              <tr className="bg-surface-container-high border-b-2 border-outline text-xs uppercase font-extrabold text-on-surface tracking-wider">
                 {selectable && (
                   <th className="p-3 w-10 text-center">
                     <button
@@ -140,7 +140,7 @@ export default function SortableTable({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-outline-variant/30">
+            <tbody className="divide-y divide-outline">
               {sortedData.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + (selectable ? 1 : 0)} className="p-8 text-center text-on-surface-variant">
@@ -157,7 +157,7 @@ export default function SortableTable({
                       onClick={() => onRowClick && onRowClick(row)}
                       className={`transition-colors ${
                         onRowClick ? 'cursor-pointer hover:bg-surface-container-high/60' : ''
-                      } ${isSelected ? 'bg-primary/10' : idx % 2 === 0 ? 'bg-transparent' : 'bg-surface-container/20'}`}
+                      } ${isSelected ? 'bg-primary/10' : idx % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-high/40'}`}
                     >
                       {selectable && (
                         <td className="p-3 text-center" onClick={e => e.stopPropagation()}>

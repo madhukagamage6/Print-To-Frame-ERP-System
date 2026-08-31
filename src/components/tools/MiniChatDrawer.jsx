@@ -126,7 +126,7 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
       {/* 2. Floating Quick Messenger Popover Window */}
       {isMiniChatOpen && (
         <div 
-          className="fixed bottom-20 right-4 sm:right-5 z-50 w-[calc(100vw-32px)] sm:w-96 h-[520px] max-h-[80vh] flex flex-col bg-surface-container/95 backdrop-blur-2xl border border-outline-variant/60 rounded-3xl shadow-[0_16px_50px_rgba(0,0,0,0.4)] overflow-hidden animate-in slide-in-from-bottom-5 zoom-in-95 duration-200"
+          className="fixed bottom-20 right-4 sm:right-5 z-50 w-[calc(100vw-32px)] sm:w-96 h-[520px] max-h-[80vh] flex flex-col bg-surface-container-high border-2 border-outline rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.7)] overflow-hidden animate-in slide-in-from-bottom-5 zoom-in-95 duration-200"
         >
           {resolvedContact ? (
             /* ─────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
                ───────────────────────────────────────────────────────────── */
             <>
               {/* Header */}
-              <div className="p-3.5 bg-surface-container-high/90 border-b border-outline-variant/50 flex items-center justify-between shadow-sm">
+              <div className="p-3.5 bg-surface-container-highest border-b border-outline flex items-center justify-between shadow-sm">
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <button
                     onClick={clearActiveContact}
@@ -209,13 +209,13 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
               </div>
 
               {/* Input Footer */}
-              <form onSubmit={handleSend} className="p-2.5 bg-surface-container border-t border-outline-variant/50 flex items-center space-x-2">
+              <form onSubmit={handleSend} className="p-2.5 bg-surface-container-highest border-t border-outline flex items-center space-x-2">
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Type message..."
-                  className="flex-1 px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/50"
+                  className="flex-1 px-3 py-2 bg-surface-container border border-outline rounded-xl text-xs text-on-surface font-medium focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-on-surface-variant"
                   autoFocus
                 />
                 <button
@@ -233,7 +233,7 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
                ───────────────────────────────────────────────────────────── */
             <>
               {/* Header */}
-              <div className="p-3.5 bg-surface-container-high/90 border-b border-outline-variant/50 flex items-center justify-between shadow-sm">
+              <div className="p-3.5 bg-surface-container-highest border-b border-outline flex items-center justify-between shadow-sm">
                 <div className="flex items-center space-x-2">
                   <div className="p-1.5 bg-primary/15 text-primary rounded-xl">
                     <MessageSquare size={16} />
@@ -265,7 +265,7 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
               </div>
 
               {/* Search Bar */}
-              <div className="p-2.5 border-b border-outline-variant/40 bg-surface-container-low/50">
+              <div className="p-2.5 border-b border-outline bg-surface-container-high">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant" size={13} />
                   <input
@@ -273,13 +273,13 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search colleagues..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-surface-container border border-outline-variant/60 rounded-xl text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/50"
+                    className="w-full pl-8 pr-3 py-1.5 bg-surface-container-highest border border-outline rounded-xl text-xs text-on-surface font-medium focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-on-surface-variant"
                   />
                 </div>
               </div>
 
               {/* Recent Conversations List */}
-              <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/30 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto divide-y divide-outline custom-scrollbar">
                 {filteredConversations.length === 0 ? (
                   <div className="p-8 text-center flex flex-col items-center justify-center text-on-surface-variant">
                     <Users size={24} className="opacity-30 mb-2" />

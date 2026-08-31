@@ -988,25 +988,25 @@ export default function LeadCardDetails({
             
             {/* Job Requirements & Scope */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline-variant/50">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
                 <FileText size={14} className="mr-2 text-primary" />
                 Job Requirements & Scope
               </h3>
 
               <div>
-                <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Scope Details</label>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Scope Details</label>
                 <textarea 
                   name="jobScope"
                   value={formData.jobScope}
                   onChange={handleInputChange}
                   rows={4}
-                  className="w-full p-4 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                   placeholder="e.g. Dimensions, wrapping specifications, steel box bar grade..."
                 />
               </div>
 
               <div>
-                <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Delivery Address / Logistics Info</label>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Delivery Address / Logistics Info</label>
                 <div className="relative">
                   <MapPin size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
                   <input 
@@ -1014,7 +1014,7 @@ export default function LeadCardDetails({
                     name="deliveryLocation"
                     value={formData.deliveryLocation}
                     onChange={handleInputChange}
-                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                     placeholder="Provide full location or address"
                   />
                 </div>
@@ -1036,7 +1036,7 @@ export default function LeadCardDetails({
                 {audioFile && (
                   <button 
                     onClick={resetAudioFile}
-                    className="text-[10px] font-bold text-on-surface-variant hover:text-error flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-lg border border-outline-variant/60 transition-colors"
+                    className="text-[10px] font-bold text-on-surface-variant hover:text-error flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-lg border border-outline transition-colors"
                     title="Change / Remove Audio File"
                   >
                     <RefreshCw size={10} /> Replace File
@@ -1110,7 +1110,7 @@ export default function LeadCardDetails({
                         </span>
                         <span className="text-error font-mono">{uploadProgress}%</span>
                       </div>
-                      <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-outline-variant/50">
+                      <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-outline">
                         <div 
                           className="bg-gradient-to-r from-error to-primary h-full transition-all duration-300 ease-out rounded-full"
                           style={{ width: `${uploadProgress}%` }}
@@ -1177,7 +1177,7 @@ export default function LeadCardDetails({
 
               {audioAnalysisResult && (
                 <div className="space-y-3">
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-widest">Visual Scope Analysis</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">Visual Scope Analysis</label>
                   <textarea 
                     value={audioAnalysisResult.scope || ''}
                     onChange={(e) => setAudioAnalysisResult({ ...audioAnalysisResult, scope: e.target.value })}
@@ -1198,7 +1198,7 @@ export default function LeadCardDetails({
             {formData.quotationGenerated && formData.quotationDraft && (
               <div className="space-y-2 flex flex-col flex-1 min-h-[220px]">
                 <div className="flex justify-between items-center">
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-widest">Quotation Body Preview</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">Quotation Body Preview</label>
                   <button 
                     onClick={() => setFormData(prev => ({ ...prev, quotationDraft: '', quotationGenerated: false }))} 
                     className="text-error hover:text-error p-1.5 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
@@ -1212,7 +1212,7 @@ export default function LeadCardDetails({
                   value={formData.quotationDraft}
                   onChange={handleInputChange}
                   rows={8}
-                  className="w-full flex-1 p-4 bg-surface-container border border-outline-variant rounded-xl text-xs text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full flex-1 p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
                 <span className="text-[9px] text-secondary font-bold block bg-secondary/10 border border-secondary/30 p-2.5 rounded-lg">
                   ✔ Structured into cost breakdown categories matching the pricing engine.
@@ -1251,7 +1251,7 @@ export default function LeadCardDetails({
                 {formData.invoiceGenerated && formData.invoiceDraft && (
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-widest">AI Generated Invoice Details</label>
+                      <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">AI Generated Invoice Details</label>
                       <button 
                         onClick={() => setFormData(prev => ({ ...prev, invoiceDraft: '', invoiceGenerated: false }))} 
                         className="text-error hover:text-error p-1.5 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
@@ -1264,14 +1264,14 @@ export default function LeadCardDetails({
                       value={formData.invoiceDraft}
                       onChange={(e) => setFormData(prev => ({ ...prev, invoiceDraft: e.target.value }))}
                       rows={6}
-                      className="w-full p-4 bg-surface-container border border-outline-variant rounded-xl text-xs text-on-surface font-mono focus:outline-none"
+                      className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none"
                     />
 
                     {/* OPTIMIZATION 6: Print redesigned premium PDF and save to Database */}
                     <div className="grid grid-cols-2 gap-3">
                       <button 
                         onClick={printInvoice}
-                        className="py-2.5 bg-surface-container border border-outline-variant text-on-surface hover:bg-surface-container-low hover:text-primary rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1"
+                        className="py-2.5 bg-surface-container-highest/60 border border-outline text-on-surface hover:bg-surface-container-low hover:text-primary rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1"
                       >
                         <Printer size={13} />
                         <span>Print PDF</span>
@@ -1338,23 +1338,23 @@ export default function LeadCardDetails({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Length (ft)</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Length (ft)</label>
                   <input 
                     type="number"
                     value={calcLength || ''}
                     onChange={(e) => setCalcLength(Number(e.target.value))}
                     disabled={dimensionsLocked && currentUser?.role !== 'Admin'}
-                    className={`w-full px-4 py-2.5 bg-surface-container border border-outline-variant rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${dimensionsLocked && currentUser?.role !== 'Admin' ? 'opacity-60 cursor-not-allowed bg-surface-container-low' : ''}`}
+                    className={`w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${dimensionsLocked && currentUser?.role !== 'Admin' ? 'opacity-60 cursor-not-allowed bg-surface-container-low' : ''}`}
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Height (ft)</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Height (ft)</label>
                   <input 
                     type="number"
                     value={calcHeight || ''}
                     onChange={(e) => setCalcHeight(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-surface-container border border-outline-variant rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                    className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                     placeholder="0"
                   />
                 </div>
@@ -1387,7 +1387,7 @@ export default function LeadCardDetails({
 
             {/* Client Details Section */}
             <div className="space-y-6">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline-variant/50">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
                 <User size={14} className="mr-2 text-primary" />
                 Client Profile Details
               </h3>
@@ -1410,8 +1410,8 @@ export default function LeadCardDetails({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Contact Number</label>
-                  <div className="flex bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Contact Number</label>
+                  <div className="flex bg-surface-container-highest/60 border border-outline rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
                     <div className="flex items-center px-3 bg-surface-container border-r border-outline-variant text-sm font-bold text-on-surface-variant select-none">
                       <Phone size={14} className="mr-1.5 text-on-surface-variant" />
                       +94
@@ -1430,7 +1430,7 @@ export default function LeadCardDetails({
                 </div>
 
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Full Name</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
                   <div className="relative">
                     <User size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
                     <input 
@@ -1438,14 +1438,14 @@ export default function LeadCardDetails({
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       placeholder="e.g. Amal Silva"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Company / Business</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Company / Business</label>
                   <div className="relative">
                     <Building size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
                     <input 
@@ -1453,14 +1453,14 @@ export default function LeadCardDetails({
                       name="company"
                       value={formData.company}
                       onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       placeholder="e.g. Silva Art Printers"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Email Address</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Email Address</label>
                   <div className="relative">
                     <Mail size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
                     <input 
@@ -1468,7 +1468,7 @@ export default function LeadCardDetails({
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                       placeholder="example@test.com"
                     />
                   </div>
@@ -1476,12 +1476,12 @@ export default function LeadCardDetails({
 
                 {/* OPTIMIZATION 3: Lead Source and Agent Selection triggers */}
                 <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Lead Source</label>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Lead Source</label>
                   <select 
                     name="source"
                     value={formData.source}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
+                    className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     <option value="Manual">Manual Entry</option>
@@ -1515,7 +1515,7 @@ export default function LeadCardDetails({
 
             
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline-variant">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
                 <FileSpreadsheet size={16} className="mr-2 text-primary" />
                 Quotation & Pricing Breakdown
               </h3>
@@ -1523,32 +1523,32 @@ export default function LeadCardDetails({
               <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Total Contract Value (LKR)</label>
+                    <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Total Contract Value (LKR)</label>
                     <input 
                       type="number"
                       name="value"
                       value={formData.value}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-base font-extrabold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-base font-extrabold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
                       placeholder="0"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Gross Volume (SqFt)</label>
+                    <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Gross Volume (SqFt)</label>
                     <input 
                       type="number"
                       name="totalSqFt"
                       value={formData.totalSqFt}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
                       placeholder="0"
                     />
                   </div>
                 </div>
 
                 {/* Structured Quotation Builder */}
-                <div className="pt-2 border-t border-outline-variant/40">
+                <div className="pt-2 border-t border-outline">
                   <QuotationBuilder
                     lead={{ ...lead, ...formData }}
                     allQuotations={allQuotations}
@@ -1558,7 +1558,7 @@ export default function LeadCardDetails({
                 </div>
 
                 {/* AI Text Quotation Generator fallback */}
-                <div className="pt-3 border-t border-outline-variant/40">
+                <div className="pt-3 border-t border-outline">
                   <button 
                     onClick={handleGenerateQuote}
                     disabled={isGeneratingQuote || (formData.quotationGenerated && !!formData.quotationDraft)}
@@ -1592,12 +1592,12 @@ export default function LeadCardDetails({
           {/* Right Column: Pricing & Quotation Overview */}
           <DetailModalSidebar>
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline-variant">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
                 <FileSpreadsheet size={16} className="mr-2 text-primary" />
                 Quotation Summary
               </h3>
 
-              <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline-variant/40 text-center space-y-3">
+              <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline text-center space-y-3">
                 <FileSpreadsheet size={32} className="text-primary/40 mx-auto" />
                 <div>
                   <p className="text-xs font-bold text-on-surface">Structured Quotation System</p>
@@ -1606,7 +1606,7 @@ export default function LeadCardDetails({
                   </p>
                 </div>
                 {formData.value > 0 && (
-                  <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/50 text-left">
+                  <div className="p-3 bg-surface-container-low rounded-xl border border-outline text-left">
                     <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Current Value</p>
                     <p className="text-sm font-black text-primary font-mono mt-0.5">
                       LKR {Number(formData.value).toLocaleString()}
@@ -1621,14 +1621,14 @@ export default function LeadCardDetails({
                     <button
                       type="button"
                       onClick={() => printInvoice('Advance')}
-                      className="w-full py-2 bg-surface-container border border-outline-variant hover:border-amber-400/40 text-on-surface hover:text-amber-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
+                      className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-amber-400/40 text-on-surface hover:text-amber-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
                     >
                       <Printer size={11} /> 75% Advance
                     </button>
                     <button
                       type="button"
                       onClick={() => printInvoice('Final')}
-                      className="w-full py-2 bg-surface-container border border-outline-variant hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
+                      className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
                     >
                       <Printer size={11} /> 25% Final
                     </button>

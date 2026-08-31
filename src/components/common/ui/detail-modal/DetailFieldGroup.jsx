@@ -14,10 +14,10 @@ export default function DetailFieldGroup({
   return (
     <div className={`space-y-2.5 ${className}`}>
       {label && (
-        <div className="flex items-center justify-between pb-1.5 border-b border-outline-variant/40">
+        <div className="flex items-center justify-between pb-1.5 border-b border-outline">
           <div className="flex items-center space-x-2">
             {Icon && <Icon size={13} className="text-primary opacity-80" />}
-            <span className="text-[10px] uppercase font-extrabold text-on-surface-variant tracking-wider">
+            <span className="text-xs uppercase font-extrabold text-on-surface tracking-wider">
               {label}
             </span>
           </div>

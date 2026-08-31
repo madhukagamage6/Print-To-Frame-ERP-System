@@ -210,7 +210,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
         <div className="lg:col-span-4 space-y-6">
           
           {/* Identity Card */}
-          <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_25px_rgba(0,0,0,0.2)] text-center relative overflow-hidden">
+          <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 shadow-[0_4px_25px_rgba(0,0,0,0.2)] text-center relative overflow-hidden">
             {/* Background Glow Accent */}
             <div className="absolute -top-16 -right-16 w-36 h-36 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
             
@@ -273,7 +273,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
             )}
 
             {/* Quick Action Buttons */}
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-outline-variant/60">
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-outline">
               <button
                 type="button"
                 onClick={handleSaveProfile}
@@ -296,7 +296,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
           </div>
 
           {/* Preset Avatar Selector */}
-          <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-5 shadow-[0_4px_25px_rgba(0,0,0,0.15)]">
+          <div className="bg-surface-container/80 border border-outline rounded-3xl p-5 shadow-[0_4px_25px_rgba(0,0,0,0.15)]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface mb-3 flex items-center justify-between">
               <span>Avatar Presets</span>
               <span className="text-[10px] text-on-surface-variant font-normal lowercase">or upload custom photo</span>
@@ -314,7 +314,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                     className={`p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition-all text-center ${
                       isSelected 
                         ? `${preset.bg} ring-2 ring-primary shadow-md scale-105` 
-                        : 'bg-surface-container-low border-outline-variant/50 text-on-surface-variant hover:bg-surface-container-high'
+                        : 'bg-surface-container-low border-outline text-on-surface-variant hover:bg-surface-container-high'
                     }`}
                   >
                     <Icon size={20} />
@@ -326,13 +326,13 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
           </div>
 
           {/* Security & Authentication Box */}
-          <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-5 shadow-[0_4px_25px_rgba(0,0,0,0.15)] space-y-3.5">
+          <div className="bg-surface-container/80 border border-outline rounded-3xl p-5 shadow-[0_4px_25px_rgba(0,0,0,0.15)] space-y-3.5">
             <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center">
               <KeyRound size={15} className="mr-2 text-amber-400" />
               Security & Credentials
             </h3>
 
-            <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/50 flex justify-between items-center text-xs">
+            <div className="p-3 bg-surface-container-low rounded-xl border border-outline flex justify-between items-center text-xs">
               <div>
                 <p className="font-bold text-on-surface">Password Security</p>
                 <p className="text-[10px] text-on-surface-variant font-mono">Firebase Auth Secured</p>
@@ -346,7 +346,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
               </button>
             </div>
 
-            <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/50 flex justify-between items-center text-xs">
+            <div className="p-3 bg-surface-container-low rounded-xl border border-outline flex justify-between items-center text-xs">
               <div>
                 <p className="font-bold text-on-surface">Active Session</p>
                 <p className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
@@ -364,7 +364,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
         <div className="lg:col-span-8 space-y-6">
           
           {/* Section Navigation Tabs */}
-          <div className="flex space-x-2 bg-surface-container/80 p-1.5 rounded-2xl border border-outline-variant/60">
+          <div className="flex space-x-2 bg-surface-container/80 p-1.5 rounded-2xl border border-outline">
             {[
               { id: 'personal', label: 'Personal Information', icon: User },
               { id: 'workspace', label: isPartner ? 'Studio & Craft Profile' : isCustomer ? 'Client Account Info' : 'Department & Duties', icon: Briefcase },
@@ -392,8 +392,8 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
           {/* Section 1: Personal & Contact Information */}
           {activeSection === 'personal' && (
-            <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
-              <div className="border-b border-outline-variant/60 pb-3">
+            <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
+              <div className="border-b border-outline pb-3">
                 <h3 className="text-base font-bold text-on-surface">Personal & Contact Details</h3>
                 <p className="text-xs text-on-surface-variant">Update your public identity details and contact methods across the ERP system.</p>
               </div>
@@ -410,7 +410,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Ruwan Jayasuriya"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                       required
                     />
                   </div>
@@ -426,7 +426,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       type="email"
                       value={currentUser?.identifier || ''}
                       disabled
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low/50 border border-outline-variant/40 rounded-xl text-sm font-mono text-on-surface-variant cursor-not-allowed"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low/50 border border-outline rounded-xl text-sm font-mono text-on-surface-variant cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -442,7 +442,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       value={formData.contactNumber}
                       onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
                       placeholder="+94 77 123 4567"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-mono text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-mono text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
                 </div>
@@ -458,7 +458,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       value={formData.company}
                       onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                       placeholder="e.g. Artisan Framing Works"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
                 </div>
@@ -474,7 +474,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       value={formData.jobTitle}
                       onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
                       placeholder="e.g. Senior Moulding Technician"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
                 </div>
@@ -490,7 +490,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                       placeholder="Kadawatha, Sri Lanka"
-                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
                 </div>
@@ -505,7 +505,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                   value={formData.bio}
                   onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                   placeholder="Share a short summary of your responsibilities, craft focus, or operational notes for the team..."
-                  className="w-full p-4 bg-surface-container-low border border-outline-variant rounded-2xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50 custom-scrollbar resize-none"
+                  className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-2xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50 custom-scrollbar resize-none"
                 />
               </div>
 
@@ -529,8 +529,8 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
               
               {/* Partner View */}
               {isPartner && (
-                <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
-                  <div className="border-b border-outline-variant/60 pb-3 flex justify-between items-center">
+                <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
+                  <div className="border-b border-outline pb-3 flex justify-between items-center">
                     <div>
                       <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
                         <Palette size={18} className="text-amber-400" />
@@ -553,7 +553,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                         value={formData.specialty}
                         onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
                         placeholder="e.g. Conservation Framing, Acrylic Box Frames"
-                        className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                        className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                       />
                     </div>
 
@@ -564,7 +564,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       <select
                         value={formData.workshopType}
                         onChange={(e) => setFormData({ ...formData, workshopType: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
+                        className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                       >
                         <option value="Custom Moulding & Assembly">Custom Moulding & Assembly</option>
                         <option value="Canvas Stretcher Specialist">Canvas Stretcher Specialist</option>
@@ -575,22 +575,22 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                   </div>
 
                   {/* Partner Capabilities Grid */}
-                  <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50 space-y-3">
+                  <div className="p-4 bg-surface-container-low rounded-2xl border border-outline space-y-3">
                     <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">Active Partner Privileges</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40 flex items-center gap-2">
+                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
                         <span className="font-medium text-on-surface">Fabrication Orders</span>
                       </div>
-                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40 flex items-center gap-2">
+                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
                         <span className="font-medium text-on-surface">Invoice Access</span>
                       </div>
-                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40 flex items-center gap-2">
+                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
                         <span className="font-medium text-on-surface">Direct Messaging</span>
                       </div>
-                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40 flex items-center gap-2">
+                      <div className="p-2.5 bg-surface-container rounded-xl border border-outline flex items-center gap-2">
                         <Check size={14} className="text-emerald-400" />
                         <span className="font-medium text-on-surface">Partner Directory</span>
                       </div>
@@ -613,8 +613,8 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
               {/* Employee View */}
               {isEmployee && (
-                <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
-                  <div className="border-b border-outline-variant/60 pb-3 flex justify-between items-center">
+                <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
+                  <div className="border-b border-outline pb-3 flex justify-between items-center">
                     <div>
                       <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
                         <Briefcase size={18} className="text-primary" />
@@ -628,13 +628,13 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50">
+                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
                       <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Assigned Department</p>
                       <p className="text-sm font-black text-on-surface mt-1">{currentUser?.role || 'Operations'}</p>
                       <p className="text-[10px] text-on-surface-variant mt-0.5">Print To Frame Pvt Ltd</p>
                     </div>
 
-                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50">
+                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
                       <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Internal Agent ID</p>
                       <p className="text-sm font-mono font-black text-primary mt-1">
                         {currentUser?.identifier?.split('@')[0]?.toUpperCase()}
@@ -642,7 +642,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       <p className="text-[10px] text-on-surface-variant mt-0.5">Verified Identity</p>
                     </div>
 
-                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50">
+                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
                       <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Clearance Status</p>
                       <p className="text-sm font-black text-emerald-400 mt-1">Full Internal Access</p>
                       <p className="text-[10px] text-on-surface-variant mt-0.5">RBAC Synchronized</p>
@@ -650,13 +650,13 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                   </div>
 
                   {/* Quick Shortcut Navigation */}
-                  <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50 space-y-3">
+                  <div className="p-4 bg-surface-container-low rounded-2xl border border-outline space-y-3">
                     <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider">Operational Jump Links</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                       <button
                         type="button"
                         onClick={() => setActiveTab && setActiveTab('roadmap')}
-                        className="p-3 bg-surface-container rounded-xl border border-outline-variant/40 hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
+                        className="p-3 bg-surface-container rounded-xl border border-outline hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
                       >
                         <Map size={14} className="text-primary mb-1.5" />
                         Execution Plan
@@ -664,7 +664,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       <button
                         type="button"
                         onClick={() => setActiveTab && setActiveTab('projects')}
-                        className="p-3 bg-surface-container rounded-xl border border-outline-variant/40 hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
+                        className="p-3 bg-surface-container rounded-xl border border-outline hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
                       >
                         <Hammer size={14} className="text-cyan-400 mb-1.5" />
                         Fabrication Works
@@ -672,7 +672,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       <button
                         type="button"
                         onClick={() => setActiveTab && setActiveTab('calculator')}
-                        className="p-3 bg-surface-container rounded-xl border border-outline-variant/40 hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
+                        className="p-3 bg-surface-container rounded-xl border border-outline hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
                       >
                         <Calculator size={14} className="text-amber-400 mb-1.5" />
                         Cost Calculator
@@ -680,7 +680,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       <button
                         type="button"
                         onClick={() => setActiveTab && setActiveTab('messages')}
-                        className="p-3 bg-surface-container rounded-xl border border-outline-variant/40 hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
+                        className="p-3 bg-surface-container rounded-xl border border-outline hover:border-primary text-left text-xs font-bold text-on-surface transition-colors"
                       >
                         <MessageSquare size={14} className="text-purple-400 mb-1.5" />
                         Team Messages
@@ -692,8 +692,8 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
               {/* Customer View */}
               {isCustomer && (
-                <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
-                  <div className="border-b border-outline-variant/60 pb-3">
+                <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
+                  <div className="border-b border-outline pb-3">
                     <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
                       <User size={18} className="text-emerald-400" />
                       Client Account Specifications
@@ -702,11 +702,11 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50">
+                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
                       <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Account ID</p>
                       <p className="text-sm font-mono font-black text-on-surface mt-1">{currentUser?.identifier}</p>
                     </div>
-                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50">
+                    <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
                       <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Billing Status</p>
                       <p className="text-sm font-bold text-emerald-400 mt-1">Verified Client Account</p>
                     </div>
@@ -719,8 +719,8 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
           {/* Section 3: System & Alert Preferences */}
           {activeSection === 'preferences' && (
-            <div className="bg-surface-container/80 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
-              <div className="border-b border-outline-variant/60 pb-3">
+            <div className="bg-surface-container/80 border border-outline rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] space-y-5">
+              <div className="border-b border-outline pb-3">
                 <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
                   <Bell size={18} className="text-primary" />
                   Workspace Alerts & Notification Preferences
@@ -730,7 +730,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
 
               <div className="space-y-4">
                 {/* Push Notification Toggle */}
-                <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center justify-between">
+                <div className="p-4 bg-surface-container-low rounded-2xl border border-outline flex items-center justify-between">
                   <div className="flex items-center space-x-3.5">
                     <div className="p-2.5 bg-primary/15 text-primary rounded-xl">
                       <Bell size={18} />
@@ -753,7 +753,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                 </div>
 
                 {/* Audio Feedback Toggle */}
-                <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center justify-between">
+                <div className="p-4 bg-surface-container-low rounded-2xl border border-outline flex items-center justify-between">
                   <div className="flex items-center space-x-3.5">
                     <div className="p-2.5 bg-amber-500/15 text-amber-400 rounded-xl">
                       <Sparkles size={18} />

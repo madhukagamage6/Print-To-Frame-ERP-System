@@ -261,7 +261,7 @@ export default function FabricationCardDetails({
           {/* Work Order Title & Scope */}
           <DetailFieldGroup label="Work Order Title & Scope" icon={FileText}>
             <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-wider">
+              <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">
                 Item Title (Kanban Display Heading)
               </label>
               <input
@@ -270,15 +270,15 @@ export default function FabricationCardDetails({
                 value={form.title}
                 onChange={handleChange}
                 placeholder="e.g. Box Iron Frame (10' × 4')"
-                className="w-full p-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full p-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-wider">
+              <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">
                 Scope & Requirements
               </label>
-              <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/50 text-xs text-on-surface leading-relaxed font-medium whitespace-pre-wrap font-mono max-h-36 overflow-y-auto custom-scrollbar">
+              <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline text-xs text-on-surface leading-relaxed font-medium whitespace-pre-wrap font-mono max-h-36 overflow-y-auto custom-scrollbar">
                 {stripEmojis(job.scope) || "Custom steel framing and gallery canvas wrap fabrication."}
               </div>
             </div>
@@ -286,7 +286,7 @@ export default function FabricationCardDetails({
 
           {/* Interactive CAD Structural Blueprint */}
           <DetailFieldGroup label="Interactive CAD Structural Blueprint" icon={Ruler}>
-            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60">
+            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline">
               <FrameBlueprintPreview
                 width={Number(form.frameWidth) || 900}
                 height={Number(form.frameHeight) || 600}
@@ -295,7 +295,7 @@ export default function FabricationCardDetails({
                 unit="mm"
                 showDimensions={true}
               />
-              <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-outline-variant/40">
+              <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-outline">
                 <div>
                   <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1">Width (mm)</label>
                   <input
@@ -303,7 +303,7 @@ export default function FabricationCardDetails({
                     name="frameWidth"
                     value={form.frameWidth}
                     onChange={handleChange}
-                    className="w-full p-2 bg-surface-container border border-outline-variant rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full p-2 bg-surface-container-highest/60 border border-outline rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
                 <div>
@@ -313,7 +313,7 @@ export default function FabricationCardDetails({
                     name="frameHeight"
                     value={form.frameHeight}
                     onChange={handleChange}
-                    className="w-full p-2 bg-surface-container border border-outline-variant rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full p-2 bg-surface-container-highest/60 border border-outline rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
                 <div>
@@ -323,7 +323,7 @@ export default function FabricationCardDetails({
                     name="frameDepth"
                     value={form.frameDepth}
                     onChange={handleChange}
-                    className="w-full p-2 bg-surface-container border border-outline-variant rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full p-2 bg-surface-container-highest/60 border border-outline rounded-lg text-xs font-mono text-on-surface font-bold focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -338,7 +338,7 @@ export default function FabricationCardDetails({
               value={form.materials}
               onChange={handleChange}
               placeholder="e.g. 1.5 inch Box Iron, Corner Brackets, Anti-Rust Primer"
-              className="w-full p-3 bg-surface-container-low border border-outline-variant rounded-xl text-sm text-on-surface font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full p-3 bg-surface-container-highest/60 border border-outline rounded-xl text-sm text-on-surface font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </DetailFieldGroup>
 
@@ -351,7 +351,7 @@ export default function FabricationCardDetails({
               className={`border-2 border-dashed rounded-xl p-5 text-center transition-all cursor-pointer relative group ${
                 isDragging 
                   ? 'border-primary bg-primary/10' 
-                  : 'border-outline-variant/60 hover:bg-surface-container-low hover:border-primary/50'
+                  : 'border-outline hover:bg-surface-container-low hover:border-primary/50'
               }`}
             >
               <input
@@ -373,7 +373,7 @@ export default function FabricationCardDetails({
             {form.blueprints.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                 {form.blueprints.map((file, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/50">
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-surface-container-low rounded-lg border border-outline">
                     <div className="flex items-center space-x-2 overflow-hidden">
                       <File size={14} className="text-primary shrink-0" />
                       <span className="text-xs font-medium text-on-surface truncate" title={file.name}>
@@ -411,7 +411,7 @@ export default function FabricationCardDetails({
 
           {/* Execution & Financial Summary */}
           <DetailFieldGroup label="Execution & Financial Summary" icon={DollarSign}>
-            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-3">
+            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline space-y-3">
               <div>
                 <span className="text-[9px] uppercase font-bold text-on-surface-variant block tracking-wider mb-0.5">Contract Value</span>
                 <p className="text-xl font-mono font-black text-primary">
@@ -419,14 +419,14 @@ export default function FabricationCardDetails({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-outline-variant/40">
-                <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40">
+              <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-outline">
+                <div className="p-2.5 bg-surface-container rounded-xl border border-outline">
                   <span className="text-[9px] uppercase font-bold text-on-surface-variant block tracking-wider">Total Area</span>
                   <p className="text-xs font-mono font-bold text-on-surface flex items-center mt-0.5">
                     <Ruler size={11} className="mr-1 text-primary" /> {job.totalSqFt || 0} SqFt
                   </p>
                 </div>
-                <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40">
+                <div className="p-2.5 bg-surface-container rounded-xl border border-outline">
                   <span className="text-[9px] uppercase font-bold text-on-surface-variant block tracking-wider">Deadline</span>
                   <p className="text-xs font-mono font-bold text-amber-400 flex items-center mt-0.5">
                     <Clock size={11} className="mr-1" /> {job.deadline || "TBA"}
@@ -438,7 +438,7 @@ export default function FabricationCardDetails({
 
           {/* Canvas Component Status Toggle */}
           <DetailFieldGroup label="Component Readiness" icon={Check}>
-            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/60 flex items-center justify-between">
+            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-on-surface block">Printed Canvas Received</span>
                 <span className="text-[10px] text-on-surface-variant block mt-0.5">Ready for gallery wrapping</span>
@@ -460,14 +460,14 @@ export default function FabricationCardDetails({
               value={form.note}
               onChange={handleChange}
               rows={2}
-              className="w-full p-3 bg-surface-container-low border border-outline-variant rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+              className="w-full p-3 bg-surface-container-highest/60 border border-outline rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
               placeholder="Critical notes, weld inspection criteria, or special instructions..."
             />
           </DetailFieldGroup>
 
           {/* Work Order Assignee */}
           <DetailFieldGroup label="Factory Lead Assignee" icon={User}>
-            <div className="flex bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
+            <div className="flex bg-surface-container-highest/60 border border-outline rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
               <div className="flex items-center px-3 bg-surface-container-high border-r border-outline-variant text-xs text-on-surface-variant">
                 <User size={13} />
               </div>

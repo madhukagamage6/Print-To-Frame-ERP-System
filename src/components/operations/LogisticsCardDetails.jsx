@@ -208,7 +208,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                   name="subType"
                   value={formData.subType}
                   onChange={handleInputChange}
-                  className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                  className="w-full px-3.5 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
                 >
                   <option value="">-- Select Category --</option>
                   <option value="Printed Canvas">Printed Canvas Roll</option>
@@ -228,7 +228,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                   name="priority"
                   value={formData.priority}
                   onChange={handleInputChange}
-                  className="w-full px-3.5 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                  className="w-full px-3.5 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
                 >
                   <option value="Standard">Standard Priority</option>
                   <option value="Express">Express Rush (Same Day)</option>
@@ -248,7 +248,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                   name="location"
                   value={formData.location}
                   onChange={handleInputChange}
-                  className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                  className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
                   placeholder="Provide full destination or client address"
                 />
               </div>
@@ -265,8 +265,8 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
               </span>
             }
           >
-            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 relative overflow-hidden">
-              <div className="w-full h-32 bg-surface-container rounded-xl relative flex items-center justify-between px-8 border border-outline-variant/40 overflow-hidden">
+            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline relative overflow-hidden">
+              <div className="w-full h-32 bg-surface-container rounded-xl relative flex items-center justify-between px-8 border border-outline overflow-hidden">
                 <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#00daf3_1px,transparent_1px)] [background-size:16px_16px]" />
                 
                 {/* Node 1: Kadawatha Central Hub */}
@@ -303,7 +303,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
 
           {/* Delivery Manifest & Waybill Slip */}
           <DetailFieldGroup label="Waybill Slip & Packaging Manifest" icon={FileText}>
-            <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60 flex items-center justify-between">
+            <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline flex items-center justify-between">
               <div className="flex items-center space-x-3 overflow-hidden">
                 <div className="p-2 bg-primary/10 text-primary rounded-lg border border-primary/20 shrink-0">
                   <FileText size={16} />
@@ -327,7 +327,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
               value={formData.specialNotes}
               onChange={handleInputChange}
               rows={2}
-              className="w-full p-3 bg-surface-container-low border border-outline-variant rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+              className="w-full p-3 bg-surface-container-highest/60 border border-outline rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
               placeholder="e.g. Fragile glass/canvas wrap, keep upright in lorry bed..."
             />
           </DetailFieldGroup>
@@ -356,7 +356,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                   name="driver"
                   value={formData.driver}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                  className="w-full px-3 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
                 >
                   <option value="">-- Select Driver --</option>
                   <option value="Saman (Master Welder)">Saman (Master Welder)</option>
@@ -374,7 +374,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                   name="vehicle"
                   value={formData.vehicle}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-outline-variant rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                  className="w-full px-3 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
                 >
                   <option value="">-- Select Vehicle --</option>
                   <option value="Lorry (WP GE 1234)">Lorry (WP GE 1234)</option>
@@ -387,9 +387,9 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
 
           {/* Milestone & Timeline Log */}
           <DetailFieldGroup label="Milestone & Duration Log" icon={Clock}>
-            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-2.5">
+            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline space-y-2.5">
               <div className="grid grid-cols-2 gap-2.5 text-xs">
-                <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40">
+                <div className="p-2.5 bg-surface-container rounded-xl border border-outline">
                   <span className="text-[9px] uppercase font-bold text-on-surface-variant flex items-center mb-1">
                     <Calendar size={10} className="mr-1" /> Dispatched At
                   </span>
@@ -397,7 +397,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
                     {job.startTime ? new Date(job.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pending'}
                   </span>
                 </div>
-                <div className="p-2.5 bg-surface-container rounded-xl border border-outline-variant/40">
+                <div className="p-2.5 bg-surface-container rounded-xl border border-outline">
                   <span className="text-[9px] uppercase font-bold text-on-surface-variant flex items-center mb-1">
                     <CheckCircle size={10} className="mr-1 text-emerald-400" /> Duration
                   </span>
@@ -411,7 +411,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
 
           {/* Client SMS / Dispatch Trigger */}
           <DetailFieldGroup label="Client Dispatch Alert" icon={Bell}>
-            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-2.5">
+            <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-on-surface">Client Transmission</span>
                 {formData.notified ? (
