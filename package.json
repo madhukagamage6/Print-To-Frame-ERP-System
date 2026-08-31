@@ -8,7 +8,9 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview --host 0.0.0.0 --port 3000"
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "push:staging": "git add . && git commit -m \"chore: update staging build\" && git push origin staging",
+    "deploy:live": "git checkout main && git merge staging && git push origin main && git checkout staging"
   },
   "dependencies": {
     "@google/genai": "^1.47.0",
