@@ -3,6 +3,8 @@ import { GoogleGenAI } from '@google/genai';
 // Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
 // All support audio inlineData multimodal content. Ordered by performance preference.
 const CANDIDATE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3-flash-preview',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.5-pro',
