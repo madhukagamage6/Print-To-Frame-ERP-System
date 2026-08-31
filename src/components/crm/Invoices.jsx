@@ -359,16 +359,27 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <strong>${lineItemTitle}</strong><br/>
-                  <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
-                    ${selectedInvoice.aiDraft ? selectedInvoice.aiDraft.replace(/#\s*Invoice\n+/i, '').replace(/- /g, '• ') : 'Custom metal framing work'}
-                  </span>
-                </td>
-                <td style="text-align: center;" class="mono-text">1</td>
-                <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-              </tr>
+              ${selectedInvoice.lineItems && selectedInvoice.lineItems.length > 0 ? selectedInvoice.lineItems.map(item => `
+                <tr>
+                  <td>
+                    <strong>${item.description || 'Fabrication Item'}</strong>
+                    ${item.unit ? `<span style="font-size:11px; color:#64748b; margin-left:6px;">(${item.unit})</span>` : ''}
+                  </td>
+                  <td style="text-align: center;" class="mono-text">${item.qty || 1}</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${(Number(item.qty || 1) * Number(item.unitPrice || 0) * (isFinal ? 0.25 : 0.75)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td>
+                    <strong>${lineItemTitle}</strong><br/>
+                    <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
+                      ${selectedInvoice.aiDraft ? selectedInvoice.aiDraft.replace(/#\s*Invoice\n+/i, '').replace(/- /g, '• ') : 'Custom metal framing work'}
+                    </span>
+                  </td>
+                  <td style="text-align: center;" class="mono-text">1</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `}
             </tbody>
           </table>
 

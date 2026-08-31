@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Plus, ArrowLeft, ArrowRight, Trash2, Calendar, User, DollarSign, 
-  Check, LayoutGrid, List, Download 
+  Check, LayoutGrid, List, Download, Truck 
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import DeleteModal from '../common/DeleteModal';
 import LeadCardDetails from './LeadCardDetails';
 import { PageHeader, FilterBar, KanbanColumn, KanbanCard, StatusBadge } from '../common/ui';
 import SortableTable from '../common/ui/SortableTable';
-import { updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { exportToCsv } from '../../utils/csvExport';
 
 const DEALS_STAGES = ["Waiting", "Fabricating", "Ready To Load", "Hand Over", "Completed"];
@@ -31,7 +31,9 @@ function DealColumn({
   onCardClick,
   onAddNew,
   isAdmin,
-  onDelete
+  onDelete,
+  onCreateDelivery,
+  logisticsJobs = []
 }) {
   return (
     <KanbanColumn
@@ -97,6 +99,52 @@ function DealColumn({
           </div>
         );
 
+        const customActions = (
+          <>
+            {(stage === "Ready To Load" || stage === "Hand Over") && (() => {
+              const job = logisticsJobs ? logisticsJobs.find(j => j.dealId === deal.id || j.leadId === deal.id || j.leadId === deal.originalLeadId) : null;
+              if (job && job.status === "Completed") {
+                return (
+                  <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Delivery Completed">
+                    <Check size={12} />
+                    <span className="text-[10px] font-bold">Delivered</span>
+                  </div>
+                );
+              }
+              if (job && job.status === "In Transit") {
+                return (
+                  <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20" title="Delivery In Transit">
+                    <Truck size={12} className="animate-pulse" />
+                    <span className="text-[10px] font-bold">In Transit</span>
+                  </div>
+                );
+              }
+              if (job) {
+                return (
+                  <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Delivery Dispatched">
+                    <Truck size={12} />
+                    <span className="text-[10px] font-bold">Dispatched</span>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onCreateDelivery) onCreateDelivery(deal);
+                  }}
+                  className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-on-primary transition-all border border-primary/20 flex items-center gap-1 text-[10px] font-bold"
+                  title="Notify Logistics to Dispatch Delivery"
+                >
+                  <Truck size={12} />
+                  <span>Deliver</span>
+                </button>
+              );
+            })()}
+          </>
+        );
+
         return (
           <KanbanCard
             key={deal.id}
@@ -112,6 +160,7 @@ function DealColumn({
             isAdmin={isAdmin}
             isFirstStage={isFirstStage}
             isLastStage={isLastStage}
+            customActions={customActions}
             moveForwardIcon={stage === "Hand Over" ? <Check size={13} /> : <ArrowRight size={13} />}
             moveForwardTitle={stage === "Hand Over" ? "Complete Deal & Commission" : "Move to next stage"}
           />
@@ -130,6 +179,9 @@ export default function Deals({
   customers = [],
   setCustomers,
   quotations = [],
+  logisticsJobs = [],
+  setLogisticsJobs,
+  invoices = [],
   onSaveInvoice,
   onMarkInvoicePaid
 }) {
@@ -219,17 +271,27 @@ export default function Deals({
           if (nextStage === "Completed") {
             if (onSaveInvoice) {
               const invId = `FIN-${String(Date.now()).slice(-6)}`;
+              const linkedQuote = (quotations || []).find(q => q.leadId === deal.id || q.leadId === deal.originalLeadId);
+              const finalAmount = (deal.value || 0) * 0.25;
               onSaveInvoice({
                 id: invId,
                 leadId: deal.id,
-                customerName: deal.name,
-                company: deal.company,
+                quotationId: linkedQuote?._firestoreId || linkedQuote?.id || '',
+                customerName: deal.name || 'Direct Customer',
+                company: deal.company || '',
+                phone: deal.phone || '',
                 date: new Date().toISOString().split('T')[0],
-                amount: (deal.value || 0) * 0.25,
+                amount: finalAmount,
                 totalValue: deal.value || 0,
+                advancePaid: (deal.value || 0) * 0.75,
+                balanceDue: finalAmount,
                 type: 'Final',
                 status: 'Unpaid',
-                aiDraft: `Final Settlement (25%) for project.`
+                aiDraft: deal.jobScope || `Final Settlement (25%) for project.`,
+                dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+                lineItems: linkedQuote?.lineItems || [
+                  { description: deal.jobScope || "Custom steel framing final balance settlement", qty: 1, unit: "job", unitPrice: finalAmount, taxPct: 0, discountPct: 0 }
+                ]
               });
             }
 
@@ -256,7 +318,7 @@ export default function Deals({
               }
             } else {
               toast.success(`Deal Completed!`, {
-                description: `25% Final Invoice generated successfully.`
+                description: `25% Final Settlement Invoice generated successfully.`
               });
             }
           }
@@ -268,10 +330,43 @@ export default function Deals({
 
     if (updatedDealObj && nextStageStr) {
       try {
-        await updateDocument(COLLECTIONS.LEADS, updatedDealObj._firestoreId || updatedDealObj.id, { stage: nextStageStr });
+        await updateDocument(COLLECTIONS.LEADS, updatedDealObj._firestoreId || updatedDealObj.id, { 
+          stage: nextStageStr,
+          stageEnteredAt: now 
+        });
       } catch (err) {
         console.error("Deal move forward error:", err);
       }
+    }
+  };
+
+  const handleCreateDeliveryJob = async (deal) => {
+    const jobId = `L-DL-${String(Date.now()).slice(-6)}`;
+    const newJob = {
+      id: jobId,
+      type: "Delivery",
+      subType: "Framed Works / Finished Goods",
+      location: deal.deliveryLocation || "Customer location TBD",
+      customer: deal.name || "Direct Customer",
+      company: deal.company || "",
+      phone: deal.phone || "",
+      status: "Pending",
+      startTime: null,
+      endTime: null,
+      duration: null,
+      manifest: `Delivery for Deal ${deal.id} - ${deal.company || deal.name || ''}`,
+      dealId: deal.id,
+      leadId: deal.originalLeadId || deal.id
+    };
+    if (setLogisticsJobs) {
+      setLogisticsJobs(prev => [newJob, ...prev]);
+    }
+    try {
+      await addDocument(COLLECTIONS.LOGISTICS, newJob, jobId);
+      toast.success(`Delivery job ${jobId} created and dispatched to Logistics!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to sync delivery job to database");
     }
   };
 
@@ -447,6 +542,8 @@ export default function Deals({
                 onAddNew={handleAddNewFallback}
                 isAdmin={isAdmin}
                 onDelete={setDeleteDealId}
+                onCreateDelivery={handleCreateDeliveryJob}
+                logisticsJobs={logisticsJobs}
               />
             ))}
           </div>
@@ -512,9 +609,13 @@ export default function Deals({
           customers={customers}
           currentUser={currentUser}
           allQuotations={quotations}
+          logisticsJobs={logisticsJobs}
+          onCreateLogistics={handleCreateDeliveryJob}
+          invoices={invoices}
+          isDeal={true}
           onConvert={() => {
             // Conversion should ideally be hidden for active deals, but we provide a no-op just in case
-            toast.info("This item is already a deal.");
+            toast.info("This item is already an active deal.");
           }}
         />
       )}

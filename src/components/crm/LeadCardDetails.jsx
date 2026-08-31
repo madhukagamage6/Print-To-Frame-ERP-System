@@ -3,7 +3,7 @@ import {
   X, User, Building, Phone, Mail, Link, FileText, 
   Trash2, Play, Check, Calculator, MapPin, 
   FileSpreadsheet, Sparkles, Printer, Save, Clock,
-  Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2
+  Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2, Truck
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { calculateCost, determineTier } from '../../services/pricingEngine';
@@ -123,7 +123,11 @@ export default function LeadCardDetails({
   partners = [], 
   customers = [],
   currentUser,
-  allQuotations = []
+  allQuotations = [],
+  isDeal = false,
+  logisticsJobs = [],
+  onCreateLogistics,
+  invoices = []
 }) {
   const defaultFormData = {
     name: lead.name || '',
@@ -546,18 +550,26 @@ export default function LeadCardDetails({
     }
   };
 
-  // Redesigned Print Invoice PDF Styling (Clean, Premium, Modern)
-  const printInvoice = () => {
+  // Redesigned Print Invoice PDF Styling (Clean, Premium, Modern, Matching Both 75% Advance and 25% Final)
+  const printInvoice = (invoiceType = 'Advance') => {
+    const isFinal = invoiceType === 'Final';
     const clientHeader = formData.company 
       ? `<strong>${formData.company}</strong><br/><span style="color:#64748b;">Attn: ${formData.name}</span>`
       : `<strong>${formData.name}</strong>`;
     
-    const invoiceNo = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
-    const advanceAmount = formData.value * 0.75;
-    const balanceAmount = formData.value * 0.25;
+    const invoiceNo = isFinal ? `FIN-${Math.floor(1000 + Math.random() * 9000)}` : `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+    const totalVal = Number(formData.value || lead.value || 0);
+    const advanceAmount = totalVal * 0.75;
+    const balanceAmount = totalVal * 0.25;
+    const invoiceAmount = isFinal ? balanceAmount : advanceAmount;
+    const badgeText = isFinal ? '25% Final Settlement Invoice' : '75% Advance Invoice';
+    const lineItemTitle = isFinal ? 'Custom Framing Final Settlement Payment (25%)' : 'Custom Framing Advance Payment (75%)';
     const dateStr = new Date().toLocaleDateString('en-GB', {
       day: 'numeric', month: 'long', year: 'numeric'
     });
+
+    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
+    const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
     const html = `
       <html>
@@ -664,7 +676,7 @@ export default function LeadCardDetails({
               margin-bottom: 60px;
             }
             .totals-table {
-              width: 350px;
+              width: 380px;
               margin-bottom: 0;
             }
             .totals-table td {
@@ -672,7 +684,7 @@ export default function LeadCardDetails({
               border: none;
             }
             .totals-table tr.grand-total td {
-              border-top: 2px solid #f1f5f9;
+              border-top: 2px solid #4f46e5;
               font-size: 18px;
               font-weight: 800;
               color: #4f46e5;
@@ -689,8 +701,9 @@ export default function LeadCardDetails({
             .badge {
               display: inline-block;
               padding: 4px 10px;
-              background-color: #e0f2fe;
-              color: #0369a1;
+              background-color: ${isFinal ? '#ecfdf5' : '#e0f2fe'};
+              color: ${isFinal ? '#047857' : '#0369a1'};
+              border: 1px solid ${isFinal ? '#a7f3d0' : '#bae6fd'};
               border-radius: 99px;
               font-size: 10px;
               font-weight: 800;
@@ -713,7 +726,7 @@ export default function LeadCardDetails({
               <p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b;">Premium Steel Framing & Gallery Canvas Wraps<br/>Kadawatha, Sri Lanka | +94 71 141 9027</p>
             </div>
             <div class="meta-box">
-              <span class="badge">75% Advance Invoice</span>
+              <span class="badge">${badgeText}</span>
               <p class="invoice-id" style="margin-top:12px;">${invoiceNo}</p>
               <p>Date: ${dateStr}</p>
             </div>
@@ -734,16 +747,27 @@ export default function LeadCardDetails({
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <strong>Custom Framing Advance Payment (75%)</strong><br/>
-                  <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
-                    Scope: ${formData.invoiceDraft || formData.jobScope || 'Custom metal framing work'}
-                  </span>
-                </td>
-                <td style="text-align: center;" class="mono-text">1</td>
-                <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${advanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-              </tr>
+              ${lineItemsToPrint ? lineItemsToPrint.map(item => `
+                <tr>
+                  <td>
+                    <strong>${item.description || 'Fabrication Item'}</strong>
+                    ${item.unit ? `<span style="font-size:11px; color:#64748b; margin-left:6px;">(${item.unit})</span>` : ''}
+                  </td>
+                  <td style="text-align: center;" class="mono-text">${item.qty || 1}</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${(Number(item.qty || 1) * Number(item.unitPrice || 0) * (isFinal ? 0.25 : 0.75)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td>
+                    <strong>${lineItemTitle}</strong><br/>
+                    <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
+                      Scope: ${formData.invoiceDraft || formData.jobScope || 'Custom metal framing work'}
+                    </span>
+                  </td>
+                  <td style="text-align: center;" class="mono-text">1</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `}
             </tbody>
           </table>
 
@@ -751,15 +775,15 @@ export default function LeadCardDetails({
             <table class="totals-table">
               <tr>
                 <td style="color:#64748b;">Contract Value:</td>
-                <td style="text-align: right;" class="mono-text">LKR ${formData.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style="text-align: right;" class="mono-text">LKR ${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td style="color:#64748b;">Balance Due on Delivery:</td>
-                <td style="text-align: right;" class="mono-text">LKR ${balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td style="color:#64748b;">${isFinal ? 'Advance Paid (75%):' : 'Balance Due on Delivery:'}</td>
+                <td style="text-align: right;" class="mono-text">LKR ${isFinal ? advanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
               <tr class="grand-total">
-                <td>Advance Amount Due:</td>
-                <td style="text-align: right;" class="mono-text">LKR ${advanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td>${isFinal ? 'Final Settlement Due:' : 'Advance Amount Due:'}</td>
+                <td style="text-align: right;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
             </table>
           </div>
@@ -778,8 +802,10 @@ export default function LeadCardDetails({
     `;
 
     const printWin = window.open('', '', 'height=800,width=800');
-    printWin.document.write(html);
-    printWin.document.close();
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+    }
   };
 
   const saveInvoiceToDb = () => {
@@ -787,21 +813,59 @@ export default function LeadCardDetails({
     const invId = `INV-${String(Date.now()).slice(-6)}`;
     const invoiceDate = new Date().toISOString().split('T')[0];
     const totalVal = Number(formData.value || lead.value || 0);
+    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
     onSaveInvoice({
       id: invId,
       leadId: lead.id,
+      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: formData.name || lead.name || 'Direct Customer',
       company: formData.company || lead.company || '',
+      phone: formData.phone || '',
       date: invoiceDate,
       amount: totalVal * 0.75,
       totalValue: totalVal,
+      advancePaid: 0,
+      balanceDue: totalVal * 0.25,
       type: 'Advance',
       status: formData.invoicePaid ? 'Paid' : 'Unpaid',
-      aiDraft: formData.invoiceDraft || formData.jobScope || 'Custom steel framing advance invoice'
+      aiDraft: formData.invoiceDraft || formData.jobScope || 'Custom steel framing advance invoice',
+      lineItems: activeQuote?.lineItems || [
+        { description: formData.jobScope || "Custom steel framing advance deposit", qty: 1, unit: "job", unitPrice: totalVal * 0.75, taxPct: 0, discountPct: 0 }
+      ]
     });
     const updatedData = { ...formData, invoiceDate: invoiceDate, invoiceGenerated: true };
     setFormData(updatedData);
     handleSaveLead(updatedData);
+    toast.success('75% Advance invoice saved to database!');
+  };
+
+  const saveFinalInvoiceToDb = () => {
+    if (!onSaveInvoice) return;
+    const invId = `FIN-${String(Date.now()).slice(-6)}`;
+    const invoiceDate = new Date().toISOString().split('T')[0];
+    const totalVal = Number(formData.value || lead.value || 0);
+    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
+    onSaveInvoice({
+      id: invId,
+      leadId: lead.id,
+      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
+      customerName: formData.name || lead.name || 'Direct Customer',
+      company: formData.company || lead.company || '',
+      phone: formData.phone || '',
+      date: invoiceDate,
+      amount: totalVal * 0.25,
+      totalValue: totalVal,
+      advancePaid: totalVal * 0.75,
+      balanceDue: totalVal * 0.25,
+      type: 'Final',
+      status: 'Unpaid',
+      aiDraft: formData.jobScope || 'Custom steel framing 25% final settlement invoice',
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      lineItems: activeQuote?.lineItems || [
+        { description: formData.jobScope || "Custom steel framing final balance settlement", qty: 1, unit: "job", unitPrice: totalVal * 0.25, taxPct: 0, discountPct: 0 }
+      ]
+    });
+    toast.success('25% Final Settlement invoice saved to database!');
   };
 
   const handleConvertClick = () => {
@@ -1549,6 +1613,78 @@ export default function LeadCardDetails({
                     </p>
                   </div>
                 )}
+
+                {/* Direct Print Quick-Actions */}
+                <div className="pt-3 border-t border-outline-variant/30 space-y-2">
+                  <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider text-left">Print Documents</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printInvoice('Advance')}
+                      className="w-full py-2 bg-surface-container border border-outline-variant hover:border-amber-400/40 text-on-surface hover:text-amber-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
+                    >
+                      <Printer size={11} /> 75% Advance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => printInvoice('Final')}
+                      className="w-full py-2 bg-surface-container border border-outline-variant hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
+                    >
+                      <Printer size={11} /> 25% Final
+                    </button>
+                  </div>
+                </div>
+
+                {/* Logistics Delivery Dispatch Card for Deals */}
+                {(isDeal || lead.isDeal) && (
+                  <div className="pt-3 border-t border-outline-variant/30 space-y-2 text-left">
+                    <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider flex items-center gap-1">
+                      <Truck size={12} className="text-primary" /> Delivery Logistics
+                    </p>
+                    {(() => {
+                      const dealJob = (logisticsJobs || []).find(j => j.dealId === lead.id || j.leadId === lead.id || j.leadId === lead.originalLeadId);
+                      if (dealJob) {
+                        return (
+                          <div className="p-2.5 bg-surface-container-low rounded-xl border border-outline-variant space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-[9px] font-bold text-on-surface-variant">{dealJob.id}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                dealJob.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
+                                dealJob.status === 'In Transit' ? 'text-primary bg-primary/10 border-primary/30 animate-pulse' :
+                                'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                              }`}>
+                                {dealJob.status === 'Completed' ? 'Delivered' : dealJob.status}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-on-surface truncate">📍 {dealJob.location || formData.deliveryLocation || 'Customer address'}</p>
+                            {dealJob.driver && (
+                              <p className="text-[9px] text-on-surface-variant font-medium">Driver: <strong>{dealJob.driver}</strong></p>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="p-2.5 bg-surface-container-low rounded-xl border border-outline-variant space-y-2">
+                          <p className="text-[10px] text-on-surface-variant leading-tight">
+                            Dispatch completed frames to: <strong className="text-on-surface">{formData.deliveryLocation || 'Destination TBD'}</strong>
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onCreateLogistics) {
+                                onCreateLogistics({ ...lead, ...formData });
+                              }
+                            }}
+                            className="w-full py-2 bg-primary/10 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                          >
+                            <Truck size={13} />
+                            <span>Dispatch Delivery</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           </DetailModalSidebar>
@@ -1558,7 +1694,7 @@ export default function LeadCardDetails({
       {/* Universal Footer */}
       <DetailModalFooter
         secondaryActions={
-          !lead.isDeal ? (
+          !lead.isDeal && !isDeal && !lead.convertedToDeal ? (
             <button 
               type="button"
               onClick={handleConvertClick}
@@ -1581,7 +1717,7 @@ export default function LeadCardDetails({
             className="px-6 py-2 bg-primary text-on-primary rounded-xl font-bold text-xs sm:text-sm hover:bg-primary/90 transition-all flex items-center space-x-1.5 shadow-[0_0_15px_rgba(0,218,243,0.2)] active:scale-95"
           >
             <Save size={14} />
-            <span>Save Lead Details</span>
+            <span>{isDeal || lead.isDeal ? 'Save Deal Details' : 'Save Lead Details'}</span>
           </button>
         }
       />

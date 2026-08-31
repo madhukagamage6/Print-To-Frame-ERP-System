@@ -147,17 +147,23 @@ function LeadColumn({
             })()}
 
             {isLastStage && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMove(lead.id);
-                }}
-                className="px-2.5 py-1.5 rounded-lg bg-secondary text-on-secondary hover:bg-secondary/90 font-bold text-[10px] uppercase tracking-wider transition-all flex items-center space-x-1"
-                title="Convert to Deal"
-              >
-                <Check size={12} />
-                <span>Convert</span>
-              </button>
+              lead.convertedToDeal ? (
+                <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-[9px] font-bold flex items-center gap-1" title="Lead has been converted to a deal">
+                  <Check size={11} /> Converted
+                </span>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMove(lead.id);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-secondary text-on-secondary hover:bg-secondary/90 font-bold text-[10px] uppercase tracking-wider transition-all flex items-center space-x-1"
+                  title="Convert to Deal"
+                >
+                  <Check size={12} />
+                  <span>Convert</span>
+                </button>
+              )
             )}
           </>
         );
@@ -406,14 +412,23 @@ export default function Leads({
 
   // OPTIMIZATION 7: Automatic Client Creation upon saving Lead Details (Prevent Duplicates)
   const handleSaveLeadDetails = async (updatedLead) => {
-    setLeads(prev => prev.map(lead => lead.id === updatedLead.id ? updatedLead : lead));
+    const currentLead = leads.find(l => l.id === updatedLead.id);
+    const cleanedLead = {
+      ...updatedLead,
+      stage: updatedLead.stage || currentLead?.stage || 'Intake',
+      isDeal: false,
+      convertedToDeal: !!currentLead?.convertedToDeal,
+      convertedDealId: currentLead?.convertedDealId || null,
+    };
+
+    setLeads(prev => prev.map(lead => lead.id === cleanedLead.id ? cleanedLead : lead));
     // Keep the modal's lead prop in sync so subsequent saves don't use stale data
-    setActiveLead(updatedLead);
+    setActiveLead(cleanedLead);
 
     // Persist to Firestore
     try {
-      const firestoreId = updatedLead._firestoreId || updatedLead.id;
-      await updateDocument(COLLECTIONS.LEADS, firestoreId, updatedLead);
+      const firestoreId = cleanedLead._firestoreId || cleanedLead.id;
+      await updateDocument(COLLECTIONS.LEADS, firestoreId, cleanedLead);
     } catch (error) {
       console.error("Failed to update lead in DB:", error);
       toast.error("Failed to save changes to database");
@@ -454,25 +469,40 @@ export default function Leads({
   };
 
   const handleConvertConfirm = async (convertedLead) => {
-    // Generate a new ID for the Deal to separate it from the Lead
-    const dealId = `D-${String(Date.now()).slice(-6)}`;
-
     const originalLead = leads.find(lead => lead.id === convertedLead.id);
     if (!originalLead) return;
 
-    // Duplicate the lead as a new deal, preserving the original lead in its current stage
+    if (originalLead.convertedToDeal) {
+      toast.info('This lead has already been converted to a deal.');
+      setLeadToConvert(null);
+      return;
+    }
+
+    // Generate a unique ID for the Deal
+    const dealId = `D-${String(Date.now()).slice(-6)}`;
+    const now = new Date().toISOString();
+
+    // Create the new deal record starting in Waiting stage of Deals pipeline
     const newDeal = {
       ...convertedLead,
       id: dealId,
       isDeal: true,
+      stage: 'Waiting',
+      stageEnteredAt: now,
+      convertedToDeal: false,
       originalLeadId: originalLead.id,
     };
 
-    // Apply any edits made during conversion to the original lead, and move to Completed stage
+    // Mark the original lead as Completed and locked
     const updatedOriginalLead = {
       ...convertedLead,
+      id: originalLead.id,
       stage: 'Completed',
-      invoiceDraft: originalLead.invoiceDraft // Keep original invoice draft for the lead
+      stageEnteredAt: now,
+      isDeal: false,
+      convertedToDeal: true,
+      convertedDealId: dealId,
+      invoiceDraft: originalLead.invoiceDraft || convertedLead.invoiceDraft
     };
 
     // Save state update optimistically
@@ -480,7 +510,13 @@ export default function Leads({
     
     // Push to Firestore
     try {
-      await updateDocument(COLLECTIONS.LEADS, originalLead._firestoreId || originalLead.id, { stage: 'Completed' });
+      await updateDocument(COLLECTIONS.LEADS, originalLead._firestoreId || originalLead.id, { 
+        stage: 'Completed', 
+        isDeal: false,
+        convertedToDeal: true,
+        convertedDealId: dealId,
+        stageEnteredAt: now
+      });
       await addDocument(COLLECTIONS.LEADS, newDeal, dealId);
     } catch (err) {
       console.error("Convert Deal Firestore error:", err);

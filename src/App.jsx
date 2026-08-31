@@ -953,6 +953,9 @@ function App() {
               leads={leads}
               setLeads={setLeads}
               setProjects={setProjects}
+              logisticsJobs={logisticsJobs}
+              setLogisticsJobs={setLogisticsJobs}
+              invoices={invoices}
               currentUser={currentUser}
               partners={partners}
               setPartners={setPartners}

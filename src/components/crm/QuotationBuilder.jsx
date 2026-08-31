@@ -181,7 +181,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     }
   };
 
-  const handleConvertToInvoice = () => {
+  const handleConvertToAdvanceInvoice = () => {
     if (status !== 'Accepted') {
       toast.error('Mark quotation as Accepted before converting to invoice.');
       return;
@@ -198,9 +198,12 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: lead.name || 'Direct Customer',
       company: lead.company || '',
+      phone: lead.phone || '',
       date: invoiceDate,
       amount: advanceDue,
       totalValue: grandTotal,
+      advancePaid: 0,
+      balanceDue: balanceDue,
       type: 'Advance',
       status: 'Unpaid',
       aiDraft: lead.jobScope || 'Custom steel framing 75% advance invoice',
@@ -208,6 +211,38 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       lineItems: lineItems.map(({ id, ...rest }) => rest),
     });
     toast.success('75% Advance invoice generated & linked!');
+  };
+
+  const handleConvertToFinalInvoice = () => {
+    if (status !== 'Accepted') {
+      toast.error('Mark quotation as Accepted before generating final invoice.');
+      return;
+    }
+    if (!onSaveInvoice) {
+      toast.error('Invoice save handler unavailable.');
+      return;
+    }
+    const invId = `FIN-${String(Date.now()).slice(-6)}`;
+    const invoiceDate = new Date().toISOString().split('T')[0];
+    onSaveInvoice({
+      id: invId,
+      leadId: lead.id || lead._firestoreId,
+      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
+      customerName: lead.name || 'Direct Customer',
+      company: lead.company || '',
+      phone: lead.phone || '',
+      date: invoiceDate,
+      amount: balanceDue,
+      totalValue: grandTotal,
+      advancePaid: advanceDue,
+      balanceDue: balanceDue,
+      type: 'Final',
+      status: 'Unpaid',
+      aiDraft: lead.jobScope || 'Custom steel framing 25% final settlement invoice',
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      lineItems: lineItems.map(({ id, ...rest }) => rest),
+    });
+    toast.success('25% Final Settlement invoice generated & linked!');
   };
 
   const switchToQuote = (q) => {
@@ -475,13 +510,22 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
         )}
 
         {status === 'Accepted' && !isEditing && (
-          <button
-            type="button"
-            onClick={handleConvertToInvoice}
-            className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)] active:scale-[0.99]"
-          >
-            <ChevronRight size={13} /> Convert to 75% Advance Invoice Record
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleConvertToAdvanceInvoice}
+              className="w-full py-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99]"
+            >
+              <ChevronRight size={13} /> 75% Advance Invoice
+            </button>
+            <button
+              type="button"
+              onClick={handleConvertToFinalInvoice}
+              className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99]"
+            >
+              <ChevronRight size={13} /> 25% Final Settlement
+            </button>
+          </div>
         )}
 
         {!isEditing && !activeQuote && (
