@@ -189,10 +189,10 @@ export default function ReferralForm() {
 
               <button
                 type="button"
-                onClick={() => window.open(`https://wa.me/94771234567?text=Hi%20Print%20To%20Frame,%20I%20claimed%20the%2015%%20discount%20via%20${partnerDetails?.name || partnerId}%20(Ref:%20${submittedLeadId})`, '_blank')}
+                onClick={() => window.open(`https://wa.me/94711419027?text=Hi%20Print%20To%20Frame,%20I%20claimed%20the%2015%%20discount%20via%20${partnerDetails?.name || partnerId}%20(Ref:%20${submittedLeadId})`, '_blank')}
                 className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
               >
-                <Phone size={14} /> Open Direct WhatsApp Chat
+                <Phone size={14} /> Open Direct WhatsApp Chat (+94 71 141 9027)
               </button>
             </div>
 

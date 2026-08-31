@@ -216,10 +216,10 @@ export default function PartnerRegistration() {
 
           <div className="pt-2 flex flex-col sm:flex-row gap-3">
             <button
-              onClick={() => window.open(`https://wa.me/94771234567?text=Hello%20Print%20To%20Frame,%20I%20have%20submitted%20Partner%20Application%20${submittedAppId}`, '_blank')}
+              onClick={() => window.open(`https://wa.me/94711419027?text=Hello%20Print%20To%20Frame,%20I%20have%20submitted%20Partner%20Application%20${submittedAppId}`, '_blank')}
               className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Phone size={14} /> Contact Partner Desk on WhatsApp
+              <Phone size={14} /> Contact Partner Desk on WhatsApp (+94 71 141 9027)
             </button>
             <button
               onClick={() => window.location.href = '/'}

@@ -72,6 +72,10 @@ export default function PartnerQRModal({ isOpen, onClose, partner }) {
       ctx.font = '24px sans-serif';
       ctx.fillText(`Referral Code: ${partner.partnerId || 'PTF-REF'}`, 600, 1160);
       ctx.fillText('Custom Box Iron Frames • High-Tension Gallery Wraps • Digital Canvas', 600, 1220);
+      
+      ctx.fillStyle = '#00dac3';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('Official Workshop Desk: +94 71 141 9027', 600, 1270);
 
       // Trigger download
       const link = document.createElement('a');

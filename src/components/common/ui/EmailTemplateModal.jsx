@@ -49,7 +49,7 @@ export default function EmailTemplateModal({
       tempPassword: recipient?.tempPassword || recipient?.password || '[Generated on Enrollment]',
       assignedRole: recipient?.role || 'Authorized Member',
       requestedRole: recipient?.role || 'Partner Access',
-      contactPhone: recipient?.contactNumber || recipient?.mobile || recipient?.phone || '+94 11 234 5678',
+      contactPhone: recipient?.contactNumber || recipient?.mobile || recipient?.phone || '+94 71 141 9027',
       portalUrl: origin,
       senderName: currentUser?.name ? `${currentUser.name} (${currentUser.role || 'Admin'})` : 'Print To Frame Admin Desk',
       supportEmail: 'support@print2frame.xyz',

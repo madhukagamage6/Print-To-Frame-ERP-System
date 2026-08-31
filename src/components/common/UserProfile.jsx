@@ -441,7 +441,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
                       type="text"
                       value={formData.contactNumber}
                       onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-                      placeholder="+94 77 123 4567"
+                      placeholder="+94 71 141 9027"
                       className="w-full pl-10 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-mono text-on-surface outline-none focus:ring-2 focus:ring-primary/50"
                     />
                   </div>
