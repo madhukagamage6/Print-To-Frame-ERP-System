@@ -7,6 +7,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, deleteDoc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 import fallbackConfig from '../../firebase-applet-config.json';
 
@@ -34,6 +35,7 @@ const getDatabaseInstance = () => {
 
 export const db = getDatabaseInstance();
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 // Google Workspace Scopes
 const provider = new GoogleAuthProvider();

@@ -15,6 +15,7 @@ import ReactDOM from 'react-dom/client';
 import * as Sentry from "@sentry/react";
 import App from './App.jsx';
 import ReferralForm from './components/public/ReferralForm.jsx';
+import PartnerRegistration from './components/public/PartnerRegistration.jsx';
 import './index.css';
 import { PermissionsProvider } from './context/PermissionsContext';
 
@@ -47,6 +48,12 @@ if (path.startsWith('/referral')) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <ReferralForm />
+    </React.StrictMode>,
+  );
+} else if (path.startsWith('/partner/register') || path.startsWith('/register-partner')) {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <PartnerRegistration />
     </React.StrictMode>,
   );
 } else {

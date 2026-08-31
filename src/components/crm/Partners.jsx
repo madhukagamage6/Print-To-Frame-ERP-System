@@ -1,662 +1,800 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, User, Building, MapPin, Globe, DollarSign, Sparkles, X, 
   Trash2, Check, Clock, Link, QrCode, Copy, Plus, ChevronRight,
-  ExternalLink, Layers, ArrowUpRight
+  ExternalLink, Layers, ArrowUpRight, ShieldCheck, FileText, CheckCircle2,
+  AlertCircle, Download, CreditCard, Send, Handshake, Filter, Phone, Mail,
+  Share2, ArrowDownRight, Printer
 } from 'lucide-react';
 import { generateText } from '../../services/gemini';
 import { toast } from '../../utils/toast';
 import DeleteModal from '../common/DeleteModal';
 import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar } from '../common/ui';
+import PartnerQRModal from './PartnerQRModal';
+import { 
+  subscribeToCollection, 
+  addDocument, 
+  updateDocument, 
+  deleteDocument,
+  COLLECTIONS 
+} from '../../services/firestoreSync';
 
 export default function Partners({ partners = [], setPartners, dataStore, currentUser }) {
+  const [activeTab, setActiveTab] = useState('directory'); // 'directory' | 'applications' | 'settlements'
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   
-  const [newPartner, setNewPartner] = useState({
-    name: '',
-    type: 'Agency',
-    googleLink: '',
-    socialLink: '',
-  });
+  // Applications (Vetting Queue)
+  const [applications, setApplications] = useState([]);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [vettingCommissionRate, setVettingCommissionRate] = useState(0.05); // 5% default
 
+  // QR Modal
+  const [qrPartner, setQrPartner] = useState(null);
+
+  // Settlements
+  const [payouts, setPayouts] = useState([]);
+  const [settlementPartner, setSettlementPartner] = useState(null);
+  const [bankRefInput, setBankRefInput] = useState('');
+
+  // AI Strategy
   const [isGeneratingStrategy, setIsGeneratingStrategy] = useState(false);
   const [strategyResult, setStrategyResult] = useState('');
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
 
-  const isAdmin = currentUser?.role === 'Admin';
-  const [showQR, setShowQR] = useState(false);
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Administrator';
+
+  // Real-time listener for partner applications
+  useEffect(() => {
+    const unsubApps = subscribeToCollection(COLLECTIONS.PARTNER_APPLICATIONS, (data) => {
+      setApplications(data || []);
+    });
+    const unsubPayouts = subscribeToCollection(COLLECTIONS.PARTNER_PAYOUTS, (data) => {
+      setPayouts(data || []);
+    });
+    return () => {
+      unsubApps();
+      unsubPayouts();
+    };
+  }, []);
+
+  const pendingAppsCount = useMemo(() => {
+    return applications.filter(a => a.status === 'Pending' || a.status === 'NeedsInfo').length;
+  }, [applications]);
 
   // Summary Metrics
   const totalSqFt = partners.reduce((acc, p) => acc + (Number(p.totalSqFt) || 0), 0);
   const totalPaid = partners.reduce((acc, p) => acc + (Number(p.paid) || 0), 0);
   const totalPending = partners.reduce((acc, p) => acc + (Number(p.pending) || 0), 0);
 
-  const agencyCount = partners.filter(p => p.type === 'Agency').length;
-  const printerCount = partners.filter(p => p.type === 'Printer').length;
-  const freelancerCount = partners.filter(p => p.type === 'Freelancer').length;
-
   const filteredPartners = partners.filter(p => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = (
       p.name?.toLowerCase().includes(query) ||
       p.partnerId?.toLowerCase().includes(query) ||
-      p.type?.toLowerCase().includes(query)
+      p.type?.toLowerCase().includes(query) ||
+      p.contactPerson?.toLowerCase().includes(query)
     );
 
     if (!matchesSearch) return false;
-
     if (activeFilter === 'agency') return p.type === 'Agency';
     if (activeFilter === 'printer') return p.type === 'Printer';
     if (activeFilter === 'freelancer') return p.type === 'Freelancer';
     return true;
   });
 
-  const handleCreatePartner = () => {
-    if (newPartner.name.trim() === '') {
-      toast.error("Please enter a partner name");
+  // Calculate dynamic commissions per partner from linked Deals
+  const partnerCommissions = useMemo(() => {
+    const allLeads = dataStore?.leads || [];
+    const map = {};
+
+    partners.forEach(p => {
+      const pid = p.partnerId || p.id;
+      const refDeals = allLeads.filter(l => (l.partnerId === pid || l.agentId === pid) && l.isDeal);
+      const totalContractValue = refDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+      const rate = Number(p.commissionRate) || 0.05;
+      const earned = totalContractValue * rate;
+      const paid = Number(p.paid) || 0;
+      const payable = Math.max(0, earned - paid);
+
+      map[pid] = {
+        partner: p,
+        dealCount: refDeals.length,
+        totalContractValue,
+        rate,
+        earned,
+        paid,
+        payable,
+        deals: refDeals
+      };
+    });
+
+    return map;
+  }, [partners, dataStore?.leads]);
+
+  // ── Approval Handler ──────────────────────────────────────────────────────
+  const handleApproveApplication = async (app) => {
+    try {
+      const lastCode = partners.length > 0 ? partners[partners.length - 1].partnerId : 'P-1000';
+      const num = parseInt(lastCode.split('-')[1] || '1000') + 1;
+      const partnerId = `P-${num}`;
+      const referralCode = `PTF-REF-${num}`;
+
+      const newPartnerEntry = {
+        partnerId,
+        referralCode,
+        name: app.businessName || app.applicantName,
+        contactPerson: app.contactName || app.applicantName,
+        type: 'Studio Partner',
+        phone: app.phone || '',
+        email: app.email || '',
+        address: app.address || '',
+        city: app.city || 'Colombo',
+        specialties: app.specialties || [],
+        brNumber: app.brNumber || '',
+        bankDetails: app.bankDetails || {},
+        commissionRate: vettingCommissionRate,
+        totalSqFt: 0,
+        paid: 0,
+        pending: 0,
+        status: 'Active',
+        joinedAt: new Date().toISOString(),
+      };
+
+      await addDocument(COLLECTIONS.PARTNERS, newPartnerEntry, partnerId);
+      await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, app._firestoreId || app.applicationId, {
+        status: 'Approved',
+        partnerId,
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser?.email || 'Admin',
+      });
+
+      setSelectedApplication(null);
+      toast.success(`Approved ${app.businessName}! Assigned ID: ${partnerId}`);
+      setQrPartner(newPartnerEntry);
+    } catch (err) {
+      toast.error('Failed to approve: ' + err.message);
+    }
+  };
+
+  const handleRejectApplication = async (app, reason = 'Did not meet requirements') => {
+    try {
+      await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, app._firestoreId || app.applicationId, {
+        status: 'Rejected',
+        rejectionReason: reason,
+        rejectedAt: new Date().toISOString(),
+        rejectedBy: currentUser?.email || 'Admin',
+      });
+      setSelectedApplication(null);
+      toast.error(`Application ${app.applicationId} marked as Rejected`);
+    } catch (err) {
+      toast.error('Failed to reject: ' + err.message);
+    }
+  };
+
+  // ── Settlement Payout Handler ─────────────────────────────────────────────
+  const handleDisbursePayout = async (e) => {
+    e.preventDefault();
+    if (!settlementPartner) return;
+    const item = partnerCommissions[settlementPartner.partnerId];
+    if (!item || item.payable <= 0) {
+      toast.error("No outstanding payable balance.");
       return;
     }
 
-    const nextId = partners.length > 0 ? Math.max(...partners.map(p => p.id || 0)) + 1 : 1;
-    const lastCode = partners.length > 0 ? partners[partners.length - 1].partnerId : 'P-1000';
-    const num = parseInt(lastCode.split('-')[1] || '1000') + 1;
-    
-    const partnerId = `P-${num}`;
-    const newEntry = {
-      id: nextId,
-      partnerId,
-      name: newPartner.name,
-      type: newPartner.type,
-      totalSqFt: 0,
-      paid: 0,
-      pending: 0,
-      googleLink: newPartner.googleLink,
-      socialLink: newPartner.socialLink,
-    };
-
-    setPartners(prev => [...prev, newEntry]);
-    setSelectedPartner(newEntry);
-    setShowCreateModal(false);
-    setNewPartner({ name: '', type: 'Agency', googleLink: '', socialLink: '' });
-    toast.success(`Partner ${newPartner.name} registered`);
-  };
-
-  const getPartnerRelationships = (partner) => {
-    if (!dataStore) return { referrals: [], productions: [] };
-    const referrals = (dataStore.leads || []).filter(l => l.agentId === partner.partnerId);
-    const productions = (dataStore.projects || []).filter(p => p.partnerId === partner.partnerId);
-    return { referrals, productions };
-  };
-
-  const handleGenerateStrategy = async (partner) => {
-    setIsGeneratingStrategy(true);
-    setStrategyResult('');
-    setShowStrategyModal(true);
-
     try {
-      const prompt = `
-        You are a strategic business advisor for "Print To Frame Pvt Ltd" (specialist steel canvas framing in Sri Lanka).
-        Suggest 3 professional strategies to increase steel framing and digital art referral volume from our partner "${partner.name}" who is categorized as a "${partner.type}".
-        Focus on mutual profitability, local Sri Lankan art dynamics, and gallery wrap marketing.
-      `;
-      const response = await generateText(prompt);
-      setStrategyResult(response);
-    } catch {
-      setStrategyResult('Error generating strategy. Please try again later.');
-    } finally {
-      setIsGeneratingStrategy(false);
+      const payoutId = `PO-${new Date().toISOString().slice(0,7)}-${String(Date.now()).slice(-4)}`;
+      const payoutPayload = {
+        payoutId,
+        partnerId: settlementPartner.partnerId,
+        partnerName: settlementPartner.name,
+        amount: item.payable,
+        bankDetails: settlementPartner.bankDetails || {},
+        bankRef: bankRefInput.trim() || 'Direct Transfer',
+        dealsIncluded: item.deals.map(d => d.id),
+        date: new Date().toISOString(),
+        disbursedBy: currentUser?.email || 'Admin',
+      };
+
+      await addDocument(COLLECTIONS.PARTNER_PAYOUTS, payoutPayload, payoutId);
+      await updateDocument(COLLECTIONS.PARTNERS, settlementPartner._firestoreId || settlementPartner.partnerId, {
+        paid: (Number(settlementPartner.paid) || 0) + item.payable,
+        pending: 0,
+        lastPayoutDate: new Date().toISOString(),
+      });
+
+      setSettlementPartner(null);
+      setBankRefInput('');
+      toast.success(`Disbursed LKR ${item.payable.toLocaleString()} to ${settlementPartner.name}!`);
+    } catch (err) {
+      toast.error('Payout failed: ' + err.message);
     }
   };
 
-  const handleSettleCommission = (partner) => {
-    if (partner.pending <= 0) return;
-    
-    if (window.confirm(`Settle LKR ${partner.pending.toLocaleString()} to ${partner.name}? This moves the balance to "Paid".`)) {
-      setPartners(prev => prev.map(p => 
-        p.partnerId === partner.partnerId
-          ? { ...p, paid: (p.paid || 0) + (p.pending || 0), pending: 0 }
-          : p
-      ));
-      setSelectedPartner(prev => ({
-        ...prev,
-        paid: (prev.paid || 0) + (prev.pending || 0),
-        pending: 0
-      }));
-      toast.success(`Commission settled for ${partner.name}`);
-    }
-  };
+  const exportSettlementCSV = () => {
+    const rows = [
+      ['Partner ID', 'Partner Name', 'Contact Person', 'Bank Name', 'Branch', 'Account Number', 'Account Name', 'Deals Count', 'Contract Value (LKR)', 'Commission Rate', 'Payable Commission (LKR)']
+    ];
 
-  const handleDeletePartner = () => {
-    if (deleteId) {
-      setPartners(prev => prev.filter(p => p.partnerId !== deleteId));
-      if (selectedPartner?.partnerId === deleteId) {
-        setSelectedPartner(null);
+    Object.values(partnerCommissions).forEach(c => {
+      if (c.payable > 0) {
+        rows.push([
+          c.partner.partnerId,
+          `"${c.partner.name}"`,
+          `"${c.partner.contactPerson || ''}"`,
+          `"${c.partner.bankDetails?.bankName || ''}"`,
+          `"${c.partner.bankDetails?.branchName || ''}"`,
+          `"${c.partner.bankDetails?.accountNumber || ''}"`,
+          `"${c.partner.bankDetails?.accountName || ''}"`,
+          c.dealCount,
+          c.totalContractValue,
+          `${(c.rate * 100).toFixed(1)}%`,
+          c.payable
+        ]);
       }
-      setDeleteId(null);
-      toast.success("Partner removed from network");
-    }
-  };
+    });
 
-  const relations = selectedPartner ? getPartnerRelationships(selectedPartner) : null;
-  const referralLink = selectedPartner ? `${window.location.origin}/referral?partnerId=${selectedPartner.partnerId}` : '';
-  const qrCodeUrl = selectedPartner ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(referralLink)}` : '';
-
-  const copyReferralLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    toast.success('Referral link copied to clipboard!');
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `PTF_Partner_Payouts_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Downloaded Bank Transfer Payout CSV!");
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
-      {/* Standardized Header */}
-      <PageHeader
-        title="Partners"
-        subtitle="Collaborative network of Creative Agencies, Digital Art Printers, and Freelance Referral Agents."
-        metrics={[
-          { label: "Total Partners", value: partners.length, color: "cyan" },
-          { label: "Total Volume", value: `${totalSqFt.toLocaleString()} SqFt`, color: "amber" },
-          { label: "Settled Payouts", value: `LKR ${totalPaid.toLocaleString()}`, color: "emerald" },
-          { label: "Pending Payouts", value: `LKR ${totalPending.toLocaleString()}`, color: totalPending > 0 ? "warning" : "neutral" }
-        ]}
-        actions={
+    <div className="space-y-6">
+      
+      {/* ── Page Header ─────────────────────────────────────────────────── */}
+      <PageHeader 
+        title="Partner Network" 
+        subtitle="Manage artisan framing partners, review onboarding applications, and disburse referral commissions."
+      >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="px-3.5 py-2 bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-bold text-xs rounded-xl border border-outline transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <Share2 size={14} className="text-primary" />
+            <span>Invite Partner</span>
+          </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0"
+            className="px-4 py-2 bg-primary text-on-primary hover:bg-primary/90 font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(0,218,243,0.3)] transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <Plus size={16} />
-            <span>Register Partner</span>
+            <Plus size={15} />
+            <span>Add Partner</span>
           </button>
-        }
-      />
+        </div>
+      </PageHeader>
 
-      {/* Standardized Filter & Search Bar */}
-      <FilterBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        placeholder="Search by partner name, ID, category..."
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        filterOptions={[
-          { id: 'all', label: 'All Partners', count: partners.length },
-          { id: 'agency', label: 'Creative Agencies', count: agencyCount },
-          { id: 'printer', label: 'Art Printers', count: printerCount },
-          { id: 'freelancer', label: 'Freelancers', count: freelancerCount }
-        ]}
-        totalCount={partners.length}
-        filteredCount={filteredPartners.length}
-      />
+      {/* ── Sub-Navigation Tabs ──────────────────────────────────────────── */}
+      <div className="flex items-center space-x-2 border-b border-outline pb-2 overflow-x-auto custom-scrollbar">
+        <button
+          onClick={() => setActiveTab('directory')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'directory'
+              ? 'bg-primary text-on-primary shadow-sm'
+              : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline'
+          }`}
+        >
+          <Building size={14} />
+          <span>Active Partner Directory</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-bold bg-black/20 text-on-primary">
+            {partners.length}
+          </span>
+        </button>
 
-      {/* Main Grid split */}
-      <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
-        {/* Left Side: Partner List */}
-        <div className="w-full lg:w-1/3 flex flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
-          <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
-            <span className="flex items-center gap-2">
-              <Building size={14} className="text-primary" />
-              Active Network ({filteredPartners.length})
+        <button
+          onClick={() => setActiveTab('applications')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'applications'
+              ? 'bg-primary text-on-primary shadow-sm'
+              : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline'
+          }`}
+        >
+          <ShieldCheck size={14} />
+          <span>Onboarding Vetting Queue</span>
+          {pendingAppsCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono font-black bg-amber-500 text-black animate-pulse">
+              {pendingAppsCount}
             </span>
-            <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
-              click to inspect
-            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settlements')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'settlements'
+              ? 'bg-primary text-on-primary shadow-sm'
+              : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline'
+          }`}
+        >
+          <CreditCard size={14} />
+          <span>Monthly Settlements & Payouts</span>
+        </button>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────────────
+          TAB 1: ACTIVE PARTNER DIRECTORY
+          ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'directory' && (
+        <div className="space-y-6">
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 bg-surface-container-high rounded-2xl border border-outline shadow-sm">
+              <span className="block text-[9px] font-black text-on-surface-variant uppercase tracking-wider mb-0.5">Total Partners</span>
+              <div className="text-2xl font-black text-on-surface font-mono">{partners.length}</div>
+            </div>
+            <div className="p-4 bg-surface-container-high rounded-2xl border border-outline shadow-sm">
+              <span className="block text-[9px] font-black text-on-surface-variant uppercase tracking-wider mb-0.5">Total Referred SqFt</span>
+              <div className="text-2xl font-black text-primary font-mono">{totalSqFt.toLocaleString()} sqft</div>
+            </div>
+            <div className="p-4 bg-surface-container-high rounded-2xl border border-outline shadow-sm">
+              <span className="block text-[9px] font-black text-on-surface-variant uppercase tracking-wider mb-0.5">Total Commission Paid</span>
+              <div className="text-2xl font-black text-emerald-400 font-mono">LKR {(totalPaid / 1000).toFixed(0)}k</div>
+            </div>
+            <div className="p-4 bg-surface-container-high rounded-2xl border border-outline shadow-sm">
+              <span className="block text-[9px] font-black text-on-surface-variant uppercase tracking-wider mb-0.5">Pending Settlements</span>
+              <div className="text-2xl font-black text-amber-400 font-mono">LKR {(totalPending / 1000).toFixed(0)}k</div>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/30">
-            {filteredPartners.length === 0 ? (
-              <div className="p-12 text-center text-on-surface-variant text-sm font-medium">
-                <Building size={36} className="mx-auto mb-3 opacity-25 text-on-surface-variant" />
-                <p className="font-bold text-on-surface">No partners found</p>
-                <p className="text-xs text-on-surface-variant mt-1">Try adjusting your search query or filter category.</p>
-              </div>
-            ) : (
-              filteredPartners.map(p => {
-                const isSelected = selectedPartner?.partnerId === p.partnerId;
-                const isAgency = p.type === 'Agency';
-                const isPrinter = p.type === 'Printer';
+          {/* Search & Filter */}
+          <FilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            placeholder="Search by partner name, ID, contact..."
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            filterOptions={[
+              { id: 'all', label: 'All Partners' },
+              { id: 'agency', label: 'Agencies' },
+              { id: 'printer', label: 'Printers' },
+              { id: 'freelancer', label: 'Artisans' },
+            ]}
+          />
 
-                return (
-                  <div
-                    key={p.partnerId}
-                    onClick={() => setSelectedPartner(p)}
-                    className={`p-4 cursor-pointer transition-all flex items-center space-x-3.5 ${
-                      isSelected 
-                        ? 'bg-primary/10 border-l-4 border-primary shadow-inner' 
-                        : 'hover:bg-surface-container-high/40 border-l-4 border-transparent'
-                    }`}
-                  >
-                    <UserAvatar user={{ ...p, role: 'partner' }} size="md" />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center gap-1 mb-0.5">
-                        <h4 className="font-bold text-xs text-on-surface truncate">{p.name}</h4>
-                        {p.pending > 0 && (
-                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" title="Pending Commission" />
+          {/* Partners Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPartners.map(partner => {
+              const comm = partnerCommissions[partner.partnerId] || { dealCount: 0, payable: 0 };
+              return (
+                <div 
+                  key={partner.partnerId || partner.id}
+                  className="bg-surface-container-high rounded-2xl border border-outline p-5 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/30">
+                          {partner.partnerId}
+                        </span>
+                        <h3 className="text-base font-bold text-on-surface mt-1">{partner.name}</h3>
+                        {partner.contactPerson && (
+                          <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                            <User size={12} /> {partner.contactPerson}
+                          </p>
                         )}
                       </div>
-                      <div className="flex items-center justify-between gap-1 text-[10px] text-on-surface-variant font-mono">
-                        <span>{p.partnerId}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                          isAgency ? 'bg-primary/10 text-primary' : isPrinter ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
-                        }`}>
-                          {p.type}
-                        </span>
-                      </div>
+                      <button
+                        onClick={() => setQrPartner(partner)}
+                        className="p-2 bg-surface-container-highest hover:bg-primary/15 text-on-surface hover:text-primary rounded-xl border border-outline transition-colors cursor-pointer"
+                        title="View & Download Marketing QR Code"
+                      >
+                        <QrCode size={18} />
+                      </button>
                     </div>
 
-                    <ChevronRight size={14} className={`text-on-surface-variant/40 transition-transform ${isSelected ? 'text-primary translate-x-0.5' : ''}`} />
+                    <div className="p-3 bg-surface-container-highest/60 rounded-xl border border-outline text-xs space-y-1 font-mono">
+                      <div className="flex justify-between text-on-surface-variant">
+                        <span>Commission Rate:</span>
+                        <span className="font-bold text-on-surface">{((partner.commissionRate || 0.05) * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between text-on-surface-variant">
+                        <span>Deals Converted:</span>
+                        <span className="font-bold text-primary">{comm.dealCount} deals</span>
+                      </div>
+                      <div className="flex justify-between text-on-surface-variant pt-1 border-t border-outline">
+                        <span>Payable Balance:</span>
+                        <span className="font-bold text-amber-400">LKR {comm.payable.toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
-                );
-              })
-            )}
+
+                  <div className="pt-4 mt-3 border-t border-outline flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setQrPartner(partner)}
+                      className="px-3 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary text-xs font-bold rounded-xl border border-primary/30 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <QrCode size={13} /> QR Flyer
+                    </button>
+                    <button
+                      onClick={() => setSelectedPartner(partner)}
+                      className="px-3 py-1.5 bg-surface-container-highest hover:bg-surface-container text-on-surface text-xs font-bold rounded-xl border border-outline transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Details</span>
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {/* Right Side: Details Inspector */}
-        <div className="w-full lg:w-2/3 h-full overflow-y-auto custom-scrollbar pr-1">
-          {selectedPartner ? (
-            <div className="space-y-6">
-              
-              {/* Partner Overview details */}
-              <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
-                  <div className="flex items-start space-x-5">
-                    <UserAvatar user={{ ...selectedPartner, role: 'partner' }} size="xl" className="shadow-md" />
+      {/* ───────────────────────────────────────────────────────────────────
+          TAB 2: ONBOARDING VETTING QUEUE
+          ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'applications' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-surface-container-high rounded-2xl border border-outline flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-on-surface">Prospective Partner Applications</h3>
+              <p className="text-xs text-on-surface-variant">Review business registrations, applicant credentials, and assign commission rates.</p>
+            </div>
+            <button
+              onClick={() => window.open('/partner/register', '_blank')}
+              className="px-3.5 py-1.5 bg-primary/15 text-primary font-bold text-xs rounded-xl border border-primary/30 flex items-center gap-1.5 hover:bg-primary/25 cursor-pointer"
+            >
+              <ExternalLink size={13} /> Test Public Form
+            </button>
+          </div>
 
-                    <div>
-                      <div className="flex items-center gap-2.5 flex-wrap mb-1">
-                        <h2 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
-                          {selectedPartner.name}
-                        </h2>
-                        <StatusBadge status={selectedPartner.type} size="xs" />
-                      </div>
-
-                      <p className="text-xs font-mono font-bold text-on-surface-variant mb-3">
-                        ID: {selectedPartner.partnerId}
-                      </p>
-
-                      <div className="flex items-center space-x-3 flex-wrap gap-y-2">
-                        {selectedPartner.googleLink && (
-                          <a 
-                            href={selectedPartner.googleLink} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="flex items-center text-[10px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 border border-primary/20 transition-colors"
-                          >
-                            <MapPin size={12} className="mr-1.5" /> Maps Location
-                          </a>
-                        )}
-                        {selectedPartner.socialLink && (
-                          <a 
-                            href={selectedPartner.socialLink} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="flex items-center text-[10px] font-bold text-pink-400 bg-pink-500/10 px-3 py-1.5 rounded-lg hover:bg-pink-500/20 border border-pink-500/20 transition-colors"
-                          >
-                            <Globe size={12} className="mr-1.5" /> Social Channel
-                          </a>
-                        )}
-                        <button 
-                          onClick={() => setShowQR(!showQR)} 
-                          className="flex items-center text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20 border border-cyan-500/20 transition-colors"
-                        >
-                          <QrCode size={12} className="mr-1.5" /> {showQR ? 'Hide QR' : 'Referral QR'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
-                    <div className="bg-surface-container-low text-on-surface-variant px-3.5 py-2 rounded-2xl text-center border border-outline-variant/60">
-                      <p className="text-[9px] font-bold uppercase tracking-wider opacity-70">Total Volume</p>
-                      <p className="text-base sm:text-lg font-black text-on-surface font-mono">
-                        {selectedPartner.totalSqFt || 0} <span className="text-[10px] uppercase font-sans">SqFt</span>
-                      </p>
-                    </div>
-                    <div className="bg-emerald-500/10 text-emerald-400 px-3.5 py-2 rounded-2xl text-center border border-emerald-500/20">
-                      <p className="text-[9px] font-bold uppercase tracking-wider opacity-80">Paid Out</p>
-                      <p className="text-base sm:text-lg font-black font-mono">
-                        LKR {(selectedPartner.paid || 0).toLocaleString()}
-                      </p>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => setDeleteId(selectedPartner.partnerId)}
-                        className="p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20"
-                        title="Delete Partner Profile (Admin Only)"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* QR Code and Referral Link Expandable */}
-                {showQR && (
-                  <div className="mt-4 p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                    <img src={qrCodeUrl} alt="Referral QR Code" className="w-24 h-24 rounded-xl border border-outline-variant/80 shadow-sm bg-white p-1" />
-                    <div className="flex-1 w-full min-w-0">
-                      <p className="text-[10px] uppercase font-bold text-on-surface-variant mb-1 tracking-wider">
-                        Unique Partner Referral Link
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="text" 
-                          readOnly 
-                          value={referralLink} 
-                          className="flex-1 px-3 py-2 bg-surface-container border border-outline-variant rounded-lg text-xs font-mono text-on-surface" 
-                        />
-                        <button 
-                          onClick={copyReferralLink} 
-                          className="p-2 bg-primary text-on-primary hover:bg-primary/90 rounded-lg transition-colors"
-                          title="Copy Link"
-                        >
-                          <Copy size={16} />
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed">
-                        Clients scanning this QR code or visiting this referral link will be automatically assigned to {selectedPartner.name}.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Settlement and AI strategy */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Pending Commission Settlement */}
-                <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-amber-400 mb-2 uppercase tracking-wider flex items-center">
-                      <DollarSign size={14} className="mr-1 text-amber-400" />
-                      Pending Commission
-                    </h3>
-                    <p className="text-2xl sm:text-3xl font-black text-on-surface mb-4 font-mono">
-                      LKR {(selectedPartner.pending || 0).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-on-surface-variant leading-relaxed mb-6">
-                      Outstanding commission for confirmed steel framing referral jobs awaiting final vendor disbursement.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => handleSettleCommission(selectedPartner)}
-                    disabled={!selectedPartner.pending || selectedPartner.pending <= 0}
-                    className={`w-full py-3.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all active:scale-95 ${
-                      selectedPartner.pending > 0 
-                        ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.25)]' 
-                        : 'bg-surface-container-high text-on-surface-variant/50 cursor-not-allowed border border-outline-variant/40'
-                    }`}
-                  >
-                    <Check size={16} />
-                    <span>Mark Balance as Settled</span>
-                  </button>
-                </div>
-
-                {/* Gemini AI Strategic Advice */}
-                <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold text-cyan-400 mb-2 uppercase tracking-wider flex items-center">
-                      <Sparkles size={14} className="mr-1.5 text-cyan-400" />
-                      Relationship Strategy Advisor
-                    </h3>
-                    <p className="text-xs text-on-surface-variant leading-relaxed mb-6">
-                      Generate tailored business growth strategies, commission tier recommendations, and localized gallery marketing ideas powered by Gemini AI.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => handleGenerateStrategy(selectedPartner)}
-                    className="w-full py-3.5 bg-primary/15 text-primary hover:bg-primary hover:text-on-primary border border-primary/30 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 active:scale-95"
-                  >
-                    <Sparkles size={16} />
-                    <span>Consult Gemini AI Strategy</span>
-                  </button>
-                </div>
-
-                {/* Referral pipeline */}
-                <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-[380px] flex flex-col">
-                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-outline-variant/40 flex-shrink-0">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center">
-                      <Clock size={14} className="mr-2 text-primary" />
-                      Referral Pipeline
-                    </h3>
-                    <span className="text-[10px] text-on-surface-variant font-mono">
-                      {relations?.referrals.length || 0} leads
-                    </span>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-                    {relations?.referrals.length === 0 ? (
-                      <div className="text-[11px] text-on-surface-variant/60 italic py-12 text-center bg-surface-container-low/50 border border-dashed border-outline-variant rounded-2xl">
-                        No active referral leads found for this partner ID.
-                      </div>
-                    ) : (
-                      relations?.referrals.map(lead => (
-                        <div key={lead.id} className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/50 hover:border-primary/40 transition-all">
-                          <div className="flex justify-between items-start mb-1.5">
-                            <span className="font-bold text-xs text-on-surface truncate pr-2 uppercase">
-                              {lead.company || lead.name}
-                            </span>
-                            <StatusBadge status={lead.stage || 'Intake'} size="xs" />
-                          </div>
-                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-outline-variant/30 text-[10px] text-on-surface-variant font-mono">
-                            <span>Value: LKR {(lead.value || 0).toLocaleString()}</span>
-                            <span className="text-emerald-400 font-bold">
-                              Comm: LKR {((lead.totalSqFt || 0) * 53.5).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Shared production jobs */}
-                <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-[380px] flex flex-col">
-                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-outline-variant/40 flex-shrink-0">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center">
-                      <Layers size={14} className="mr-2 text-cyan-400" />
-                      Shared Production Jobs
-                    </h3>
-                    <span className="text-[10px] text-on-surface-variant font-mono">
-                      {relations?.productions.length || 0} jobs
-                    </span>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-                    {relations?.productions.length === 0 ? (
-                      <div className="text-[11px] text-on-surface-variant/60 italic py-12 text-center bg-surface-container-low/50 border border-dashed border-outline-variant rounded-2xl">
-                        No production fabrication jobs currently assigned.
-                      </div>
-                    ) : (
-                      relations?.productions.map(proj => (
-                        <div key={proj.jobNo} className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/50 hover:border-primary/40 transition-all">
-                          <div className="flex justify-between items-start mb-1.5">
-                            <span className="font-bold text-xs text-on-surface font-mono">{proj.jobNo}</span>
-                            <StatusBadge status={proj.status || 'Fabricating'} size="xs" />
-                          </div>
-                          <p className="text-[11px] text-on-surface-variant leading-snug line-clamp-2 mb-1.5 italic">
-                            "{proj.scope}"
-                          </p>
-                          <p className="text-[9px] text-on-surface-variant/70 font-medium">Assigned Tech: {proj.assignee}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
+          {applications.length === 0 ? (
+            <div className="p-12 text-center bg-surface-container-high rounded-2xl border border-outline text-on-surface-variant space-y-2">
+              <ShieldCheck size={32} className="mx-auto text-primary/50" />
+              <p className="text-sm font-bold">Vetting queue is empty</p>
+              <p className="text-xs">New registrations from /partner/register will appear here for review.</p>
             </div>
           ) : (
-            <div className="h-full min-h-[350px] flex flex-col items-center justify-center border-2 border-dashed border-outline-variant/60 rounded-3xl text-on-surface-variant bg-surface-container/40 p-8 text-center">
-              <Building size={56} className="mb-3 opacity-20 text-on-surface" />
-              <h3 className="font-bold text-base text-on-surface">No Partner Selected</h3>
-              <p className="text-xs max-w-sm text-on-surface-variant mt-1.5 leading-relaxed">
-                Select a referral partner, design agency, or art printer to view their status, payout records, QR referral channels, and linked jobs.
-              </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {applications.map(app => (
+                <div key={app.applicationId || app._firestoreId} className="bg-surface-container-high rounded-2xl border border-outline p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className={`text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border ${
+                        app.status === 'Approved' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                      }`}>
+                        {app.status || 'Pending Review'}
+                      </span>
+                      <h4 className="text-base font-bold text-on-surface mt-1.5">{app.businessName}</h4>
+                      <p className="text-xs text-on-surface-variant">{app.contactName} ({app.designation || 'Partner'})</p>
+                    </div>
+                    <span className="font-mono text-xs text-on-surface-variant">{app.applicationId}</span>
+                  </div>
+
+                  <div className="p-3 bg-surface-container-highest rounded-xl border border-outline text-xs space-y-1 font-mono">
+                    <div>Phone: <span className="text-on-surface font-bold">{app.phone}</span></div>
+                    <div>Email: <span className="text-on-surface">{app.email}</span></div>
+                    <div>Bank: <span className="text-primary font-bold">{app.bankDetails?.bankName} (Acc: {app.bankDetails?.accountNumber})</span></div>
+                  </div>
+
+                  {app.status !== 'Approved' && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedApplication(app)}
+                        className="flex-1 py-2.5 bg-primary text-on-primary hover:bg-primary/90 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <ShieldCheck size={14} /> Review & Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectApplication(app)}
+                        className="px-3 py-2.5 bg-surface-container-highest hover:bg-error/20 text-on-surface-variant hover:text-error font-bold text-xs rounded-xl border border-outline transition-colors cursor-pointer"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Standardized New Partner Modal */}
-      {showCreateModal && (
-        <ModalWrapper
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          maxWidth="max-w-md"
-          height="h-auto max-h-[85vh]"
-          ariaLabel="Register Art Partner"
-        >
-          <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
+      {/* ───────────────────────────────────────────────────────────────────
+          TAB 3: MONTHLY COMMISSION SETTLEMENTS
+          ─────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'settlements' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-surface-container-high rounded-2xl border border-outline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-on-surface">
-                Register Art Partner
-              </h3>
-              <p className="text-[10px] uppercase font-bold text-primary tracking-widest mt-0.5">
-                Strategic Alliance & Referral Network
-              </p>
+              <h3 className="text-sm font-bold text-on-surface">Monthly Partner Commission Ledger</h3>
+              <p className="text-xs text-on-surface-variant">Accrued referral earnings from converted Deals ready for direct bank transfer disbursement.</p>
             </div>
-            <button 
-              onClick={() => setShowCreateModal(false)} 
-              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors"
+            <button
+              onClick={exportSettlementCSV}
+              className="px-4 py-2 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 font-bold text-xs rounded-xl border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
-              <X size={18} />
+              <Download size={14} /> Export Bank Transfer CSV
             </button>
           </div>
 
-          <div className="p-6 overflow-y-auto space-y-4">
+          {/* Table */}
+          <div className="rounded-2xl border border-outline overflow-hidden bg-surface-container-high shadow-sm">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-surface-container-highest border-b-2 border-outline text-xs uppercase font-extrabold text-on-surface tracking-wider">
+                  <th className="p-3">Partner ID</th>
+                  <th className="p-3">Partner Name</th>
+                  <th className="p-3">Bank Account</th>
+                  <th className="p-3 text-center">Deals</th>
+                  <th className="p-3 text-right">Contract Value</th>
+                  <th className="p-3 text-right">Payable Commission</th>
+                  <th className="p-3 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline">
+                {Object.values(partnerCommissions).map(({ partner, dealCount, totalContractValue, rate, payable }) => (
+                  <tr key={partner.partnerId} className="hover:bg-surface-container-highest/40 transition-colors">
+                    <td className="p-3 font-mono font-bold text-primary">{partner.partnerId}</td>
+                    <td className="p-3 font-bold text-on-surface">{partner.name}</td>
+                    <td className="p-3 font-mono text-[11px] text-on-surface-variant">
+                      {partner.bankDetails?.bankName ? `${partner.bankDetails.bankName} - ${partner.bankDetails.accountNumber}` : 'No bank details'}
+                    </td>
+                    <td className="p-3 text-center font-bold">{dealCount}</td>
+                    <td className="p-3 text-right font-mono">LKR {totalContractValue.toLocaleString()}</td>
+                    <td className="p-3 text-right font-mono font-black text-amber-400">
+                      LKR {payable.toLocaleString()}
+                    </td>
+                    <td className="p-3 text-center">
+                      {payable > 0 ? (
+                        <button
+                          onClick={() => setSettlementPartner(partner)}
+                          className="px-3 py-1.5 bg-primary text-on-primary hover:bg-primary/90 font-bold text-xs rounded-lg transition-all cursor-pointer"
+                        >
+                          Disburse
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Settled</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Partner QR Code Modal ────────────────────────────────────────── */}
+      {qrPartner && (
+        <PartnerQRModal
+          isOpen={!!qrPartner}
+          onClose={() => setQrPartner(null)}
+          partner={qrPartner}
+        />
+      )}
+
+      {/* ── Partner Vetting & Approval Modal ─────────────────────────────── */}
+      {selectedApplication && (
+        <ModalWrapper
+          isOpen={!!selectedApplication}
+          onClose={() => setSelectedApplication(null)}
+          maxWidth="max-w-xl"
+          height="h-auto"
+          ariaLabel="Review Partner Application"
+        >
+          <div className="p-6 sm:p-8 space-y-6">
+            <div className="flex justify-between items-start pb-3 border-b border-outline">
+              <div>
+                <h3 className="text-lg font-black text-on-surface">Vetting Application: {selectedApplication.businessName}</h3>
+                <p className="text-xs text-on-surface-variant">Reference ID: {selectedApplication.applicationId}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 p-4 bg-surface-container-highest rounded-2xl border border-outline">
+                <div><span className="text-on-surface-variant">Applicant:</span> <span className="font-bold text-on-surface">{selectedApplication.contactName}</span></div>
+                <div><span className="text-on-surface-variant">Phone:</span> <span className="font-bold font-mono text-primary">{selectedApplication.phone}</span></div>
+                <div><span className="text-on-surface-variant">Email:</span> <span className="text-on-surface">{selectedApplication.email}</span></div>
+                <div><span className="text-on-surface-variant">BR Number:</span> <span className="font-mono text-on-surface">{selectedApplication.brNumber}</span></div>
+              </div>
+
+              {/* Commission Rate Slider */}
+              <div className="p-4 bg-primary/10 rounded-2xl border border-primary/30 space-y-2">
+                <div className="flex justify-between items-center font-bold">
+                  <span className="text-primary">Allocated Commission Rate:</span>
+                  <span className="text-base font-black font-mono text-primary">{(vettingCommissionRate * 100).toFixed(1)}%</span>
+                </div>
+                <input 
+                  type="range"
+                  min="0.01"
+                  max="0.15"
+                  step="0.005"
+                  value={vettingCommissionRate}
+                  onChange={(e) => setVettingCommissionRate(Number(e.target.value))}
+                  className="w-full accent-primary cursor-pointer"
+                />
+                <div className="flex justify-between text-[9px] text-on-surface-variant font-mono">
+                  <span>1.0% (Basic)</span>
+                  <span>5.0% (Standard)</span>
+                  <span>15.0% (Premium)</span>
+                </div>
+              </div>
+
+              {/* Documents preview */}
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-2 tracking-wider">Submitted Verification Documents</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 bg-surface-container-highest rounded-xl border border-outline text-center">
+                    <FileText size={20} className="mx-auto text-primary mb-1" />
+                    <div className="text-[11px] font-bold text-on-surface">BR Certificate</div>
+                    {selectedApplication.documents?.brCertUrl ? (
+                      <a href={selectedApplication.documents.brCertUrl} target="_blank" rel="noreferrer" className="text-[10px] text-primary hover:underline mt-1 block">View Document</a>
+                    ) : (
+                      <span className="text-[10px] text-on-surface-variant">Not provided</span>
+                    )}
+                  </div>
+                  <div className="p-3 bg-surface-container-highest rounded-xl border border-outline text-center">
+                    <ShieldCheck size={20} className="mx-auto text-primary mb-1" />
+                    <div className="text-[11px] font-bold text-on-surface">NIC / Identity</div>
+                    {selectedApplication.documents?.nicCopyUrl ? (
+                      <a href={selectedApplication.documents.nicCopyUrl} target="_blank" rel="noreferrer" className="text-[10px] text-primary hover:underline mt-1 block">View Document</a>
+                    ) : (
+                      <span className="text-[10px] text-on-surface-variant">Not provided</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleApproveApplication(selectedApplication)}
+                className="flex-1 py-3 bg-primary text-on-primary hover:bg-primary/90 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Check size={15} /> Approve & Generate QR Code
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedApplication(null)}
+                className="px-4 py-3 bg-surface-container-highest text-on-surface font-bold text-xs rounded-xl border border-outline cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalWrapper>
+      )}
+
+      {/* ── Disburse Settlement Modal ────────────────────────────────────── */}
+      {settlementPartner && (
+        <ModalWrapper
+          isOpen={!!settlementPartner}
+          onClose={() => setSettlementPartner(null)}
+          maxWidth="max-w-md"
+          height="h-auto"
+          ariaLabel="Disburse Commission Payout"
+        >
+          <form onSubmit={handleDisbursePayout} className="p-6 sm:p-8 space-y-6">
+            <div className="pb-3 border-b border-outline">
+              <h3 className="text-lg font-black text-on-surface">Disburse Partner Commission</h3>
+              <p className="text-xs text-on-surface-variant">{settlementPartner.name} ({settlementPartner.partnerId})</p>
+            </div>
+
+            <div className="p-4 bg-surface-container-highest rounded-2xl border border-outline space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant">Payable Amount:</span>
+                <span className="text-base font-black font-mono text-amber-400">
+                  LKR {partnerCommissions[settlementPartner.partnerId]?.payable.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant">Bank:</span>
+                <span className="font-bold text-on-surface">{settlementPartner.bankDetails?.bankName || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant">Account:</span>
+                <span className="font-bold font-mono text-on-surface">{settlementPartner.bankDetails?.accountNumber || 'N/A'}</span>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Partner / Agency Name *
+              <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">
+                Bank Transfer Reference / Transaction ID *
               </label>
-              <input
+              <input 
                 type="text"
-                placeholder="e.g. Colombo Canvas Studio"
-                value={newPartner.name}
-                onChange={(e) => setNewPartner(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+                required
+                value={bankRefInput}
+                onChange={(e) => setBankRefInput(e.target.value)}
+                placeholder="e.g. TXN-984218 or Cheque #4912"
+                className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs sm:text-sm font-mono font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
 
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Partner Category *
-              </label>
-              <select
-                value={newPartner.type}
-                onChange={(e) => setNewPartner(prev => ({ ...prev, type: e.target.value }))}
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                className="flex-1 py-3 bg-emerald-500 text-white hover:bg-emerald-600 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <option value="Agency">Creative Agency</option>
-                <option value="Printer">Digital Art Printer</option>
-                <option value="Freelancer">Freelance Designer</option>
-              </select>
+                <Check size={15} /> Confirm Payout Disbursed
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettlementPartner(null)}
+                className="px-4 py-3 bg-surface-container-highest text-on-surface font-bold text-xs rounded-xl border border-outline cursor-pointer"
+              >
+                Cancel
+              </button>
             </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Google Maps Location Link
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://maps.google.com/..."
-                  value={newPartner.googleLink}
-                  onChange={(e) => setNewPartner(prev => ({ ...prev, googleLink: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Social Media / Portfolio Link
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://instagram.com/..."
-                  value={newPartner.socialLink}
-                  onChange={(e) => setNewPartner(prev => ({ ...prev, socialLink: e.target.value }))}
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-5 border-t border-outline-variant bg-surface-container-low flex justify-end space-x-3 flex-shrink-0">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="px-5 py-2.5 bg-surface-container-high text-on-surface rounded-xl font-bold text-xs hover:bg-surface-container-highest transition-colors border border-outline-variant/60"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreatePartner}
-              disabled={!newPartner.name.trim()}
-              className="px-6 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs hover:bg-primary/90 transition-all shadow-[0_0_15px_rgba(0,218,243,0.2)] active:scale-95 disabled:opacity-50"
-            >
-              Register Partner
-            </button>
-          </div>
+          </form>
         </ModalWrapper>
       )}
 
-      {/* Standardized AI Strategy Modal */}
-      {showStrategyModal && (
+      {/* ── Invite Partner Modal ─────────────────────────────────────────── */}
+      {showInviteModal && (
         <ModalWrapper
-          isOpen={showStrategyModal}
-          onClose={() => setShowStrategyModal(false)}
-          maxWidth="max-w-lg"
-          height="h-auto max-h-[85vh]"
-          ariaLabel="Strategic AI Advisor"
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          maxWidth="max-w-md"
+          height="h-auto"
+          ariaLabel="Invite Partner"
         >
-          <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
-            <h3 className="font-bold text-on-surface flex items-center uppercase tracking-widest text-xs">
-              <Sparkles size={16} className="mr-2 text-cyan-400" />
-              Gemini Strategy: {selectedPartner?.name}
-            </h3>
-            <button onClick={() => setShowStrategyModal(false)} className="p-1.5 text-on-surface-variant hover:text-on-surface">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="p-6 overflow-y-auto space-y-4">
-            <div className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant text-xs sm:text-sm text-on-surface leading-relaxed min-h-[220px] whitespace-pre-line font-sans shadow-inner">
-              {isGeneratingStrategy ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <Sparkles size={32} className="animate-spin text-primary mb-3" />
-                  <p className="font-bold text-primary">Consulting Gemini AI strategy advisor...</p>
-                </div>
-              ) : (
-                strategyResult || 'No strategy generated yet.'
-              )}
+          <div className="p-6 sm:p-8 space-y-5">
+            <div className="pb-3 border-b border-outline">
+              <h3 className="text-lg font-black text-on-surface">Invite a Framing Partner</h3>
+              <p className="text-xs text-on-surface-variant">Share the onboarding link with studios, print agencies, or artists.</p>
             </div>
-          </div>
 
-          <div className="p-4 sm:p-5 border-t border-outline-variant bg-surface-container-low flex justify-end flex-shrink-0">
-            <button 
-              onClick={() => setShowStrategyModal(false)} 
-              className="px-6 py-2.5 bg-surface-container-high text-on-surface hover:bg-surface-variant rounded-xl text-xs font-bold transition-colors border border-outline-variant/60"
-            >
-              Close Advisory
-            </button>
+            <div className="p-4 bg-surface-container-highest rounded-2xl border border-outline space-y-2">
+              <div className="text-xs font-bold text-on-surface">Registration Portal Link:</div>
+              <div className="p-2.5 bg-surface-container-lowest rounded-xl font-mono text-xs text-primary break-all select-all border border-outline">
+                {typeof window !== 'undefined' ? `${window.location.origin}/partner/register` : 'https://portal.print2frame.xyz/partner/register'}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const url = typeof window !== 'undefined' ? `${window.location.origin}/partner/register` : 'https://portal.print2frame.xyz/partner/register';
+                  navigator.clipboard.writeText(url);
+                  toast.success("Partner registration link copied!");
+                  setShowInviteModal(false);
+                }}
+                className="flex-1 py-3 bg-primary text-on-primary hover:bg-primary/90 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Copy size={14} /> Copy Registration Link
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(false)}
+                className="px-4 py-3 bg-surface-container-highest text-on-surface font-bold text-xs rounded-xl border border-outline cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </ModalWrapper>
       )}
 
-      {/* Delete Partner Modal */}
-      <DeleteModal
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDeletePartner}
-        title="Delete Partner Profile?"
-        message="Are you sure you want to permanently delete this partner? All historical referral links and commission records will be removed."
-      />
+      {/* ── Legacy Delete Confirmation ───────────────────────────────────── */}
+      {deleteId && (
+        <DeleteModal
+          isOpen={!!deleteId}
+          onClose={() => setDeleteId(null)}
+          onConfirm={() => {
+            setPartners(prev => prev.filter(p => (p.partnerId || p.id) !== deleteId));
+            setDeleteId(null);
+            toast.success("Partner removed");
+          }}
+          title="Remove Partner"
+          message="Are you sure you want to remove this partner from the network?"
+        />
+      )}
+
     </div>
   );
 }
-

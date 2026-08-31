@@ -27,6 +27,8 @@ export const COLLECTIONS = {
   LEADS: 'leads',
   CUSTOMERS: 'customers',
   PARTNERS: 'partners',
+  PARTNER_APPLICATIONS: 'partner_applications',
+  PARTNER_PAYOUTS: 'partner_payouts',
   PROJECTS: 'projects',
   LOGISTICS: 'logistics',
   INVOICES: 'invoices',
