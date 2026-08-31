@@ -247,7 +247,13 @@ function App() {
     }
   }, [theme]);
 
-  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  const [activeTabRaw, setActiveTabRaw] = useState("dashboard");
+  const activeTab = activeTabRaw;
+  const setActiveTab = (tabId) => {
+    setActiveTabRaw(tabId);
+    setSidebarCollapsed(true);
+    setMobileMenuOpen(false);
+  };
 
   // Route Protection for Partner Role (5 Modules Only)
   useEffect(() => {
@@ -258,14 +264,6 @@ function App() {
       }
     }
   }, [currentUser, activeTab]);
-
-  const [activeTabRaw, setActiveTabRaw] = useState("dashboard");
-  const activeTab = activeTabRaw;
-  const setActiveTab = (tabId) => {
-    setActiveTabRaw(tabId);
-    setSidebarCollapsed(true);
-    setMobileMenuOpen(false);
-  };
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
