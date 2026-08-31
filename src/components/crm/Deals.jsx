@@ -457,7 +457,7 @@ export default function Deals({
     <div className="h-[calc(100vh-140px)] flex flex-col">
       {/* Unified Page Header */}
       <PageHeader
-        title="Deals Pipeline"
+        title="Deals"
         subtitle="Track committed projects from waiting queue through fabrication, handover, and final settlement."
         metrics={[
           { label: "Committed Value", value: `LKR ${totalDealsValue.toLocaleString()}`, color: "secondary" },

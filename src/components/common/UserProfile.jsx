@@ -193,7 +193,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
     <div className="flex flex-col pb-12">
       {/* Standardized Header */}
       <PageHeader
-        title="User Profile & Identity Settings"
+        title="My Profile"
         subtitle="Manage your personal credentials, studio identity, contact details, and workspace preferences."
         metrics={[
           { label: "Account Role", value: currentUser?.role || "Employee", color: "cyan" },

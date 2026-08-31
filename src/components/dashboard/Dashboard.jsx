@@ -575,9 +575,9 @@ const Dashboard = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mb-1">
-            Admin Dashboard
+            Dashboard
           </h1>
-          <p className="text-on-surface-variant text-sm">Print To Frame — Full Operational View</p>
+          <p className="text-on-surface-variant text-sm">Real-time enterprise overview, project metrics, and financial performance.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="flex items-center text-xs text-secondary bg-secondary/10 border border-secondary/30 px-3 py-1.5 rounded-full font-bold shadow-[0_4px_20px_rgba(0,218,243,0.05)]">

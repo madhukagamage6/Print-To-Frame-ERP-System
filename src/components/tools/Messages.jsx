@@ -5,7 +5,7 @@ import { toast } from "../../utils/toast";
 import { addDocument, updateDocument, deleteDocument, setDocument, COLLECTIONS } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
-import { UserAvatar } from "../common/ui";
+import { UserAvatar, PageHeader } from "../common/ui";
 import { useMessaging, getChannelId } from "../../context/MessagingContext";
 
 const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
@@ -140,9 +140,20 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   const activeMessages = messages.filter(m => m.channelId === activeChan);
 
   return (
-    <div className="flex h-[calc(100vh-140px)] border border-outline-variant bg-surface-container rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,218,243,0.05)]">
-      {/* Sidebar Employees List */}
-      <aside className={`w-full md:w-72 border-r border-outline-variant/50 p-4 bg-surface-container-low/50 ${activeUser ? 'hidden md:flex' : 'flex'} flex-col h-full`}>
+    <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
+      {/* Standardized Header */}
+      <PageHeader
+        title="Messages"
+        subtitle="Direct 1-on-1 team messaging, real-time collaboration, and file sharing."
+        metrics={[
+          { label: "Team Members", value: users.filter(u => u.identifier !== currentUser?.identifier).length, color: "cyan" },
+          { label: "Unread", value: Object.values(unreadCounts).reduce((a, b) => a + b, 0), color: "emerald" }
+        ]}
+      />
+
+      <div className="flex-1 flex border border-outline-variant bg-surface-container rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,218,243,0.05)] min-h-0">
+        {/* Sidebar Employees List */}
+        <aside className={`w-full md:w-72 border-r border-outline-variant/50 p-4 bg-surface-container-low/50 ${activeUser ? 'hidden md:flex' : 'flex'} flex-col h-full`}>
         <h3 className="font-bold text-on-surface text-sm mb-4 flex items-center">
           <Users size={16} className="mr-2 text-on-surface-variant" />
           Employees
@@ -385,6 +396,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 };

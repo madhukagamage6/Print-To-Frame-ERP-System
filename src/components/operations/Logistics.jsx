@@ -463,8 +463,8 @@ export default function Logistics({ jobs = [], setJobs, currentUser }) {
     <div className="h-[calc(100vh-140px)] flex flex-col">
       {/* Unified Page Header */}
       <PageHeader
-        title="Logistics Hub"
-        subtitle="Manage dispatch schedules, driver allocations, material pickups and customer deliveries."
+        title="Logistics"
+        subtitle="Manage dispatch schedules, driver allocations, material pickups, and customer deliveries."
         metrics={[
           { label: "Active Mode", value: activeSubTab === "pickup" ? "Pickups" : "Deliveries", color: activeSubTab === "pickup" ? "primary" : "secondary" },
           { label: "In Transit", value: inTransitCount, color: inTransitCount > 0 ? "secondary" : "default" },

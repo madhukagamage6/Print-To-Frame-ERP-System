@@ -817,10 +817,10 @@ function App() {
           {/* Databases Group */}
           {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices')) && (
             <NavGroup title="Databases" isOpen={navGroupsOpen.databases} onToggle={() => toggleGroup("databases")} collapsed={effectivelyCollapsed}>
-              {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customer Database" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customers" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
               {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partner Database" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices Database" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partners" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
             </NavGroup>
           )}
 

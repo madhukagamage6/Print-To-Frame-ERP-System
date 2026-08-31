@@ -73,11 +73,11 @@ export default function AdminPanel({ dataStore }) {
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="bg-surface-container-highest text-on-surface p-6 rounded-3xl flex justify-between items-center shadow-[0_10px_40px_rgba(0,218,243,0.2)] border border-slate-800">
         <div>
-          <h2 className="text-2xl font-black tracking-tighter">PTF EXECUTIVE CONTROL</h2>
+          <h2 className="text-2xl font-black tracking-tighter">System Overview</h2>
           <div className="flex items-center space-x-2 mt-1">
             <span className="w-2 h-2 rounded-full bg-secondary text-on-secondary animate-pulse" />
-            <span className="text-[8px] font-black uppercase tracking-widest text-on-surface-variant">
-              System Monitoring Active • V2.1.0
+            <span className="text-[10px] font-semibold text-on-surface-variant">
+              Executive system analytics, database storage health, and system audit logs.
             </span>
           </div>
         </div>

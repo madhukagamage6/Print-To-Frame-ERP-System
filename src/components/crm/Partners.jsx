@@ -154,7 +154,7 @@ export default function Partners({ partners = [], setPartners, dataStore, curren
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
-        title="Partner Network"
+        title="Partners"
         subtitle="Collaborative network of Creative Agencies, Digital Art Printers, and Freelance Referral Agents."
         metrics={[
           { label: "Total Partners", value: partners.length, color: "cyan" },

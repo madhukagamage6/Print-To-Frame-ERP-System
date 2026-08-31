@@ -329,8 +329,8 @@ export default function AgentDatabase({
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
-        title="User & Access Directory"
-        subtitle="Manage authenticated identity access levels, dynamic RBAC roles, and pending registration requests."
+        title="User Management"
+        subtitle="Manage authenticated identities, dynamic RBAC role assignments, and pending registrations."
         metrics={[
           { label: "Total Members", value: users.length, color: "cyan" },
           { label: "Internal Team", value: employeeCount, color: "emerald" },

@@ -424,7 +424,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
-        title="Consolidated Invoices"
+        title="Invoices"
         subtitle="Central billing repository for advance receipts, balance settlements, and financial audits."
         metrics={[
           { label: "Total Invoiced", value: `LKR ${totalAmount.toLocaleString()}`, color: "cyan" },

@@ -714,8 +714,8 @@ export default function Leads({
     <div className="h-[calc(100vh-140px)] flex flex-col">
       {/* Unified Page Header */}
       <PageHeader
-        title="Leads Intake"
-        subtitle="Nurture incoming inquiries from intake to advance payment before production handover."
+        title="Leads"
+        subtitle="Nurture incoming inquiries from intake to quotation and 75% advance payment."
         metrics={[
           { label: "Active Pipeline", value: `LKR ${totalPipelineValue.toLocaleString()}`, color: "primary" },
           { label: "Total Leads", value: nonDealLeads.length, color: "default" }

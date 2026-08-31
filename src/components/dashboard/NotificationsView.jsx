@@ -40,10 +40,10 @@ export default function NotificationsView({ notifications = [], setNotifications
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-on-surface tracking-tight flex items-center">
             <Bell className="mr-3 text-primary" size={28} />
-            Notifications & Activity Hub
+            Notifications
           </h1>
           <p className="text-xs sm:text-sm font-medium text-on-surface-variant mt-1">
-            Real-time feed of system status changes, alerts, and direct team messages
+            Real-time feed of system status changes, alerts, and direct team messages.
           </p>
         </div>
 

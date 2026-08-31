@@ -279,7 +279,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
-        title="Customer Database"
+        title="Customers"
         subtitle="Centralized client registry, relationship profiles, order histories, and communications."
         metrics={[
           { label: "Total Clients", value: customers.length, color: "cyan" },

@@ -118,10 +118,10 @@ const CostCalculator = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mb-1">
-            Pricing Engine
+            Cost Calculator
           </h1>
           <p className="text-on-surface-variant text-sm">
-            Automated Quotation System — Tier-based pricing calculator
+            Algorithmic steel framing pricing, BOM estimation, QA, and margin calculator.
           </p>
         </div>
         <div className="flex items-center gap-2 bg-surface-container px-4 py-3 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] self-start">
