@@ -204,6 +204,7 @@ const MetricLabel = ({ children }) => (
 );
 
 const Dashboard = ({
+  currentUser,
   setActiveTab,
   projects = [],
   logisticsJobs = [],
@@ -221,35 +222,6 @@ const Dashboard = ({
   );
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
-
-  // ── Role-Based Functional Category Definitions ───────────────────────────
-  const getDefaultCategory = (role) => {
-    if (['Sales', 'Support', 'Business Client'].includes(role)) return 'crm';
-    if (['Operations', 'Logistics', 'Partner'].includes(role)) return 'operations';
-    if (['Accounts'].includes(role)) return 'finance';
-    return 'all'; // Admin, Manager, and executive roles default to All
-  };
-
-  const [activeCategory, setActiveCategory] = useState(() => getDefaultCategory(currentUser?.role));
-
-  useEffect(() => {
-    if (currentUser?.role) {
-      setActiveCategory(getDefaultCategory(currentUser.role));
-    }
-  }, [currentUser?.role]);
-
-  const CATEGORIES = [
-    { id: 'all', label: 'All Operations', icon: LayoutDashboard, badge: 'Executive' },
-    { id: 'crm', label: 'CRM & Sales', icon: Target, badge: String(activeLeadsCount + activeDealsCount) },
-    { id: 'operations', label: 'Production & Logistics', icon: Hammer, badge: String(ongoingFabCount + pendingLogisticsCount) },
-    { id: 'finance', label: 'Finance & Billing', icon: DollarSign, badge: 'LKR' },
-  ];
-
-  const showCRM = activeCategory === 'all' || activeCategory === 'crm';
-  const showOperations = activeCategory === 'all' || activeCategory === 'operations';
-  const showFinance = activeCategory === 'all' || activeCategory === 'finance';
-  const showExecutive = activeCategory === 'all';
-
 
   React.useEffect(() => {
     const unsub = subscribeToCollection(COLLECTIONS.AUDIT_LOG, setAuditLogs);
@@ -441,6 +413,34 @@ const Dashboard = ({
   const ongoingFabList = projects.filter((project) => project.status !== "Completed").slice(0, 4);
 
   const logisticsQueue = logisticsJobs.filter((job) => job.status !== "Completed").slice(0, 4);
+
+  // ── Role-Based Functional Category Definitions ───────────────────────────
+  const getDefaultCategory = (role) => {
+    if (['Sales', 'Support', 'Business Client'].includes(role)) return 'crm';
+    if (['Operations', 'Logistics', 'Partner'].includes(role)) return 'operations';
+    if (['Accounts'].includes(role)) return 'finance';
+    return 'all'; // Admin, Manager, and executive roles default to All
+  };
+
+  const [activeCategory, setActiveCategory] = useState(() => getDefaultCategory(currentUser?.role));
+
+  useEffect(() => {
+    if (currentUser?.role) {
+      setActiveCategory(getDefaultCategory(currentUser.role));
+    }
+  }, [currentUser?.role]);
+
+  const CATEGORIES = [
+    { id: 'all', label: 'All Operations', icon: LayoutDashboard, badge: 'Executive' },
+    { id: 'crm', label: 'CRM & Sales', icon: Target, badge: String(activeLeadsCount + activeDealsCount) },
+    { id: 'operations', label: 'Production & Logistics', icon: Hammer, badge: String(ongoingFabCount + pendingLogisticsCount) },
+    { id: 'finance', label: 'Finance & Billing', icon: DollarSign, badge: 'LKR' },
+  ];
+
+  const showCRM = activeCategory === 'all' || activeCategory === 'crm';
+  const showOperations = activeCategory === 'all' || activeCategory === 'operations';
+  const showFinance = activeCategory === 'all' || activeCategory === 'finance';
+  const showExecutive = activeCategory === 'all';
 
   const getLeadStageColor = (stage) => {
     switch (stage) {
