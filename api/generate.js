@@ -1,10 +1,11 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Only real, production Gemini models — ordered by preference
+// Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
+// All support audio inlineData multimodal content. Ordered by performance preference.
 const CANDIDATE_MODELS = [
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
 ];
 
 // Vercel Serverless max body ≈ 4.5MB. Base64 inflates binary by ~33%.
@@ -99,6 +100,13 @@ export default async function handler(req, res) {
           lastErrorStatus = 400;
           console.error(`Data validation error on ${model} — skipping remaining models`);
           break;
+        }
+
+        // If model is not found (404), record and try next model
+        if (errMsg.includes('404') || errMsg.includes('not found') || errMsg.includes('NOT_FOUND')) {
+          lastErrorStatus = 404;
+          console.warn(`Model ${model} not found — trying next`);
+          continue;
         }
 
         // For 503/429 (transient), continue to next model
