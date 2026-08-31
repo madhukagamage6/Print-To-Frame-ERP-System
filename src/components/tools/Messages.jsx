@@ -4,56 +4,40 @@ import { triggerBrowserNotification } from "../../App";
 import { toast } from "../../utils/toast";
 import { addDocument, updateDocument, deleteDocument, setDocument, COLLECTIONS } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
-import { collection, query, where, orderBy, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { UserAvatar } from "../common/ui";
-
-// Helper to sort and create channel IDs (e.g. user1_user2)
-function getChannelId(id1, id2) {
-  if (!id1 || !id2) return null;
-  return [String(id1).trim().toLowerCase(), String(id2).trim().toLowerCase()].sort().join("_");
-}
+import { useMessaging, getChannelId } from "../../context/MessagingContext";
 
 const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
+  const { 
+    messages, 
+    unreadCounts, 
+    sendDirectMessage, 
+    markChatAsRead, 
+    setActiveChatContactId 
+  } = useMessaging();
+
   const [activeUser, setActiveUser] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [typingState, setTypingState] = useState({});
-  const [unreadCounts, setUnreadCounts] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   
   // Presence simulation state
   const [presenceState, setPresenceState] = useState({});
-
   const chatContainerRef = useRef(null);
-  const lastMsgCountRef = useRef(0);
 
-  // Subscribe to ALL messages where current user is a participant
+  // Sync active contact with global messaging context
   useEffect(() => {
-    if (!currentUser?.identifier) return;
+    if (activeUser?.identifier) {
+      setActiveChatContactId(String(activeUser.identifier).trim().toLowerCase());
+      markChatAsRead(activeUser.identifier);
+    } else {
+      setActiveChatContactId(null);
+    }
+    return () => setActiveChatContactId(null);
+  }, [activeUser, setActiveChatContactId, markChatAsRead]);
 
-    const myId = String(currentUser.identifier).trim().toLowerCase();
-
-    const q = query(
-      collection(db, COLLECTIONS.MESSAGES),
-      where('participants', 'array-contains', myId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedMessages = [];
-      snapshot.forEach((docSnap) => {
-        fetchedMessages.push({ _firestoreId: docSnap.id, ...docSnap.data() });
-      });
-      
-      fetchedMessages.sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
-      setMessages(fetchedMessages);
-    }, (err) => {
-      console.warn("Messages snapshot subscription notice:", err.message);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  // Presence simulation & typing via a unified 'presence' document or just simple timeouts
+  // Presence simulation & typing via a unified 'presence' document or simple timeouts
   useEffect(() => {
     if (!currentUser) return;
     
@@ -80,84 +64,6 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, activeUser]);
-
-  // Calculate unread counts
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const myId = String(currentUser.identifier).trim().toLowerCase();
-    const counts = {};
-    users.forEach((u) => {
-      const uId = String(u.identifier).trim().toLowerCase();
-      if (uId === myId) return;
-      
-      const chan = getChannelId(myId, uId);
-      const chanMsgs = messages.filter((m) => m.channelId === chan);
-      
-      const unread = chanMsgs.filter(
-        (m) => String(m.fromId).trim().toLowerCase() === uId && !(m.readBy || []).map(r => String(r).toLowerCase()).includes(myId)
-      ).length;
-      
-      counts[u.identifier] = unread;
-    });
-
-    setUnreadCounts(counts);
-
-    const totalUnread = Object.values(counts).reduce((sum, val) => sum + val, 0);
-    if (onUnreadCountChange) {
-      onUnreadCountChange(totalUnread);
-    }
-  }, [messages, currentUser, users, onUnreadCountChange]);
-
-  // Notifications for new incoming messages
-  useEffect(() => {
-    if (!currentUser || !messages.length) return;
-
-    const myId = String(currentUser.identifier).trim().toLowerCase();
-
-    if (messages.length > lastMsgCountRef.current) {
-      const newMsgs = messages.slice(lastMsgCountRef.current);
-      newMsgs.forEach((msg) => {
-        const msgFrom = String(msg.fromId).trim().toLowerCase();
-        // If it's sent to me and I didn't send it
-        if (msgFrom !== myId && !(msg.readBy || []).map(r => String(r).toLowerCase()).includes(myId)) {
-          if (String(activeUser?.identifier).trim().toLowerCase() !== msgFrom) {
-            const sender = users.find(u => String(u.identifier).trim().toLowerCase() === msgFrom);
-            const title = `Message from ${sender?.name || msg.fromId}`;
-            const body = msg.text ? (msg.text.substring(0, 100) + (msg.text.length > 100 ? "..." : "")) : "Sent an attachment";
-            
-            toast.info(title + ": " + body);
-            if (triggerBrowserNotification) {
-              triggerBrowserNotification(title, { body, tag: "chat-message" });
-            }
-          }
-        }
-      });
-    }
-    lastMsgCountRef.current = messages.length;
-  }, [messages, currentUser, activeUser, users]);
-
-  // Mark active chat messages as read
-  useEffect(() => {
-    if (!currentUser || !activeUser || !messages.length) return;
-
-    const myId = String(currentUser.identifier).trim().toLowerCase();
-    const activeChan = getChannelId(myId, activeUser.identifier);
-    const unread = messages.filter(
-      (m) => m.channelId === activeChan && String(m.fromId).trim().toLowerCase() !== myId && !(m.readBy || []).map(r => String(r).toLowerCase()).includes(myId)
-    );
-
-    if (unread.length) {
-      unread.forEach(m => {
-        const readBy = m.readBy || [];
-        if (!readBy.map(r => String(r).toLowerCase()).includes(myId)) {
-          updateDocument(COLLECTIONS.MESSAGES, m._firestoreId, {
-            readBy: [...readBy, myId]
-          }).catch(e => console.warn("Read sync error:", e));
-        }
-      });
-    }
-  }, [messages, currentUser, activeUser]);
 
   const sendTypingIndicator = (isTyping) => {
     if (!activeUser || !currentUser) return;

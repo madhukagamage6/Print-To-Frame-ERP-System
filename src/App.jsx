@@ -50,6 +50,9 @@ const AgentDatabase = React.lazy(() => import("./components/admin/AgentDatabase"
 const UserProfile = React.lazy(() => import("./components/common/UserProfile"));
 
 import { usePermissions } from "./context/PermissionsContext";
+import { MessagingProvider, useMessaging } from "./context/MessagingContext";
+import FloatingMessageToast from "./components/common/FloatingMessageToast";
+import MiniChatDrawer from "./components/tools/MiniChatDrawer";
 
 // Defaults
 import {
@@ -151,6 +154,23 @@ const NavGroup = ({ title, children, isOpen, onToggle, collapsed }) => {
         {children}
       </div>
     </div>
+  );
+};
+
+// Real-Time Messages Badge NavLink
+const MessagesNavLink = ({ activeTab, setActiveTab, collapsed, onNavigate }) => {
+  const { totalUnreadCount } = useMessaging();
+  return (
+    <NavLink
+      icon={MessageSquare}
+      label="Messages"
+      id="messages"
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      badge={totalUnreadCount}
+      collapsed={collapsed}
+      onNavigate={onNavigate}
+    />
   );
 };
 
@@ -657,7 +677,13 @@ function App() {
   }
 
   return (
-    <div className="flex h-[100dvh] bg-surface font-sans text-on-surface overflow-hidden relative">
+    <MessagingProvider
+      currentUser={currentUser}
+      users={users}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+    >
+      <div className="flex h-[100dvh] bg-surface font-sans text-on-surface overflow-hidden relative">
       {/* Scroll Progress Bar */}
       <div 
         className="fixed top-0 left-0 h-1 bg-primary z-[100] shadow-[0_0_10px_rgba(0,218,243,0.8)] transition-[width] duration-75 ease-out"
@@ -804,7 +830,14 @@ function App() {
           {(canAccess(currentUser?.role, 'calculator') || canAccess(currentUser?.role, 'messages')) && (
             <NavGroup title="Tools" isOpen={navGroupsOpen.tools} onToggle={() => toggleGroup("tools")} collapsed={effectivelyCollapsed}>
               {canAccess(currentUser?.role, 'calculator') && <NavLink icon={Calculator} label="Cost Calculator" id="calculator" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
-              {canAccess(currentUser?.role, 'messages') && <NavLink icon={MessageSquare} label="Messages" id="messages" activeTab={activeTab} setActiveTab={setActiveTab} badge={unreadMessages} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+              {canAccess(currentUser?.role, 'messages') && (
+                <MessagesNavLink
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  collapsed={effectivelyCollapsed}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+              )}
             </NavGroup>
           )}
 
@@ -894,6 +927,8 @@ function App() {
       </div>
 
       <Toaster position="bottom-right" richColors duration={3000} />
+      <FloatingMessageToast setActiveTab={setActiveTab} />
+      <MiniChatDrawer currentUser={currentUser} setActiveTab={setActiveTab} />
 
       {/* Main Content Area */}
       <main
@@ -927,6 +962,7 @@ function App() {
             <NotificationsView
               notifications={notificationsList}
               setNotifications={setNotificationsList}
+              setActiveTab={setActiveTab}
             />
           )}
 
@@ -1024,7 +1060,7 @@ function App() {
           {activeTab === "calculator" && canAccess(currentUser?.role, 'calculator') && <CostCalculator />}
 
           {activeTab === "messages" && canAccess(currentUser?.role, 'messages') && (
-            <Messages users={users} currentUser={currentUser} onUnreadCountChange={setUnreadMessages} />
+            <Messages users={users} currentUser={currentUser} />
           )}
 
           {activeTab === "admin" && canAccess(currentUser?.role, 'admin') && (
@@ -1061,6 +1097,7 @@ function App() {
         </div>
       </main>
     </div>
+    </MessagingProvider>
   );
 }
 
