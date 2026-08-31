@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
+  LayoutDashboard,
+  DollarSign,
   Target,
   Kanban,
   Hammer,
