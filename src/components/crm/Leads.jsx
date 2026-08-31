@@ -57,7 +57,7 @@ function LeadColumn({
               <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md uppercase border border-primary/20">
                 {lead.source || 'Manual'}
               </span>
-              {lead.source === 'Partner Referral' && (
+              {(lead.source === 'Referral' || lead.source === 'Partner Referral') && (
                 <span className="text-[9px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded-md border border-amber-500/30 flex items-center gap-1 animate-pulse" title={`Referred by ${lead.partnerName || 'Partner'}`}>
                   <Clock size={10} /> 5-Min SLA
                 </span>

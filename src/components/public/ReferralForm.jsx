@@ -101,7 +101,7 @@ export default function ReferralForm() {
         email: formData.email?.trim() || '',
         company: '',
         jobScope: `Claimed 15% Partner Referral Discount (Referred by ${partnerDetails?.name || partnerId})`,
-        source: 'Partner Referral',
+        source: 'Referral',
         agentId: partnerId || 'Direct',
         agentName: partnerDetails?.name || partnerId || 'Partner Referral',
         partnerId: partnerId || '',
