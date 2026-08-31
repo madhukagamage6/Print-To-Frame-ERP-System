@@ -222,6 +222,35 @@ const Dashboard = ({
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
 
+  // ── Role-Based Functional Category Definitions ───────────────────────────
+  const getDefaultCategory = (role) => {
+    if (['Sales', 'Support', 'Business Client'].includes(role)) return 'crm';
+    if (['Operations', 'Logistics', 'Partner'].includes(role)) return 'operations';
+    if (['Accounts'].includes(role)) return 'finance';
+    return 'all'; // Admin, Manager, and executive roles default to All
+  };
+
+  const [activeCategory, setActiveCategory] = useState(() => getDefaultCategory(currentUser?.role));
+
+  useEffect(() => {
+    if (currentUser?.role) {
+      setActiveCategory(getDefaultCategory(currentUser.role));
+    }
+  }, [currentUser?.role]);
+
+  const CATEGORIES = [
+    { id: 'all', label: 'All Operations', icon: LayoutDashboard, badge: 'Executive' },
+    { id: 'crm', label: 'CRM & Sales', icon: Target, badge: String(activeLeadsCount + activeDealsCount) },
+    { id: 'operations', label: 'Production & Logistics', icon: Hammer, badge: String(ongoingFabCount + pendingLogisticsCount) },
+    { id: 'finance', label: 'Finance & Billing', icon: DollarSign, badge: 'LKR' },
+  ];
+
+  const showCRM = activeCategory === 'all' || activeCategory === 'crm';
+  const showOperations = activeCategory === 'all' || activeCategory === 'operations';
+  const showFinance = activeCategory === 'all' || activeCategory === 'finance';
+  const showExecutive = activeCategory === 'all';
+
+
   React.useEffect(() => {
     const unsub = subscribeToCollection(COLLECTIONS.AUDIT_LOG, setAuditLogs);
     return () => unsub();
@@ -598,6 +627,34 @@ const Dashboard = ({
         </div>
       </div>
 
+      
+      {/* Category Switcher Toolbar */}
+      <div className="flex items-center space-x-2 overflow-x-auto pb-1 custom-scrollbar">
+        {CATEGORIES.map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
+                isActive
+                  ? 'bg-primary text-on-primary shadow-[0_0_20px_rgba(0,218,243,0.35)] scale-100 ring-2 ring-primary/40'
+                  : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/60'
+              }`}
+            >
+              <Icon size={14} className={isActive ? 'text-on-primary' : 'text-primary'} />
+              <span>{cat.label}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono font-extrabold uppercase ${
+                isActive ? 'bg-black/20 text-on-primary' : 'bg-surface-container-high text-on-surface-variant'
+              }`}>
+                {cat.badge}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Global Search */}
       <div className="relative">
         <div className="relative flex items-center">
@@ -681,469 +738,531 @@ const Dashboard = ({
         )}
       </div>
 
-      {/* Main Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Open Leads Card */}
-        <div
-          onClick={() => setActiveTab("leads")}
-          className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
-              <Target size={18} className="text-primary" />
+      
+      {/* Main Metric Cards (Category Filtered) */}
+      {(activeCategory === 'all' || activeCategory === 'crm' || activeCategory === 'operations') && (
+        <div className={`grid gap-4 ${
+          activeCategory === 'all' 
+            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' 
+            : 'grid-cols-1 sm:grid-cols-2'
+        }`}>
+          {/* Open Leads Card */}
+          {showCRM && (
+            <div
+              onClick={() => setActiveTab("leads")}
+              className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                  <Target size={18} className="text-primary" />
+                </div>
+                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                  Active
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold text-on-surface">{activeLeadsCount}</div>
+              <div className="text-xs text-on-surface-variant mt-1 font-medium">Open Leads</div>
             </div>
-            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-              Active
-            </span>
-          </div>
-          <div className="text-3xl font-extrabold text-on-surface">{activeLeadsCount}</div>
-          <div className="text-xs text-on-surface-variant mt-1 font-medium">Open Leads</div>
-        </div>
+          )}
 
-        {/* Deals Card */}
-        <div
-          onClick={() => setActiveTab("pipeline")}
-          className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
-              <Kanban size={18} className="text-primary" />
+          {/* Deals Card */}
+          {showCRM && (
+            <div
+              onClick={() => setActiveTab("pipeline")}
+              className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                  <Kanban size={18} className="text-primary" />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                  Deals
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold text-on-surface">{activeDealsCount}</div>
+              <div className="text-xs text-on-surface-variant mt-1 font-medium">In Pipeline</div>
             </div>
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-              Deals
-            </span>
-          </div>
-          <div className="text-3xl font-extrabold text-on-surface">{activeDealsCount}</div>
-          <div className="text-xs text-on-surface-variant mt-1 font-medium">In Pipeline</div>
-        </div>
+          )}
 
-        {/* Fab Ongoing Card */}
-        <div
-          onClick={() => setActiveTab("projects")}
-          className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-yellow-500/20 transition-colors">
-              <Hammer size={18} className="text-yellow-500" />
+          {/* Fab Ongoing Card */}
+          {showOperations && (
+            <div
+              onClick={() => setActiveTab("projects")}
+              className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-primary/30 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl group-hover:bg-yellow-500/20 transition-colors">
+                  <Hammer size={18} className="text-yellow-500" />
+                </div>
+                <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">
+                  Fab
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold text-on-surface">{ongoingFabCount}</div>
+              <div className="text-xs text-on-surface-variant mt-1 font-medium">Jobs Ongoing</div>
             </div>
-            <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-widest">
-              Fab
-            </span>
-          </div>
-          <div className="text-3xl font-extrabold text-on-surface">{ongoingFabCount}</div>
-          <div className="text-xs text-on-surface-variant mt-1 font-medium">Jobs Ongoing</div>
-        </div>
+          )}
 
-        {/* Pending Logistics Card */}
-        <div
-          onClick={() => setActiveTab("logistics")}
-          className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-error/30 transition-all group"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="p-2.5 bg-error/10 text-error rounded-xl group-hover:bg-error/20 transition-colors">
-              <Truck size={18} className="text-error" />
+          {/* Pending Logistics Card */}
+          {showOperations && (
+            <div
+              onClick={() => setActiveTab("logistics")}
+              className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] hover:border-error/30 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-error/10 text-error rounded-xl group-hover:bg-error/20 transition-colors">
+                  <Truck size={18} className="text-error" />
+                </div>
+                <span className="text-[10px] font-bold text-error uppercase tracking-widest">
+                  Logistics
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold text-on-surface">{pendingLogisticsCount}</div>
+              <div className="text-xs text-on-surface-variant mt-1 font-medium">Pending Jobs</div>
             </div>
-            <span className="text-[10px] font-bold text-error uppercase tracking-widest">
-              Logistics
-            </span>
-          </div>
-          <div className="text-3xl font-extrabold text-on-surface">{pendingLogisticsCount}</div>
-          <div className="text-xs text-on-surface-variant mt-1 font-medium">Pending Jobs</div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Revenue & Aging Section (Item 15) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Pending Revenue */}
-        <div className="bg-primary/10 border border-primary/30 p-6 rounded-2xl text-on-surface shadow-[0_0_20px_rgba(0,218,243,0.15)] flex justify-between items-start relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] -mr-10 -mt-10 rounded-full pointer-events-none"></div>
-          <div className="relative z-10">
-            <p className="text-primary text-xs font-bold uppercase tracking-widest mb-2 font-mono">
-              Pending Revenue
-            </p>
-            <p className="text-3xl sm:text-4xl font-extrabold text-on-surface font-display tracking-tight">LKR {pendingRevenue.toLocaleString()}</p>
-            <p className="text-primary/70 text-xs mt-2 font-medium">
-              From {activeDealsCount} active deal{activeDealsCount !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <TrendingUp size={36} className="text-primary opacity-60 relative z-10" />
-        </div>
-
-        {/* Completed Revenue */}
-        <div className="bg-secondary/10 border border-secondary/30 p-6 rounded-2xl text-on-surface shadow-[0_0_20px_rgba(152,208,218,0.15)] flex justify-between items-start relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-secondary/20 blur-[50px] -mr-10 -mt-10 rounded-full pointer-events-none"></div>
-          <div className="relative z-10">
-            <p className="text-secondary text-xs font-bold uppercase tracking-widest mb-2 font-mono">
-              Completed Revenue
-            </p>
-            <p className="text-3xl sm:text-4xl font-extrabold text-on-surface font-display tracking-tight">LKR {completedRevenue.toLocaleString()}</p>
-            <p className="text-secondary/70 text-xs mt-2 font-medium">From closed deals</p>
-          </div>
-          <CircleCheckBig size={36} className="text-secondary opacity-60 relative z-10" />
-        </div>
-
-        {/* Invoice Aging & Receivables Exposure (Item 15) */}
-        <div 
-          onClick={() => setActiveTab("invoices")}
-          className="bg-surface-container border border-outline-variant p-5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] cursor-pointer hover:border-primary/40 transition-all"
-        >
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
-              Receivables Aging
-            </span>
-            <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center gap-1">
-              View Invoices <ArrowUpRight size={10} />
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
-              <span className="text-[8px] font-bold uppercase text-emerald-400">0–30 Days</span>
-              <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.current.amount.toLocaleString()}</p>
-              <span className="text-[8px] text-on-surface-variant">{invoiceAging.current.count} inv</span>
+      {/* Revenue & Aging Section + Trends Chart */}
+      {showFinance && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Pending Revenue */}
+            <div className="bg-primary/10 border border-primary/30 p-6 rounded-2xl text-on-surface shadow-[0_0_20px_rgba(0,218,243,0.15)] flex justify-between items-start relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] -mr-10 -mt-10 rounded-full pointer-events-none"></div>
+              <div className="relative z-10">
+                <p className="text-primary text-xs font-bold uppercase tracking-widest mb-2 font-mono">
+                  Pending Revenue
+                </p>
+                <p className="text-3xl sm:text-4xl font-extrabold text-on-surface font-display tracking-tight">LKR {pendingRevenue.toLocaleString()}</p>
+                <p className="text-primary/70 text-xs mt-2 font-medium">
+                  From {activeDealsCount} active deal{activeDealsCount !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <TrendingUp size={36} className="text-primary opacity-60 relative z-10" />
             </div>
-            <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
-              <span className="text-[8px] font-bold uppercase text-cyan-400">31–60 Days</span>
-              <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.thirtyToSixty.amount.toLocaleString()}</p>
-              <span className="text-[8px] text-on-surface-variant">{invoiceAging.thirtyToSixty.count} inv</span>
-            </div>
-            <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
-              <span className="text-[8px] font-bold uppercase text-amber-400">61–90 Days</span>
-              <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.sixtyToNinety.amount.toLocaleString()}</p>
-              <span className="text-[8px] text-on-surface-variant">{invoiceAging.sixtyToNinety.count} inv</span>
-            </div>
-            <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/30">
-              <span className="text-[8px] font-bold uppercase text-rose-400">90d+ Overdue</span>
-              <p className="text-xs font-bold font-mono text-rose-400 mt-0.5">LKR {invoiceAging.overNinety.amount.toLocaleString()}</p>
-              <span className="text-[8px] text-rose-400/80">{invoiceAging.overNinety.count} inv</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Trends Chart */}
-      <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)]">
-        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
-          <div>
-            <h3 className="font-bold text-on-surface text-sm">Monthly Sales & Production Trends</h3>
-            <p className="text-[10px] text-on-surface-variant mt-1">Real-time revenue vs volume aggregated directly from live billing and shop fabrication logs.</p>
+            {/* Completed Revenue */}
+            <div className="bg-secondary/10 border border-secondary/30 p-6 rounded-2xl text-on-surface shadow-[0_0_20px_rgba(152,208,218,0.15)] flex justify-between items-start relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-secondary/20 blur-[50px] -mr-10 -mt-10 rounded-full pointer-events-none"></div>
+              <div className="relative z-10">
+                <p className="text-secondary text-xs font-bold uppercase tracking-widest mb-2 font-mono">
+                  Completed Revenue
+                </p>
+                <p className="text-3xl sm:text-4xl font-extrabold text-on-surface font-display tracking-tight">LKR {completedRevenue.toLocaleString()}</p>
+                <p className="text-secondary/70 text-xs mt-2 font-medium">From closed deals</p>
+              </div>
+              <CircleCheckBig size={36} className="text-secondary opacity-60 relative z-10" />
+            </div>
+
+            {/* Invoice Aging & Receivables Exposure (Item 15) */}
+            <div 
+              onClick={() => setActiveTab("invoices")}
+              className="bg-surface-container border border-outline-variant p-5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] cursor-pointer hover:border-primary/40 transition-all"
+            >
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+                  Receivables Aging
+                </span>
+                <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center gap-1">
+                  View Invoices <ArrowUpRight size={10} />
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-[8px] font-bold uppercase text-emerald-400">0–30 Days</span>
+                  <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.current.amount.toLocaleString()}</p>
+                  <span className="text-[8px] text-on-surface-variant">{invoiceAging.current.count} inv</span>
+                </div>
+                <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-[8px] font-bold uppercase text-cyan-400">31–60 Days</span>
+                  <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.thirtyToSixty.amount.toLocaleString()}</p>
+                  <span className="text-[8px] text-on-surface-variant">{invoiceAging.thirtyToSixty.count} inv</span>
+                </div>
+                <div className="p-2 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-[8px] font-bold uppercase text-amber-400">61–90 Days</span>
+                  <p className="text-xs font-bold font-mono text-on-surface mt-0.5">LKR {invoiceAging.sixtyToNinety.amount.toLocaleString()}</p>
+                  <span className="text-[8px] text-on-surface-variant">{invoiceAging.sixtyToNinety.count} inv</span>
+                </div>
+                <div className="p-2 bg-rose-500/10 rounded-xl border border-rose-500/30">
+                  <span className="text-[8px] font-bold uppercase text-rose-400">90d+ Overdue</span>
+                  <p className="text-xs font-bold font-mono text-rose-400 mt-0.5">LKR {invoiceAging.overNinety.amount.toLocaleString()}</p>
+                  <span className="text-[8px] text-rose-400/80">{invoiceAging.overNinety.count} inv</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Trends Chart */}
+          <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)]">
+            <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+              <div>
+                <h3 className="font-bold text-on-surface text-sm">Monthly Sales & Production Trends</h3>
+                <p className="text-[10px] text-on-surface-variant mt-1">Real-time revenue vs volume aggregated directly from live billing and shop fabrication logs.</p>
+              </div>
+            </div>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={trendData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `LKR ${value / 1000}k`} dx={-10} />
+                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={10} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value, name) => {
+                      if (name === "Sales Revenue") return [`LKR ${value.toLocaleString()}`, name];
+                      return [value, name];
+                    }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
+                  <Bar yAxisId="left" dataKey="sales" name="Sales Revenue" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={32} />
+                  <Line yAxisId="right" type="monotone" dataKey="production" name="Production Volume" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
-        <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={trendData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(value) => `LKR ${value / 1000}k`} dx={-10} />
-              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dx={10} />
-              <Tooltip 
-                contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                formatter={(value, name) => {
-                  if (name === "Sales Revenue") return [`LKR ${value.toLocaleString()}`, name];
-                  return [value, name];
-                }}
+      )}
+
+      {/* Pipeline Progress Bars (Category Filtered) */}
+      {(showCRM || showOperations) && (
+        <div className={`grid gap-4 ${
+          activeCategory === 'all' 
+            ? 'grid-cols-1 lg:grid-cols-3' 
+            : activeCategory === 'crm'
+            ? 'grid-cols-1 md:grid-cols-2'
+            : 'grid-cols-1'
+        }`}>
+          {/* Leads Pipeline Progress */}
+          {showCRM && (
+            <div
+              className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-blue-200 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
+              onClick={() => setActiveTab("leads")}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Target size={16} className="mr-2 text-primary" />
+                  Leads Pipeline
+                </h3>
+                <ArrowRight size={14} className="text-on-surface" />
+              </div>
+              <p className="text-[10px] text-on-surface-variant mb-1">
+                {leads.filter((lead) => LEAD_STAGES.includes(lead.stage)).length} total leads
+              </p>
+              <PipelineBar
+                stages={LEAD_STAGES}
+                data={leads.filter((lead) => LEAD_STAGES.includes(lead.stage))}
+                getStageColor={getLeadStageColor}
+                onStageClick={() => setActiveTab("leads")}
               />
-              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-              <Bar yAxisId="left" dataKey="sales" name="Sales Revenue" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={32} />
-              <Line yAxisId="right" type="monotone" dataKey="production" name="Production Volume" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+            </div>
+          )}
 
-      {/* Pipeline Progress Bars */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Leads Pipeline Progress */}
-        <div
-          className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-blue-200 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
-          onClick={() => setActiveTab("leads")}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-on-surface text-sm flex items-center">
-              <Target size={16} className="mr-2 text-primary" />
-              Leads Pipeline
-            </h3>
-            <ArrowRight size={14} className="text-on-surface" />
-          </div>
-          <p className="text-[10px] text-on-surface-variant mb-1">
-            {leads.filter((lead) => LEAD_STAGES.includes(lead.stage)).length} total leads
-          </p>
-          <PipelineBar
-            stages={LEAD_STAGES}
-            data={leads.filter((lead) => LEAD_STAGES.includes(lead.stage))}
-            getStageColor={getLeadStageColor}
-            onStageClick={() => setActiveTab("leads")}
-          />
-        </div>
+          {/* Deals Pipeline Progress */}
+          {showCRM && (
+            <div
+              className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-primary/30 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
+              onClick={() => setActiveTab("pipeline")}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Kanban size={16} className="mr-2 text-primary" />
+                  Deals Pipeline
+                </h3>
+                <ArrowRight size={14} className="text-on-surface" />
+              </div>
+              <p className="text-[10px] text-on-surface-variant mb-1">
+                {leads.filter((lead) => DEAL_STAGES.includes(lead.stage)).length} total deals
+              </p>
+              <PipelineBar
+                stages={DEAL_STAGES}
+                data={leads.filter((lead) => DEAL_STAGES.includes(lead.stage))}
+                getStageColor={getDealStageColor}
+                onStageClick={() => setActiveTab("pipeline")}
+              />
+            </div>
+          )}
 
-        {/* Deals Pipeline Progress */}
-        <div
-          className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-primary/30 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
-          onClick={() => setActiveTab("pipeline")}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-on-surface text-sm flex items-center">
-              <Kanban size={16} className="mr-2 text-primary" />
-              Deals Pipeline
-            </h3>
-            <ArrowRight size={14} className="text-on-surface" />
-          </div>
-          <p className="text-[10px] text-on-surface-variant mb-1">
-            {leads.filter((lead) => DEAL_STAGES.includes(lead.stage)).length} total deals
-          </p>
-          <PipelineBar
-            stages={DEAL_STAGES}
-            data={leads.filter((lead) => DEAL_STAGES.includes(lead.stage))}
-            getStageColor={getDealStageColor}
-            onStageClick={() => setActiveTab("pipeline")}
-          />
+          {/* Fab Pipeline Progress */}
+          {showOperations && (
+            <div
+              className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-primary/30 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
+              onClick={() => setActiveTab("projects")}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Hammer size={16} className="mr-2 text-yellow-500" />
+                  Fabrication Works
+                </h3>
+                <ArrowRight size={14} className="text-on-surface" />
+              </div>
+              <p className="text-[10px] text-on-surface-variant mb-1">{projects.length} total jobs</p>
+              <PipelineBar
+                stages={PROJECT_STAGES}
+                data={projects.map((proj) => ({ ...proj, stage: proj.status }))}
+                getStageColor={getFabStatusColor}
+                onStageClick={() => setActiveTab("projects")}
+              />
+            </div>
+          )}
         </div>
+      )}
 
-        {/* Fab Pipeline Progress */}
-        <div
-          className="bg-surface-container rounded-2xl border border-outline-variant p-5 shadow-[0_4px_20px_rgba(0,218,243,0.05)] cursor-pointer hover:border-primary/30 hover:shadow-[0_4px_25px_rgba(0,218,243,0.1)] transition-all"
-          onClick={() => setActiveTab("projects")}
-        >
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-on-surface text-sm flex items-center">
-              <Hammer size={16} className="mr-2 text-yellow-500" />
-              Fabrication Works
-            </h3>
-            <ArrowRight size={14} className="text-on-surface" />
-          </div>
-          <p className="text-[10px] text-on-surface-variant mb-1">{projects.length} total jobs</p>
-          <PipelineBar
-            stages={PROJECT_STAGES}
-            data={projects.map((proj) => ({ ...proj, stage: proj.status }))}
-            getStageColor={getFabStatusColor}
-            onStageClick={() => setActiveTab("projects")}
-          />
-        </div>
-      </div>
-
-      {/* Lists & Quick Actions */}
+      {/* Lists & Quick Actions Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Stale Leads Alert (Item 12) */}
-          <div className="bg-surface-container rounded-2xl border border-rose-500/30 p-5 shadow-[0_4px_20px_rgba(244,63,94,0.05)]">
-            <div className="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant/40">
-              <h3 className="font-bold text-on-surface text-sm flex items-center">
-                <AlertTriangle size={15} className="mr-2 text-rose-400" />
-                Stale Pipeline Leads ({staleLeads.length})
-              </h3>
-              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded uppercase">
-                ≥ 5 Days in Stage
-              </span>
-            </div>
+          {/* Stale Leads Alert */}
+          {showCRM && (
+            <div className="bg-surface-container rounded-2xl border border-rose-500/30 p-5 shadow-[0_4px_20px_rgba(244,63,94,0.05)]">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant/40">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <AlertTriangle size={15} className="mr-2 text-rose-400" />
+                  Stale Pipeline Leads ({staleLeads.length})
+                </h3>
+                <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded uppercase">
+                  ≥ 5 Days in Stage
+                </span>
+              </div>
 
-            <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar">
-              {staleLeads.length === 0 ? (
-                <p className="text-xs text-emerald-400 italic text-center py-6">
-                  ✓ All leads actively moving! Zero pipeline bottlenecks.
-                </p>
-              ) : (
-                staleLeads.slice(0, 5).map(lead => (
-                  <div
-                    key={lead.id}
-                    onClick={() => setActiveTab("leads")}
-                    className="p-2.5 bg-surface-container-low hover:bg-surface-container-high rounded-xl border border-outline-variant/50 flex items-center justify-between cursor-pointer transition-colors"
-                  >
-                    <div>
-                      <span className="font-bold text-xs text-on-surface">{lead.name || lead.company || lead.id}</span>
-                      <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">
-                        Stage: {lead.stage} · LKR {Number(lead.value || 0).toLocaleString()}
-                      </p>
+              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar">
+                {staleLeads.length === 0 ? (
+                  <p className="text-xs text-emerald-400 italic text-center py-6">
+                    ✓ All leads actively moving! Zero pipeline bottlenecks.
+                  </p>
+                ) : (
+                  staleLeads.slice(0, 5).map(lead => (
+                    <div
+                      key={lead.id}
+                      onClick={() => setActiveTab("leads")}
+                      className="p-2.5 bg-surface-container-low hover:bg-surface-container-high rounded-xl border border-outline-variant/50 flex items-center justify-between cursor-pointer transition-colors"
+                    >
+                      <div>
+                        <span className="font-bold text-xs text-on-surface">{lead.name || lead.company || lead.id}</span>
+                        <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">
+                          Stage: {lead.stage} · LKR {Number(lead.value || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-black text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-lg flex-shrink-0">
+                        {lead.daysInStage}d stuck
+                      </span>
                     </div>
-                    <span className="text-[10px] font-black text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-lg flex-shrink-0">
-                      {lead.daysInStage}d stuck
-                    </span>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Leads needing action */}
-          <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
-            <div className="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant/40">
-              <h3 className="font-bold text-on-surface text-sm flex items-center">
-                <CircleAlert size={14} className="mr-2 text-yellow-500" />
-                Leads Needing Action
-              </h3>
-              <button
-                onClick={() => setActiveTab("leads")}
-                className="text-[10px] text-primary font-bold hover:underline"
-              >
-                View All
-              </button>
+          {/* Leads Needing Action */}
+          {showCRM && (
+            <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-outline-variant/40">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <CircleAlert size={14} className="mr-2 text-yellow-500" />
+                  Leads Needing Action
+                </h3>
+                <button
+                  onClick={() => setActiveTab("leads")}
+                  className="text-[10px] text-primary font-bold hover:underline"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar">
+                {leadsNeedingAction.length > 0 ? (
+                  leadsNeedingAction.map((lead) => (
+                    <ActionItem
+                      key={lead.id}
+                      title={lead.company || lead.clientName}
+                      subtitle={`Stage: ${lead.stage}`}
+                      badge={lead.stage}
+                      badgeColor={getLeadStageColor(lead.stage)}
+                      onClick={() => setActiveTab("leads")}
+                      actions={getActionsForItem(lead, "lead")}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-on-surface-variant italic text-center py-6">
+                    No critical leads right now.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar">
-              {leadsNeedingAction.length > 0 ? (
-                leadsNeedingAction.map((lead) => (
-                  <ActionItem
-                    key={lead.id}
-                    title={lead.company || lead.clientName}
-                    subtitle={`Stage: ${lead.stage}`}
-                    badge={lead.stage}
-                    badgeColor={getLeadStageColor(lead.stage)}
-                    onClick={() => setActiveTab("leads")}
-                    actions={getActionsForItem(lead, "lead")}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-on-surface-variant italic text-center py-6">
-                  No critical leads right now.
-                </p>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Active Deals */}
-          <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-on-surface text-sm flex items-center">
-                <Kanban size={14} className="mr-2 text-primary" />
-                Active Deals
-              </h3>
-              <button
-                onClick={() => setActiveTab("pipeline")}
-                className="text-[10px] text-primary font-bold hover:underline"
-              >
-                View All
-              </button>
+          {showCRM && (
+            <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Kanban size={14} className="mr-2 text-primary" />
+                  Active Deals
+                </h3>
+                <button
+                  onClick={() => setActiveTab("pipeline")}
+                  className="text-[10px] text-primary font-bold hover:underline"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-2">
+                {activeDealsList.length > 0 ? (
+                  activeDealsList.map((deal) => (
+                    <ActionItem
+                      key={deal.id}
+                      title={deal.company || deal.clientName}
+                      subtitle={`LKR ${(deal.value || 0).toLocaleString()}`}
+                      badge={deal.stage}
+                      badgeColor={getDealStageColor(deal.stage)}
+                      onClick={() => setActiveTab("pipeline")}
+                      actions={getActionsForItem(deal, "lead")}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-on-surface-variant italic text-center py-6">No active deals.</p>
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              {activeDealsList.length > 0 ? (
-                activeDealsList.map((deal) => (
-                  <ActionItem
-                    key={deal.id}
-                    title={deal.company || deal.clientName}
-                    subtitle={`LKR ${(deal.value || 0).toLocaleString()}`}
-                    badge={deal.stage}
-                    badgeColor={getDealStageColor(deal.stage)}
-                    onClick={() => setActiveTab("pipeline")}
-                    actions={getActionsForItem(deal, "lead")}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-on-surface-variant italic text-center py-6">No active deals.</p>
-              )}
-            </div>
-          </div>
+          )}
 
-          {/* Fab Floor */}
-          <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-on-surface text-sm flex items-center">
-                <Hammer size={14} className="mr-2 text-yellow-500" />
-                Fabrication Floor
-              </h3>
-              <button
-                onClick={() => setActiveTab("projects")}
-                className="text-[10px] text-yellow-500 font-bold hover:underline"
-              >
-                View All
-              </button>
+          {/* Fabrication Floor */}
+          {showOperations && (
+            <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Hammer size={14} className="mr-2 text-yellow-500" />
+                  Fabrication Floor
+                </h3>
+                <button
+                  onClick={() => setActiveTab("projects")}
+                  className="text-[10px] text-yellow-500 font-bold hover:underline"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-2">
+                {ongoingFabList.length > 0 ? (
+                  ongoingFabList.map((project) => (
+                    <ActionItem
+                      key={project.jobNo}
+                      title={project.jobNo}
+                      subtitle={project.scope}
+                      badge={project.status}
+                      badgeColor={getFabStatusColor(project.status)}
+                      onClick={() => setActiveTab("projects")}
+                      actions={getActionsForItem(project, "project")}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-on-surface-variant italic text-center py-6">
+                    No active fabrication jobs.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              {ongoingFabList.length > 0 ? (
-                ongoingFabList.map((project) => (
-                  <ActionItem
-                    key={project.jobNo}
-                    title={project.jobNo}
-                    subtitle={project.scope}
-                    badge={project.status}
-                    badgeColor={getFabStatusColor(project.status)}
-                    onClick={() => setActiveTab("projects")}
-                    actions={getActionsForItem(project, "project")}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-on-surface-variant italic text-center py-6">
-                  No active fabrication jobs.
-                </p>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Logistics Queue */}
-          <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-on-surface text-sm flex items-center">
-                <Truck size={14} className="mr-2 text-error" />
-                Logistics Queue
-              </h3>
-              <button
-                onClick={() => setActiveTab("logistics")}
-                className="text-[10px] text-error font-bold hover:underline"
-              >
-                View All
-              </button>
+          {showOperations && (
+            <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-on-surface text-sm flex items-center">
+                  <Truck size={14} className="mr-2 text-error" />
+                  Logistics Queue
+                </h3>
+                <button
+                  onClick={() => setActiveTab("logistics")}
+                  className="text-[10px] text-error font-bold hover:underline"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-2">
+                {logisticsQueue.length > 0 ? (
+                  logisticsQueue.map((job) => (
+                    <ActionItem
+                      key={job.id}
+                      title={job.customer || job.location}
+                      subtitle={`${job.type}: ${job.subType}`}
+                      badge={job.status}
+                      badgeColor={
+                        job.status === "In Transit"
+                          ? "bg-primary/20 text-primary"
+                          : job.status === "Pending"
+                          ? "bg-yellow-500/20 text-primary"
+                          : "bg-secondary/20 text-secondary"
+                      }
+                      onClick={() => setActiveTab("logistics")}
+                      actions={getActionsForItem(job, "logistics")}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-on-surface-variant italic text-center py-6">
+                    No pending logistics.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              {logisticsQueue.length > 0 ? (
-                logisticsQueue.map((job) => (
-                  <ActionItem
-                    key={job.id}
-                    title={job.customer || job.location}
-                    subtitle={`${job.type}: ${job.subType}`}
-                    badge={job.status}
-                    badgeColor={
-                      job.status === "In Transit"
-                        ? "bg-primary/20 text-primary"
-                        : job.status === "Pending"
-                        ? "bg-yellow-500/20 text-primary"
-                        : "bg-secondary/20 text-secondary"
-                    }
-                    onClick={() => setActiveTab("logistics")}
-                    actions={getActionsForItem(job, "logistics")}
-                  />
-                ))
-              ) : (
-                <p className="text-xs text-on-surface-variant italic text-center py-6">
-                  No pending logistics.
-                </p>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Sidebar Controls (Quick Actions & Strategic Advice) */}
         <div className="space-y-4">
-          {/* Quick Actions */}
+          
+          {/* Quick Actions (Role Categorized) */}
           <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-5">
             <h3 className="font-bold text-on-surface text-sm mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              <button
-                onClick={() => setActiveTab("leads")}
-                className="w-full flex items-center p-3 bg-primary/10 hover:bg-primary/20 rounded-xl text-primary font-bold transition-colors text-sm"
-              >
-                <Target size={16} className="mr-3" /> New Lead
-              </button>
-              <button
-                onClick={() => setActiveTab("projects")}
-                className="w-full flex items-center p-3 bg-primary/10 hover:bg-primary/20 rounded-xl text-primary font-bold transition-colors text-sm"
-              >
-                <Hammer size={16} className="mr-3" /> New Fabrication Job
-              </button>
-              <button
-                onClick={() => setActiveTab("logistics")}
-                className="w-full flex items-center p-3 bg-error/20 hover:bg-error/30 rounded-xl text-error font-bold transition-colors text-sm"
-              >
-                <Truck size={16} className="mr-3" /> New Logistics Dispatch
-              </button>
-              <button
-                onClick={() => setActiveTab("customers")}
-                className="w-full flex items-center p-3 bg-surface-container-low hover:bg-surface-container rounded-xl text-on-surface font-bold transition-colors text-sm"
-              >
-                <User size={16} className="mr-3" /> Register Customer
-              </button>
-              <button
-                onClick={() => setActiveTab("calculator")}
-                className="w-full flex items-center p-3 bg-secondary/10 hover:bg-secondary/20 rounded-xl text-secondary font-bold transition-colors text-sm"
-              >
-                <Calculator size={16} className="mr-3" /> Cost Calculator
-              </button>
+              {showCRM && (
+                <button
+                  onClick={() => setActiveTab("leads")}
+                  className="w-full flex items-center p-3 bg-primary/10 hover:bg-primary/20 rounded-xl text-primary font-bold transition-colors text-sm"
+                >
+                  <Target size={16} className="mr-3" /> New Lead
+                </button>
+              )}
+              {showOperations && (
+                <button
+                  onClick={() => setActiveTab("projects")}
+                  className="w-full flex items-center p-3 bg-primary/10 hover:bg-primary/20 rounded-xl text-primary font-bold transition-colors text-sm"
+                >
+                  <Hammer size={16} className="mr-3" /> New Fabrication Job
+                </button>
+              )}
+              {showOperations && (
+                <button
+                  onClick={() => setActiveTab("logistics")}
+                  className="w-full flex items-center p-3 bg-error/20 hover:bg-error/30 rounded-xl text-error font-bold transition-colors text-sm"
+                >
+                  <Truck size={16} className="mr-3" /> New Logistics Dispatch
+                </button>
+              )}
+              {showCRM && (
+                <button
+                  onClick={() => setActiveTab("customers")}
+                  className="w-full flex items-center p-3 bg-surface-container-low hover:bg-surface-container rounded-xl text-on-surface font-bold transition-colors text-sm"
+                >
+                  <User size={16} className="mr-3" /> Register Customer
+                </button>
+              )}
+              {showFinance && (
+                <button
+                  onClick={() => setActiveTab("invoices")}
+                  className="w-full flex items-center p-3 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl text-emerald-400 font-bold transition-colors text-sm"
+                >
+                  <FileText size={16} className="mr-3" /> Invoices & Ledger
+                </button>
+              )}
+              {(showCRM || showFinance || showOperations) && (
+                <button
+                  onClick={() => setActiveTab("calculator")}
+                  className="w-full flex items-center p-3 bg-secondary/10 hover:bg-secondary/20 rounded-xl text-secondary font-bold transition-colors text-sm"
+                >
+                  <Calculator size={16} className="mr-3" /> Cost Calculator
+                </button>
+              )}
             </div>
           </div>
 

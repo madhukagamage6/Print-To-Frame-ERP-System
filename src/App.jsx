@@ -951,6 +951,7 @@ function App() {
             <React.Suspense fallback={<LoadingSpinner message="Loading module..." />}>
             {activeTab === "dashboard" && canAccess(currentUser?.role, 'dashboard') && (
               <Dashboard
+                currentUser={currentUser}
                 setActiveTab={setActiveTab}
                 projects={projects}
                 logisticsJobs={logisticsJobs}
