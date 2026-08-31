@@ -186,14 +186,41 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
     }
   }, [currentUser, messages]);
 
+  // Helper: Dynamically resolve complete user profile from global users list
+  const resolveUserProfile = useCallback((target) => {
+    if (!target) return null;
+    const targetObj = typeof target === 'string' ? { identifier: target } : target;
+    const targetId = String(targetObj.identifier || targetObj.email || targetObj.id || target || '').trim().toLowerCase();
+    const targetName = String(targetObj.name || targetObj.senderName || '').trim().toLowerCase();
+
+    const matchedUser = users.find(u => {
+      const uId = String(u.identifier || u.email || '').trim().toLowerCase();
+      const uName = String(u.name || '').trim().toLowerCase();
+      return (targetId && uId === targetId) || (targetName && uName === targetName);
+    });
+
+    if (matchedUser) {
+      return {
+        ...matchedUser,
+        ...targetObj,
+        photoURL: matchedUser.photoURL || matchedUser.avatar || targetObj.photoURL || targetObj.avatar || '',
+        name: matchedUser.name || targetObj.name || targetObj.identifier,
+        role: matchedUser.role || targetObj.role || 'Team Member',
+      };
+    }
+
+    return targetObj;
+  }, [users]);
+
   // 6. Action: Open Mini-Chat Drawer
   const openMiniChat = useCallback((contact) => {
     if (!contact) return;
-    setMiniChatContact(contact);
+    const fullContact = resolveUserProfile(contact);
+    setMiniChatContact(fullContact);
     setIsMiniChatOpen(true);
-    markChatAsRead(contact.identifier);
+    markChatAsRead(fullContact.identifier);
     setActiveToastMessage(null);
-  }, [markChatAsRead]);
+  }, [resolveUserProfile, markChatAsRead]);
 
   // 7. Action: Close Mini-Chat Drawer
   const closeMiniChat = useCallback(() => {
@@ -220,6 +247,7 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
     setActiveChatContactId,
     sendDirectMessage,
     markChatAsRead,
+    resolveUserProfile,
     getChannelId
   };
 

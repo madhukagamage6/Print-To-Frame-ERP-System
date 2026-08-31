@@ -401,6 +401,11 @@ function App() {
           
           if (userDoc.exists()) {
             const userData = userDoc.data();
+            // Auto-sync Google photoURL if user profile doesn't have a photo but Google Auth provides one
+            if (!userData.photoURL && user.photoURL) {
+              userData.photoURL = user.photoURL;
+              setDoc(doc(db, "users", emailKey), { photoURL: user.photoURL }, { merge: true }).catch(console.warn);
+            }
             if (userData.isApproved || userData.status === 'Active' || userData.status === undefined) {
               setCurrentUser({ ...userData, isApproved: true });
             } else {
@@ -428,6 +433,7 @@ function App() {
                   role: isAdminEmail ? "Admin" : "Customer",
                   isApproved: true,
                   status: 'Active',
+                  photoURL: user.photoURL || '',
                 };
                 await setDoc(doc(db, "users", emailKey), newUser);
                 console.log("5. Created successfully");

@@ -4,17 +4,21 @@ import { useMessaging, getChannelId } from '../../context/MessagingContext';
 import { UserAvatar } from '../common/ui';
 
 export default function MiniChatDrawer({ currentUser, setActiveTab }) {
-  const { isMiniChatOpen, miniChatContact, closeMiniChat, messages, sendDirectMessage, markChatAsRead } = useMessaging();
+  const { isMiniChatOpen, miniChatContact, closeMiniChat, messages, sendDirectMessage, markChatAsRead, resolveUserProfile } = useMessaging();
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
   const scrollRef = useRef(null);
 
+  const resolvedContact = React.useMemo(() => {
+    return resolveUserProfile ? resolveUserProfile(miniChatContact) : miniChatContact;
+  }, [miniChatContact, resolveUserProfile]);
+
   const channelMessages = React.useMemo(() => {
-    if (!currentUser?.identifier || !miniChatContact?.identifier) return [];
-    const chan = getChannelId(currentUser.identifier, miniChatContact.identifier);
+    if (!currentUser?.identifier || !resolvedContact?.identifier) return [];
+    const chan = getChannelId(currentUser.identifier, resolvedContact.identifier);
     return messages.filter(m => m.channelId === chan);
-  }, [messages, currentUser, miniChatContact]);
+  }, [messages, currentUser, resolvedContact]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -23,12 +27,12 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
   }, [channelMessages, isMiniChatOpen]);
 
   useEffect(() => {
-    if (isMiniChatOpen && miniChatContact?.identifier) {
-      markChatAsRead(miniChatContact.identifier);
+    if (isMiniChatOpen && resolvedContact?.identifier) {
+      markChatAsRead(resolvedContact.identifier);
     }
-  }, [isMiniChatOpen, miniChatContact, markChatAsRead, channelMessages]);
+  }, [isMiniChatOpen, resolvedContact, markChatAsRead, channelMessages]);
 
-  if (!isMiniChatOpen || !miniChatContact) return null;
+  if (!isMiniChatOpen || !resolvedContact) return null;
 
   const handleSend = async (e) => {
     e?.preventDefault();
@@ -37,7 +41,7 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
     setIsSending(true);
     try {
       await sendDirectMessage({
-        toId: miniChatContact.identifier,
+        toId: resolvedContact.identifier,
         text: inputText.trim()
       });
       setInputText('');
@@ -60,10 +64,10 @@ export default function MiniChatDrawer({ currentUser, setActiveTab }) {
       {/* Header */}
       <div className="p-3 bg-surface-container-high border-b border-outline-variant/50 flex items-center justify-between">
         <div className="flex items-center space-x-2.5 min-w-0">
-          <UserAvatar user={miniChatContact} size="sm" showStatus status="active" />
+          <UserAvatar user={resolvedContact} size="sm" showStatus status="active" />
           <div className="min-w-0">
-            <h4 className="text-xs font-black text-on-surface truncate">{miniChatContact.name || miniChatContact.identifier}</h4>
-            <p className="text-[9px] font-bold text-primary uppercase tracking-tight">{miniChatContact.role || 'Online'}</p>
+            <h4 className="text-xs font-black text-on-surface truncate">{resolvedContact.name || resolvedContact.identifier}</h4>
+            <p className="text-[9px] font-bold text-primary uppercase tracking-tight">{resolvedContact.role || 'Online'}</p>
           </div>
         </div>
         <div className="flex items-center space-x-1">

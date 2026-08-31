@@ -48,8 +48,24 @@ export default function UserAvatar({
 
   const name = directName || userData.name || userData.clientName || userData.company || userData.identifier || 'User';
   const role = (directRole || userData.role || '').toLowerCase();
-  const rawPhoto = directPhotoURL || directAvatar || userData.photoURL || userData.avatar || userData.photo || null;
-  const photoURL = !imageError ? rawPhoto : null;
+  
+  // Extract photo from direct props or user data object with extensive property aliasing
+  const rawPhoto = (
+    directPhotoURL || 
+    directAvatar || 
+    userData.photoURL || 
+    userData.photoUrl || 
+    userData.avatar || 
+    userData.photo || 
+    userData.profilePicture || 
+    userData.profileImage || 
+    userData.image || 
+    userData.picture || 
+    (typeof user === 'string' && (user.startsWith('http') || user.startsWith('data:') || user.startsWith('/')) ? user : null)
+  );
+
+  const cleanPhoto = typeof rawPhoto === 'string' ? rawPhoto.trim() : null;
+  const photoURL = !imageError && cleanPhoto && cleanPhoto.length > 5 ? cleanPhoto : null;
   const selectedPreset = userData.selectedPreset || null;
   const PresetIcon = selectedPreset ? PRESET_ICONS[selectedPreset] : null;
 
@@ -68,7 +84,7 @@ export default function UserAvatar({
     return 'bg-surface-container-high text-on-surface border-outline-variant/60';
   };
 
-  const initial = name.charAt(0).toUpperCase() || 'U';
+  const initial = (name.replace(/^[^a-zA-Z0-9]+/, '') || 'U').charAt(0).toUpperCase() || 'U';
   const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.md;
   const iconSize = ICON_SIZES[size] || ICON_SIZES.md;
   const userStatus = status || userData.status || (userData.isApproved ? 'active' : null);
@@ -82,6 +98,8 @@ export default function UserAvatar({
         <img
           src={photoURL}
           alt={alt || name}
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
           onError={() => setImageError(true)}
           className={`${sizeClass} object-cover border border-primary/30 shadow-[0_0_12px_rgba(0,218,243,0.15)] bg-surface-container`}
         />

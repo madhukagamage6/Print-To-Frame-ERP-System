@@ -123,7 +123,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
         updatedAt: new Date().toISOString()
       };
 
-      const userDocRef = doc(db, 'users', currentUser.identifier);
+      const userDocRef = doc(db, 'users', String(currentUser.identifier).trim().toLowerCase());
       await setDoc(userDocRef, updatedProfile, { merge: true });
 
       // Update in-memory user

@@ -4,13 +4,23 @@ import { useMessaging } from '../../context/MessagingContext';
 import { UserAvatar } from '../common/ui';
 
 export default function FloatingMessageToast({ setActiveTab }) {
-  const { activeToastMessage, dismissToast, openMiniChat, sendDirectMessage } = useMessaging();
+  const { activeToastMessage, dismissToast, openMiniChat, sendDirectMessage, resolveUserProfile } = useMessaging();
   const [quickReplyText, setQuickReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showReplyBox, setShowReplyBox] = useState(false);
 
   const timerRef = useRef(null);
+
+  const sender = React.useMemo(() => {
+    if (!activeToastMessage) return null;
+    const raw = activeToastMessage.sender || activeToastMessage.fromId;
+    return resolveUserProfile ? resolveUserProfile(raw) : raw;
+  }, [activeToastMessage, resolveUserProfile]) || {
+    identifier: activeToastMessage?.fromId,
+    name: activeToastMessage?.senderName || 'Team Member',
+    role: 'Staff'
+  };
 
   useEffect(() => {
     if (!activeToastMessage) {
@@ -32,12 +42,6 @@ export default function FloatingMessageToast({ setActiveTab }) {
   }, [activeToastMessage, isHovered, showReplyBox, dismissToast]);
 
   if (!activeToastMessage) return null;
-
-  const sender = activeToastMessage.sender || {
-    identifier: activeToastMessage.fromId,
-    name: activeToastMessage.senderName || 'Team Member',
-    role: 'Staff'
-  };
 
   const handleSendQuickReply = async (e) => {
     e.preventDefault();
