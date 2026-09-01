@@ -42,26 +42,37 @@ if (sentryDsn && typeof sentryDsn === 'string' && sentryDsn.trim() !== '' && sen
   }
 }
 
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import LoadingSpinner from './components/common/LoadingSpinner';
+
 const path = window.location.pathname;
 
 if (path.startsWith('/referral')) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <ReferralForm />
+      <ErrorBoundary>
+        <ReferralForm />
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 } else if (path.startsWith('/partner/register') || path.startsWith('/register-partner')) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <PartnerRegistration />
+      <ErrorBoundary>
+        <PartnerRegistration />
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 } else {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <PermissionsProvider>
-        <App />
-      </PermissionsProvider>
+      <ErrorBoundary>
+        <React.Suspense fallback={<LoadingSpinner fullScreen message="Loading Print To Frame ERP..." />}>
+          <PermissionsProvider>
+            <App />
+          </PermissionsProvider>
+        </React.Suspense>
+      </ErrorBoundary>
     </React.StrictMode>,
   );
 }

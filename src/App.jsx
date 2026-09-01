@@ -45,7 +45,7 @@ const Logistics = React.lazy(() => import("./components/operations/Logistics"));
 const CostCalculator = React.lazy(() => import("./components/tools/CostCalculator"));
 const Messages = React.lazy(() => import("./components/tools/Messages"));
 const AdminPanel = React.lazy(() => import("./components/admin/AdminPanel"));
-const Login = React.lazy(() => import("./components/auth/Login"));
+import Login from "./components/auth/Login";
 const NotificationsView = React.lazy(() => import("./components/dashboard/NotificationsView"));
 const AgentDatabase = React.lazy(() => import("./components/admin/AgentDatabase"));
 const UserProfile = React.lazy(() => import("./components/common/UserProfile"));
@@ -246,6 +246,8 @@ function App() {
       localStorage.setItem('ptf_theme', theme);
     }
   }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const [activeTabRaw, setActiveTabRaw] = useState("dashboard");
   const activeTab = activeTabRaw;
