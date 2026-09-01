@@ -155,35 +155,39 @@ const CostCalculator = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <label className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2 ml-1">
+              <label htmlFor="calc-length" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2 ml-1">
                 Length (ft)
               </label>
               <input
+                id="calc-length"
                 type="number"
                 value={length}
                 onChange={(e) => setLength(Number(e.target.value))}
-                className="w-full border-2 border-outline-variant rounded-xl p-3 text-sm font-bold text-on-surface focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all bg-surface-container-low"
+                className="w-full border-2 border-outline-variant rounded-xl p-3 text-sm font-bold text-on-surface focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus-visible:ring-2 focus-visible:ring-primary transition-all bg-surface-container-low"
                 placeholder="0"
+                min="0"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2 ml-1">
+              <label htmlFor="calc-height" className="block text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-2 ml-1">
                 Height (ft)
               </label>
               <input
+                id="calc-height"
                 type="number"
                 value={height}
                 onChange={(e) => setHeight(Number(e.target.value))}
-                className="w-full border-2 border-outline-variant rounded-xl p-3 text-sm font-bold text-on-surface focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all bg-surface-container-low"
+                className="w-full border-2 border-outline-variant rounded-xl p-3 text-sm font-bold text-on-surface focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus-visible:ring-2 focus-visible:ring-primary transition-all bg-surface-container-low"
                 placeholder="0"
+                min="0"
               />
             </div>
           </div>
         </div>
 
         {/* Calculated Area Card */}
-        <div className="lg:col-span-4 bg-surface-container-highest rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group shadow-[0_8px_30px_rgba(0,218,243,0.15)] ">
-          <div className="absolute top-0 right-0 p-6 text-on-surface/5 group-hover:text-primary/10 transition-colors">
+        <div className="lg:col-span-4 bg-surface-container-highest rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group shadow-[0_8px_30px_rgba(0,218,243,0.15)]" aria-live="polite">
+          <div className="absolute top-0 right-0 p-6 text-on-surface/5 group-hover:text-primary/10 transition-colors" aria-hidden="true">
             <TrendingUp size={110} />
           </div>
           <div className="relative z-10">
