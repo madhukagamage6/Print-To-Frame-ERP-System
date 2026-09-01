@@ -450,8 +450,18 @@ function App() {
                 updateDocument(COLLECTIONS.PARTNERS, pDocId, { photoURL: user.photoURL }).catch(console.warn);
               }
             }
-            if (userData.isApproved || userData.status === 'Active' || userData.status === undefined) {
-              setCurrentUser({ ...userData, isApproved: true });
+
+            // Self-Healing Super Admin Guard: Ensure primary admin email always retains Admin role
+            const isSuperAdminEmail = emailKey === "madhukagamage6@gmail.com" || emailKey === "madhukagamage@gmail.com";
+            if (isSuperAdminEmail && userData.role !== 'Admin') {
+              userData.role = 'Admin';
+              userData.status = 'Active';
+              userData.isApproved = true;
+              setDoc(doc(db, "users", emailKey), { role: 'Admin', status: 'Active', isApproved: true }, { merge: true }).catch(console.warn);
+            }
+
+            if (userData.isApproved || userData.status === 'Active' || userData.status === undefined || isSuperAdminEmail) {
+              setCurrentUser({ ...userData, role: isSuperAdminEmail ? 'Admin' : userData.role, isApproved: true, status: 'Active' });
             } else {
               logout();
               setLoginError("Your account has been disabled or deactivated.");

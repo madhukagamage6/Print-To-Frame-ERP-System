@@ -27,11 +27,21 @@ export default function EmailTemplateModal({
   }, [recipient, initialTemplateId]);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState(defaultTemplateId);
+  const [templateCategory, setTemplateCategory] = useState('ALL');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  const categories = useMemo(() => {
+    return ['ALL', ...new Set(EMAIL_TEMPLATES.map(t => t.category))];
+  }, []);
+
+  const filteredTemplates = useMemo(() => {
+    if (templateCategory === 'ALL') return EMAIL_TEMPLATES;
+    return EMAIL_TEMPLATES.filter(t => t.category === templateCategory);
+  }, [templateCategory]);
 
   // Template definition
   const activeTemplate = useMemo(() => {
@@ -152,11 +162,30 @@ export default function EmailTemplateModal({
         
         {/* Template Selector Bar */}
         <div>
-          <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-2 tracking-widest">
-            Select Email Template:
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {EMAIL_TEMPLATES.map((tmpl) => {
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+            <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+              Select Email Template ({filteredTemplates.length} of {EMAIL_TEMPLATES.length}):
+            </label>
+            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setTemplateCategory(cat)}
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-colors whitespace-nowrap cursor-pointer ${
+                    templateCategory === cat
+                      ? 'bg-primary/20 text-primary border-primary/40'
+                      : 'bg-surface-container-high text-on-surface-variant border-outline-variant/60 hover:text-on-surface'
+                  }`}
+                >
+                  {cat === 'ALL' ? 'All Templates' : cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto custom-scrollbar p-1">
+            {filteredTemplates.map((tmpl) => {
               const isSelected = selectedTemplateId === tmpl.id;
               return (
                 <button

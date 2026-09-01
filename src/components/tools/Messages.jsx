@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
   Send, Users, MessageSquare, Trash2, Reply, X, Check, CheckCheck, 
   ArrowLeft, Phone, Mail, PhoneCall, Sparkles, User, ChevronRight,
-  Smile, Paperclip, MoreVertical
+  Smile, Paperclip, MoreVertical, MessageCircle
 } from "lucide-react";
 import { toast } from "../../utils/toast";
 import { setDocument } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
-import { PageHeader, FilterBar, StatusBadge, UserAvatar } from "../common/ui";
+import { PageHeader, FilterBar, StatusBadge, UserAvatar, EmailTemplateModal } from "../common/ui";
 import { useMessaging, getChannelId } from "../../context/MessagingContext";
 
 export default function Messages({ users = [], currentUser, onUnreadCountChange }) {
@@ -27,6 +27,7 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [mobileView, setMobileView] = useState("list"); // 'list' | 'chat'
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
   const chatContainerRef = useRef(null);
 
@@ -298,22 +299,35 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
                 </div>
 
                 {/* Direct Action triggers */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                   {activeUser.contactNumber && (
-                    <a
-                      href={`tel:${activeUser.contactNumber.replace(/[^0-9+]/g, '')}`}
-                      className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Call Teammate"
-                    >
-                      <PhoneCall size={12} /> Call
-                    </a>
+                    <>
+                      <a
+                        href={`tel:${activeUser.contactNumber.replace(/[^0-9+]/g, '')}`}
+                        className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Call Teammate"
+                      >
+                        <PhoneCall size={12} className="text-primary" /> Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${activeUser.contactNumber.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                        title="Open WhatsApp Chat"
+                      >
+                        <MessageCircle size={13} /> WhatsApp
+                      </a>
+                    </>
                   )}
-                  <a
-                    href={`mailto:${activeUser.identifier}`}
-                    className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => setIsEmailModalOpen(true)}
+                    className="px-3 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                    title="Open Email Template Dispatcher & Gmail Web Compose"
                   >
-                    <Mail size={12} /> Email
-                  </a>
+                    <Mail size={13} /> Email Dispatcher
+                  </button>
                 </div>
               </div>
 
@@ -397,6 +411,16 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
           )}
         </div>
       </div>
+
+      {/* Email Template Dispatcher Modal */}
+      {isEmailModalOpen && activeUser && (
+        <EmailTemplateModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          recipient={activeUser}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 }
