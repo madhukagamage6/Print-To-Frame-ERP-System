@@ -6,10 +6,10 @@ import {
 import { useMessaging } from '../../context/MessagingContext';
 import { PageHeader, FilterBar, StatusBadge, UserAvatar } from '../common/ui';
 
-export default function NotificationsView({ notifications = [], setNotifications, setActiveTab }) {
+export default function NotificationsView({ notifications = [], setNotifications, users = [], setActiveTab }) {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'SYSTEM' | 'MESSAGES'
   const [searchQuery, setSearchQuery] = useState('');
-  const { messages, openMiniChat } = useMessaging();
+  const { messages, openMiniChat, resolveUserProfile } = useMessaging();
 
   const handleClearAll = () => {
     setNotifications([]);
@@ -19,17 +19,24 @@ export default function NotificationsView({ notifications = [], setNotifications
     setNotifications((prev) => prev.filter(n => n.id !== id));
   };
 
-  // Convert direct messages to notification feed items
+  // Convert direct messages to notification feed items with resolved sender profile & photoURL
   const messageItems = useMemo(() => {
-    return (messages || []).slice(-30).reverse().map(msg => ({
-      id: `msg_${msg._firestoreId || msg.id}`,
-      type: 'message',
-      title: `Message from ${msg.senderName || msg.fromId}`,
-      message: msg.text || 'Attachment / Image',
-      date: new Date(Number(msg.timestamp) || Date.now()).toISOString(),
-      rawMessage: msg
-    }));
-  }, [messages]);
+    return (messages || []).slice(-30).reverse().map(msg => {
+      const senderProfile = resolveUserProfile 
+        ? resolveUserProfile({ identifier: msg.fromId, name: msg.senderName, photoURL: msg.photoURL || msg.senderAvatar })
+        : (users.find(u => u.identifier?.toLowerCase() === msg.fromId?.toLowerCase() || u.email?.toLowerCase() === msg.fromId?.toLowerCase() || u.name?.toLowerCase() === msg.senderName?.toLowerCase()) || null);
+
+      return {
+        id: `msg_${msg._firestoreId || msg.id}`,
+        type: 'message',
+        title: `Message from ${senderProfile?.name || msg.senderName || msg.fromId}`,
+        message: msg.text || 'Attachment / Image',
+        date: new Date(Number(msg.timestamp) || Date.now()).toISOString(),
+        senderUser: senderProfile || { name: msg.senderName || msg.fromId, identifier: msg.fromId, photoURL: msg.photoURL },
+        rawMessage: msg
+      };
+    });
+  }, [messages, resolveUserProfile, users]);
 
   const combinedNotifications = useMemo(() => {
     let list = [];
@@ -121,8 +128,10 @@ export default function NotificationsView({ notifications = [], setNotifications
                     {/* Dynamic Avatar / Icon */}
                     {isMessage ? (
                       <UserAvatar 
-                        name={item.rawMessage?.senderName || 'Teammate'}
-                        role="internal"
+                        user={item.senderUser}
+                        photoURL={item.senderUser?.photoURL}
+                        name={item.senderUser?.name || item.rawMessage?.senderName || 'Teammate'}
+                        role={item.senderUser?.role || 'internal'}
                         size="md"
                       />
                     ) : (

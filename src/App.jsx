@@ -1060,6 +1060,7 @@ function App() {
             <NotificationsView
               notifications={notificationsList}
               setNotifications={setNotificationsList}
+              users={users}
               setActiveTab={setActiveTab}
             />
           )}
