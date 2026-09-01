@@ -3,7 +3,8 @@ import {
   X, User, Building, Phone, Mail, Link, FileText, 
   Trash2, Play, Check, Calculator, MapPin, 
   FileSpreadsheet, Sparkles, Printer, Save, Clock,
-  Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2, Truck
+  Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2, Truck,
+  PhoneCall, Mic, Square, Radio, RotateCcw
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { calculateCost, determineTier } from '../../services/pricingEngine';
@@ -184,6 +185,230 @@ export default function LeadCardDetails({
       }
     };
   }, [audioPreviewUrl]);
+
+  // Live Call Recording State (In-Browser Web MediaStream)
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+
+  const formatTimer = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handlePhoneLinkCall = (e) => {
+    if (!formData.phone) {
+      if (e) e.preventDefault();
+      toast.error('Please enter a contact number first.');
+      return;
+    }
+    const cleanPhone = formData.phone.replace(/[^0-9+]/g, '');
+    toast.success(`Opening Windows Phone Link for ${cleanPhone}...`);
+    window.location.href = `tel:${cleanPhone}`;
+  };
+
+  const startCallRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('Microphone recording is not supported in this browser.');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      mediaStreamRef.current = stream;
+
+      let mimeType = 'audio/webm';
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        const leadCleanName = (formData.name || 'Lead').replace(/[^a-zA-Z0-9]/g, '_');
+        const filename = `Call_${leadCleanName}_${Date.now()}.webm`;
+        const recordedFile = new File([audioBlob], filename, { type: audioBlob.type });
+
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        toast.success(`Call recording captured! Preparing AI analysis...`);
+        await processAudioFile(recordedFile);
+      };
+
+      recorder.start(500);
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+
+      toast.success('Live call recording started');
+    } catch (err) {
+      console.error('Failed to start audio recording:', err);
+      toast.error('Microphone permission denied: ' + (err.message || 'Check browser settings.'));
+    }
+  };
+
+  const stopCallRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const cancelCallRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    toast.info('Recording cancelled');
+  };
+
+  // Shared audio processor for both file drops and live microphone recordings
+  const processAudioFile = async (file) => {
+    if (!file) return;
+
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl);
+      setAudioPreviewUrl(null);
+    }
+    setAudioFile(file);
+    setAudioAnalysisResult('');
+    setAudioError('');
+    setPreparedAudioData(null);
+    setUploadProgress(10);
+    setUploadStage('reading');
+    setUploadStageText('Reading audio data...');
+
+    try {
+      const previewUrl = URL.createObjectURL(file);
+      setAudioPreviewUrl(previewUrl);
+
+      const EXTENSION_MIME_MAP = {
+        mp3: 'audio/mpeg',
+        m4a: 'audio/mp4',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        webm: 'audio/webm',
+        aac: 'audio/aac',
+        flac: 'audio/flac',
+      };
+      const ext = (file.name || '').split('.').pop()?.toLowerCase();
+      const detectedMime = file.type || EXTENSION_MIME_MAP[ext] || 'audio/webm';
+
+      const COMPRESSED_FORMATS = ['mp3', 'm4a', 'aac', 'ogg', 'webm'];
+      const isAlreadyCompressed = COMPRESSED_FORMATS.includes(ext) || (file.type && !file.type.includes('wav'));
+      const MAX_PAYLOAD_RAW_SIZE = 3.2 * 1024 * 1024;
+
+      setUploadProgress(35);
+      setUploadStage('validating');
+      setUploadStageText(`Validated format (${ext?.toUpperCase() || 'Audio'}) • Checking payload...`);
+
+      await new Promise(r => setTimeout(r, 150));
+
+      let processedBlob = file;
+      let finalMime = detectedMime;
+      let isCompressed = false;
+
+      if (!isAlreadyCompressed && file.size > MAX_PAYLOAD_RAW_SIZE) {
+        setUploadProgress(60);
+        setUploadStage('compressing');
+        setUploadStageText(`Optimizing audio (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+        
+        try {
+          processedBlob = await downsampleAudio(file);
+          finalMime = 'audio/wav';
+          isCompressed = true;
+          setUploadProgress(80);
+          setUploadStageText(`Optimized to 8kHz WAV speech standard`);
+        } catch (dsErr) {
+          console.warn('Downsampling fallback:', dsErr);
+          processedBlob = file;
+          finalMime = detectedMime;
+        }
+      } else {
+        setUploadProgress(80);
+        setUploadStageText(isAlreadyCompressed 
+          ? `Preserving compressed stream (${(file.size / 1024 / 1024).toFixed(2)} MB ${ext?.toUpperCase() || 'Audio'})` 
+          : 'Audio size verified • Encoding payload...');
+      }
+
+      await new Promise(r => setTimeout(r, 100));
+
+      const reader = new FileReader();
+      const base64Promise = new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(processedBlob);
+      const base64Data = await base64Promise;
+
+      setPreparedAudioData({
+        base64Data,
+        mimeType: finalMime,
+        originalSizeMB: (file.size / 1024 / 1024).toFixed(2),
+        finalSizeMB: (processedBlob.size / 1024 / 1024).toFixed(2),
+        isCompressed,
+        fileName: file.name,
+        formatLabel: ext?.toUpperCase() || 'AUDIO'
+      });
+
+      setUploadProgress(100);
+      setUploadStage('ready');
+      setUploadStageText('Audio ready for AI extraction');
+      toast.success('Audio prepared & ready for Gemini analysis');
+    } catch (err) {
+      console.error('Audio ingestion failed:', err);
+      setUploadStage('error');
+      setUploadStageText('Failed to process audio');
+      setAudioError(err.message || 'Failed to read audio data.');
+    }
+  };
 
   // Cost calculator fields
   const [calcLength, setCalcLength] = useState(0);
@@ -1028,6 +1253,62 @@ export default function LeadCardDetails({
                 </div>
               </div>
 
+              {/* Call Execution & Live Recording Quick-Bar */}
+              <div className="sm:col-span-2 flex flex-wrap items-center gap-2 p-2.5 bg-surface-container-low/60 rounded-xl border border-outline-variant/60">
+                <button
+                  type="button"
+                  onClick={handlePhoneLinkCall}
+                  disabled={!formData.phone}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
+                    formData.phone
+                      ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 cursor-pointer'
+                      : 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/40 cursor-not-allowed opacity-60'
+                  }`}
+                  title={formData.phone ? `Open Windows Phone Link for ${formData.phone}` : 'Enter contact number first'}
+                >
+                  <PhoneCall size={13} className={formData.phone ? 'text-emerald-400' : 'text-on-surface-variant/40'} />
+                  <span>Call via Phone Link</span>
+                </button>
+
+                {!isRecording ? (
+                  <button
+                    type="button"
+                    onClick={startCallRecording}
+                    className="px-3 py-1.5 bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                    title="Record this conversation directly in browser"
+                  >
+                    <Mic size={13} className="text-primary" />
+                    <span>Record Live Call</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-error/15 border border-error/40 px-3 py-1 rounded-xl">
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
+                    </span>
+                    <span className="text-xs font-mono font-black text-error">
+                      REC {formatTimer(recordingSeconds)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopCallRecording}
+                      className="px-2.5 py-1 bg-error text-on-error hover:bg-error/90 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                      title="Stop recording and feed audio into AI Scope Extractor"
+                    >
+                      <Square size={9} /> Stop & Send to AI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelCallRecording}
+                      className="p-1 text-on-surface-variant hover:text-error rounded-md transition-colors cursor-pointer"
+                      title="Cancel Recording"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
                 <div className="relative">
@@ -1225,17 +1506,56 @@ export default function LeadCardDetails({
             />
 
             {!audioFile ? (
-              /* Empty Dropzone State */
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-error/30 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-error/15 hover:border-error/50 transition-all group"
-              >
-                <div className="text-center space-y-1.5">
-                  <div className="w-10 h-10 rounded-xl bg-error/15 text-error flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                    <Music size={20} />
+              /* Empty Dropzone State with Dual Upload / Live Recording options */
+              <div className="space-y-3">
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-error/30 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:bg-error/15 hover:border-error/50 transition-all group"
+                >
+                  <div className="text-center space-y-1.5">
+                    <div className="w-9 h-9 rounded-xl bg-error/15 text-error flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                      <Music size={18} />
+                    </div>
+                    <p className="text-xs font-bold text-on-surface group-hover:text-error transition-colors">Attach telephone call recording file</p>
+                    <p className="text-[10px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG, AAC up to 25MB • Auto-optimized</p>
                   </div>
-                  <p className="text-xs font-bold text-on-surface group-hover:text-error transition-colors">Attach telephone call recording</p>
-                  <p className="text-[10px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG, AAC up to 25MB • Auto-optimized</p>
+                </div>
+
+                {/* Live Mic Recorder alternative button */}
+                <div className="flex items-center justify-between p-3 bg-surface-container-low rounded-xl border border-outline-variant">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/15 text-primary rounded-lg">
+                      <Mic size={14} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-on-surface">Or record call live right now</p>
+                      <p className="text-[9px] text-on-surface-variant">Captures conversation audio directly through your browser microphone</p>
+                    </div>
+                  </div>
+
+                  {!isRecording ? (
+                    <button
+                      type="button"
+                      onClick={startCallRecording}
+                      className="px-3 py-1.5 bg-primary text-on-primary hover:bg-primary/90 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                    >
+                      <Mic size={12} />
+                      <span>Start Recording</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-black text-error animate-pulse">
+                        REC {formatTimer(recordingSeconds)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={stopCallRecording}
+                        className="px-2.5 py-1 bg-error text-on-error hover:bg-error/90 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                      >
+                        <Square size={9} /> Stop
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
