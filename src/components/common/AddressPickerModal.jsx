@@ -138,30 +138,35 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
           </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-full border border-outline-variant/60 transition-colors cursor-pointer"
+          className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-full border border-outline-variant/60 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label="Close delivery location picker"
         >
-          <X size={18} />
+          <X size={18} aria-hidden="true" />
         </button>
       </div>
 
       {/* Search Bar */}
       <div className="p-3 sm:p-4 bg-surface-container-low border-b border-outline-variant flex gap-2 flex-shrink-0">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-on-surface-variant" size={16} />
+          <Search className="absolute left-3 top-2.5 text-on-surface-variant pointer-events-none" size={16} aria-hidden="true" />
           <input
             type="text"
             value={addressInput}
             onChange={(e) => setAddressInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Enter delivery address, street, or city in Sri Lanka..."
-            className="w-full bg-surface-container border border-outline-variant/60 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            aria-label="Enter delivery address or city in Sri Lanka"
+            className="w-full bg-surface-container border border-outline-variant/60 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary"
           />
         </div>
         <button
+          type="button"
           onClick={handleSearch}
           disabled={isSearching}
-          className="px-4 sm:px-5 py-2 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+          aria-label={isSearching ? "Locating address..." : "Search address on map"}
+          className="px-4 sm:px-5 py-2 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary"
         >
           <span>{isSearching ? 'Locating...' : 'Search'}</span>
         </button>
@@ -169,33 +174,35 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
 
       {/* Map Container */}
       <div className="relative w-full flex-1 min-h-[260px] sm:min-h-[340px] bg-surface-container">
-        <div ref={mapRef} className="w-full h-full" />
+        <div ref={mapRef} className="w-full h-full" role="region" aria-label="Interactive Google Map" />
         <div className="absolute bottom-3 left-3 right-3 sm:right-auto bg-surface-container/90 backdrop-blur border border-outline-variant px-3 py-1.5 rounded-xl text-[11px] text-on-surface-variant flex items-center space-x-1.5 shadow-lg pointer-events-none">
-          <Globe size={14} className="text-primary flex-shrink-0" />
+          <Globe size={14} className="text-primary flex-shrink-0" aria-hidden="true" />
           <span className="truncate">Drag pin or tap map to adjust coordinates</span>
         </div>
       </div>
 
       {/* Footer */}
       <div className="px-5 sm:px-6 py-4 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3 bg-surface-container-low flex-shrink-0">
-        <div className="text-xs text-on-surface-variant truncate max-w-sm text-center sm:text-left">
+        <div className="text-xs text-on-surface-variant truncate max-w-sm text-center sm:text-left" aria-live="polite">
           <span className="font-bold text-on-surface">Selected:</span> {selectedLocation.address}
         </div>
         <div className="flex space-x-2.5 w-full sm:w-auto justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="flex-1 sm:flex-none px-4 py-2.5 border border-outline-variant/60 rounded-xl text-xs sm:text-sm font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+            className="flex-1 sm:flex-none px-4 py-2.5 border border-outline-variant/60 rounded-xl text-xs sm:text-sm font-bold text-on-surface hover:bg-surface-container-high transition-colors focus-visible:ring-2 focus-visible:ring-primary"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={() => {
               onSelect(selectedLocation);
               onClose();
             }}
-            className="flex-1 sm:flex-none px-5 py-2.5 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm active:scale-95 flex items-center justify-center space-x-1.5 cursor-pointer"
+            className="flex-1 sm:flex-none px-5 py-2.5 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm active:scale-95 flex items-center justify-center space-x-1.5 cursor-pointer focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <Check size={14} />
+            <Check size={14} aria-hidden="true" />
             <span>Confirm Location</span>
           </button>
         </div>
