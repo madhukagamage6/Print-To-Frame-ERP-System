@@ -443,6 +443,13 @@ function App() {
               userData.photoURL = user.photoURL;
               setDoc(doc(db, "users", emailKey), { photoURL: user.photoURL }, { merge: true }).catch(console.warn);
             }
+            if (user.photoURL && (userData.role === 'Partner' || userData.partnerId)) {
+              const pMatch = partners.find(p => p.email?.toLowerCase() === emailKey || p.partnerId === userData.partnerId);
+              if (pMatch && !pMatch.photoURL) {
+                const pDocId = pMatch._firestoreId || pMatch.id || pMatch.partnerId;
+                updateDocument(COLLECTIONS.PARTNERS, pDocId, { photoURL: user.photoURL }).catch(console.warn);
+              }
+            }
             if (userData.isApproved || userData.status === 'Active' || userData.status === undefined) {
               setCurrentUser({ ...userData, isApproved: true });
             } else {
@@ -698,10 +705,31 @@ function App() {
 
   const handleUpdateUser = (updatedUser) => {
     setCurrentUser(updatedUser);
+    setUsers(prev => prev.map(u => (u.identifier === updatedUser.identifier || u.email === updatedUser.identifier) ? { ...u, ...updatedUser } : u));
     try {
       localStorage.setItem("ptf_user", JSON.stringify(updatedUser));
     } catch (e) {
       console.warn("Could not cache user locally", e);
+    }
+
+    // Auto-propagate profile photo and contact updates to partners collection if user is Partner
+    if (updatedUser.role === 'Partner' || updatedUser.partnerId) {
+      const pMatch = partners.find(p => 
+        p.email?.toLowerCase() === updatedUser.identifier?.toLowerCase() || 
+        p.partnerId === updatedUser.partnerId || 
+        p.id === updatedUser.partnerId
+      );
+      if (pMatch) {
+        const pDocId = pMatch._firestoreId || pMatch.id || pMatch.partnerId;
+        const pUpdates = {
+          name: updatedUser.name || pMatch.name,
+          phone: updatedUser.contactNumber || pMatch.phone,
+          photoURL: updatedUser.photoURL || pMatch.photoURL || '',
+          contactPerson: updatedUser.name || pMatch.contactPerson,
+        };
+        updateDocument(COLLECTIONS.PARTNERS, pDocId, pUpdates).catch(console.warn);
+        setPartners(prev => prev.map(p => (p.id === pDocId || p.partnerId === pMatch.partnerId) ? { ...p, ...pUpdates } : p));
+      }
     }
   };
 
@@ -1094,6 +1122,8 @@ function App() {
               setLeads={setLeads}
               invoices={invoices}
               projects={projects}
+              users={users}
+              setUsers={setUsers}
               dataStore={dataStore}
               currentUser={currentUser}
             />

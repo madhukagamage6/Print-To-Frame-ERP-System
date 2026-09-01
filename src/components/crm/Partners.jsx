@@ -4,13 +4,13 @@ import {
   Trash2, Check, Clock, Link, QrCode, Copy, Plus, ChevronRight,
   ExternalLink, Layers, ArrowUpRight, ShieldCheck, FileText, CheckCircle2,
   AlertCircle, Download, CreditCard, Send, Handshake, Filter, Phone, Mail,
-  Share2, ArrowDownRight, Printer, Edit3, Upload, FileCheck, Save, Eye, PhoneCall
+  Share2, ArrowDownRight, Printer, Edit3, Upload, FileCheck, Save, Eye, PhoneCall, Camera
 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import { toast } from '../../utils/toast';
 import DeleteModal from '../common/DeleteModal';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal } from '../common/ui';
 import PartnerQRModal from './PartnerQRModal';
 import { 
   subscribeToCollection, 
@@ -29,6 +29,8 @@ export default function Partners({
   setLeads, 
   invoices = [], 
   projects = [],
+  users = [],
+  setUsers,
   dataStore, 
   currentUser 
 }) {
@@ -37,11 +39,15 @@ export default function Partners({
 
   // Navigation & Filter States
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'active' | 'applications' | 'claims' | 'settlements'
-  const [partnerTab, setPartnerTab] = useState('referrals'); // 'referrals' | 'documents' | 'marketing'
   const [workspaceTab, setWorkspaceTab] = useState('referrals'); // 'referrals' | 'documents' | 'financial' | 'marketing'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+
+  // Image Crop & Avatar Upload state
+  const [rawImageForCrop, setRawImageForCrop] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const photoInputRef = useRef(null);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -94,8 +100,38 @@ export default function Partners({
     accountNumber: '',
     accountName: '',
     branchName: '',
+    photoURL: '',
     status: 'Active',
   });
+
+  // Dynamic Avatar Resolution (Google Photo, Custom Upload, or Users DB Bridge)
+  const getPartnerAvatar = (partner) => {
+    if (!partner) return null;
+    if (partner.photoURL && partner.photoURL.length > 5) return partner.photoURL;
+    if (partner.avatar && partner.avatar.length > 5) return partner.avatar;
+    
+    // Cross-reference with authenticated users table
+    const matchingUser = users.find(u => 
+      (u.email && partner.email && u.email.toLowerCase() === partner.email.toLowerCase()) ||
+      (u.identifier && partner.email && u.identifier.toLowerCase() === partner.email.toLowerCase()) ||
+      (u.partnerId && partner.partnerId && u.partnerId === partner.partnerId) ||
+      (u.name && partner.name && u.name.toLowerCase() === partner.name.toLowerCase())
+    );
+    if (matchingUser?.photoURL && matchingUser.photoURL.length > 5) return matchingUser.photoURL;
+    if (matchingUser?.avatar && matchingUser.avatar.length > 5) return matchingUser.avatar;
+
+    // Check currentUser if this partner matches the logged-in session
+    if (
+      currentUser && 
+      (currentUser.email?.toLowerCase() === partner.email?.toLowerCase() ||
+       currentUser.identifier?.toLowerCase() === partner.email?.toLowerCase() ||
+       currentUser.name?.toLowerCase() === partner.name?.toLowerCase())
+    ) {
+      return currentUser.photoURL || currentUser.avatar || null;
+    }
+
+    return null;
+  };
 
   // Partner Identity Resolution for logged-in Partner role
   const currentPartner = useMemo(() => {
@@ -108,7 +144,7 @@ export default function Partners({
       p.id === currentUser?.id ||
       p.name?.toLowerCase() === currentUser?.name?.toLowerCase()
     );
-    if (found) return found;
+    if (found) return { ...found, photoURL: getPartnerAvatar(found) || currentUser?.photoURL };
     return {
       name: currentUser?.name || currentUser?.company || 'Partner Studio',
       partnerId: currentUser?.partnerId || (currentUser?.identifier ? 'P-' + String(currentUser.identifier).slice(0, 4).toUpperCase() : 'P-1001'),
@@ -121,8 +157,20 @@ export default function Partners({
       accountNumber: '',
       accountName: currentUser?.name || '',
       branchName: '',
+      photoURL: currentUser?.photoURL || '',
     };
-  }, [isPartnerUser, partners, currentUser]);
+  }, [isPartnerUser, partners, currentUser, users]);
+
+  // Auto-select partner on mount if partner role or single partner
+  useEffect(() => {
+    if (isPartnerUser && currentPartner) {
+      setSelectedPartner(currentPartner);
+      setEditFormData({ ...currentPartner });
+    } else if (!selectedPartner && partners.length > 0) {
+      setSelectedPartner(partners[0]);
+      setEditFormData({ ...partners[0] });
+    }
+  }, [isPartnerUser, currentPartner, partners]);
 
   // Helper to calculate partner referral stats with SqFt rate (53.5 LKR/SqFt)
   const getPartnerReferrals = (partner) => {
@@ -144,7 +192,6 @@ export default function Partners({
       
       // Determine commission per SqFt (Default: 53.5 LKR/SqFt)
       let commRate = Number(lead.commissionRate || partner.commissionRate || 53.5);
-      // Normalize if historical rate was stored as small fraction (e.g. 0.05)
       if (commRate > 0 && commRate <= 1) {
         commRate = 53.5;
       }
@@ -156,7 +203,6 @@ export default function Partners({
       } else if (totalSqFt > 0) {
         commAmount = totalSqFt * commRate;
       } else if (dealVal > 0) {
-        // Approximate standard 53.5 rate ratio if sqft unentered
         commAmount = (dealVal / 850) * commRate;
       }
 
@@ -192,17 +238,49 @@ export default function Partners({
     });
   };
 
-  // Partner Referrals for Current Logged-in Partner
-  const myReferralLeads = useMemo(() => {
-    return getPartnerReferrals(currentPartner);
-  }, [currentPartner, leads, invoices]);
-
-  // Selected Partner's Referrals (in Admin view)
+  // Selected Partner's Referrals
   const selectedPartnerLeads = useMemo(() => {
     return getPartnerReferrals(selectedPartner);
   }, [selectedPartner, leads, invoices]);
 
-  // Document Upload Handler
+  // Image Upload & Crop Handlers for Partner Avatar
+  const handlePartnerPhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setRawImageForCrop(event.target?.result);
+      setShowCropModal(true);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePartnerCropComplete = async (croppedBase64) => {
+    if (editFormData) {
+      setEditFormData(prev => ({ ...prev, photoURL: croppedBase64 }));
+    }
+    if (selectedPartner) {
+      const docId = selectedPartner._firestoreId || selectedPartner.id || selectedPartner.partnerId;
+      try {
+        await updateDocument(COLLECTIONS.PARTNERS, docId, { photoURL: croppedBase64 });
+        if (setPartners) {
+          setPartners(prev => prev.map(p => (p.id === docId || p.partnerId === selectedPartner.partnerId) ? { ...p, photoURL: croppedBase64 } : p));
+        }
+        setSelectedPartner(prev => ({ ...prev, photoURL: croppedBase64 }));
+        toast.success('Studio logo / profile photo updated & saved!');
+      } catch (err) {
+        console.error('Failed to update photo:', err);
+        toast.error('Failed to persist photo: ' + err.message);
+      }
+    }
+  };
+
+  // Document Upload Handler (Agreements Vault)
   const handleFileUpload = async (e, docKey, targetPartner) => {
     const file = e.target.files?.[0];
     if (!file || !targetPartner) return;
@@ -232,7 +310,6 @@ export default function Partners({
       const docId = targetPartner._firestoreId || targetPartner.id || pid;
       await updateDocument(COLLECTIONS.PARTNERS, docId, { documents: updatedDocs });
 
-      // Update local state
       if (setPartners) {
         setPartners(prev => prev.map(p => (p.partnerId === pid || p.id === pid) ? { ...p, documents: updatedDocs } : p));
       }
@@ -285,6 +362,7 @@ export default function Partners({
         accountNumber: '',
         accountName: '',
         branchName: '',
+        photoURL: '',
         status: 'Active',
       });
       toast.success(`Partner ${partnerPayload.name} (${partnerId}) created successfully!`);
@@ -349,7 +427,7 @@ export default function Partners({
 
     setIsSubmittingClaim(true);
     try {
-      const p = currentPartner || { name: 'Direct Partner', partnerId: 'P-1001' };
+      const p = selectedPartner || currentPartner || { name: 'Direct Partner', partnerId: 'P-1001' };
       const claimPayload = {
         partnerId: p.partnerId || 'P-1001',
         partnerName: p.name || 'Partner',
@@ -417,9 +495,16 @@ export default function Partners({
     }
   };
 
-  // Filtered partners list for admin search
+  // Filtered partners list for admin search (or scoped to self for Partner role)
+  const basePartnersList = useMemo(() => {
+    if (isPartnerUser && currentPartner) {
+      return [currentPartner];
+    }
+    return partners;
+  }, [isPartnerUser, currentPartner, partners]);
+
   const filteredPartners = useMemo(() => {
-    return partners.filter(p => {
+    return basePartnersList.filter(p => {
       const query = searchQuery.toLowerCase();
       const matchesSearch = !query || 
         p.name?.toLowerCase().includes(query) ||
@@ -433,9 +518,9 @@ export default function Partners({
       if (activeFilter === 'active') return p.status === 'Active' || !p.status;
       return true;
     });
-  }, [partners, searchQuery, activeFilter]);
+  }, [basePartnersList, searchQuery, activeFilter]);
 
-  const activePartnersCount = partners.filter(p => p.status === 'Active' || !p.status).length;
+  const activePartnersCount = basePartnersList.filter(p => p.status === 'Active' || !p.status).length;
   const pendingAppsCount = applications.filter(a => a.status === 'Pending Review' || !a.status).length;
   const pendingClaimsCount = claims.filter(c => c.status === 'Pending Verification').length;
 
@@ -445,422 +530,7 @@ export default function Partners({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 1. DEDICATED PARTNER ROLE VIEW (When logged in as Partner)
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (isPartnerUser) {
-    const partnerQr = publicQrUrl(currentPartner);
-    const totalAccumulatedComm = myReferralLeads.reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
-    const eligiblePayoutComm = myReferralLeads.filter(l => l.commState === 'Eligible for Payout').reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
-    const partnerCommRate = Number(currentPartner?.commissionRate) > 1 ? Number(currentPartner.commissionRate) : 53.5;
-
-    return (
-      <div className="h-[calc(100vh-140px)] flex flex-col pb-6 space-y-4">
-        {/* Standardized Header */}
-        <PageHeader
-          title="Partners"
-          subtitle="Your personal partner workspace, referral tracking, agreements vault, and counter QR flyers."
-          metrics={[
-            { label: "Partner ID", value: currentPartner?.partnerId || 'P-1001', color: "cyan" },
-            { label: "Commission Rate", value: `LKR ${partnerCommRate.toFixed(2)} / SqFt`, color: "amber" },
-            { label: "Eligible Payout", value: `LKR ${eligiblePayoutComm.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: "emerald" },
-            { label: "Total Accumulated", value: `LKR ${totalAccumulatedComm.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: "cyan" }
-          ]}
-          actions={
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowClaimModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant hover:border-primary/40 text-on-surface rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0 cursor-pointer"
-              >
-                <Handshake size={14} className="text-primary" />
-                <span>Claim Offline Referral</span>
-              </button>
-              <button
-                onClick={() => setQrPartner(currentPartner)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
-              >
-                <QrCode size={16} />
-                <span>Print QR Flyer</span>
-              </button>
-            </div>
-          }
-        />
-
-        {/* Sub-Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-outline-variant/60 pb-3">
-          <button
-            onClick={() => setPartnerTab('referrals')}
-            className={'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ' + (
-              partnerTab === 'referrals'
-                ? 'bg-primary text-on-primary shadow-md shadow-primary/20'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-            )}
-          >
-            <Layers size={14} /> My Referrals & Deals ({myReferralLeads.length})
-          </button>
-          <button
-            onClick={() => setPartnerTab('documents')}
-            className={'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ' + (
-              partnerTab === 'documents'
-                ? 'bg-primary text-on-primary shadow-md shadow-primary/20'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-            )}
-          >
-            <ShieldCheck size={14} /> Agreements Vault (4)
-          </button>
-          <button
-            onClick={() => setPartnerTab('marketing')}
-            className={'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ' + (
-              partnerTab === 'marketing'
-                ? 'bg-primary text-on-primary shadow-md shadow-primary/20'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
-            )}
-          >
-            <QrCode size={14} /> Marketing Kit & QR Flyer
-          </button>
-        </div>
-
-        {/* Tab Content Container */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {/* Referrals & Deals Table */}
-          {partnerTab === 'referrals' && (
-            <div className="space-y-4">
-              <div className="bg-surface-container rounded-2xl border border-outline-variant/60 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-surface-container-high/80 text-[10px] font-black uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/60">
-                      <tr>
-                        <th className="py-3 px-4">Client Name & Contact</th>
-                        <th className="py-3 px-4">Date Referred</th>
-                        <th className="py-3 px-4">Framing Scope</th>
-                        <th className="py-3 px-4 text-right">Deal Value</th>
-                        <th className="py-3 px-4 text-right">Commission (LKR/SqFt)</th>
-                        <th className="py-3 px-4">Client Payment Status</th>
-                        <th className="py-3 px-4">Commission Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/30">
-                      {myReferralLeads.length > 0 ? (
-                        myReferralLeads.map((lead) => (
-                          <tr key={lead.id} className="hover:bg-surface-container-high/40 transition-colors">
-                            <td className="py-3 px-4">
-                              <div className="font-bold text-on-surface text-xs">{lead.name || 'Direct Client'}</div>
-                              <div className="text-[10px] text-on-surface-variant flex items-center gap-2 mt-0.5">
-                                <span className="font-mono">{lead.phone || 'No phone'}</span>
-                                {lead.phone && (
-                                  <button
-                                    type="button"
-                                    onClick={() => window.open('https://wa.me/' + lead.phone.replace(/[^0-9]/g, ''), '_blank')}
-                                    className="text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                                    title="WhatsApp Client"
-                                  >
-                                    <Phone size={10} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-[11px] text-on-surface-variant font-mono">
-                              {lead.date || new Date().toISOString().split('T')[0]}
-                            </td>
-                            <td className="py-3 px-4 max-w-[200px] truncate text-[11px] text-on-surface-variant" title={lead.jobScope || lead.scope}>
-                              {lead.jobScope || lead.scope || 'Custom Framing'}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-on-surface">
-                              LKR {lead.calculatedDealVal > 0 ? lead.calculatedDealVal.toLocaleString(undefined, { minimumFractionDigits: 2 }) : 'TBD'}
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <div className="font-mono font-black text-primary text-xs">
-                                LKR {lead.calculatedCommAmount > 0 ? lead.calculatedCommAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
-                              </div>
-                              <div className="text-[9px] text-on-surface-variant font-mono">
-                                (LKR {Number(lead.calculatedCommRate || 53.5).toFixed(2)}/SqFt{lead.calculatedSqFt > 0 ? ` · ${lead.calculatedSqFt} SqFt` : ''})
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={'text-[10px] font-bold px-2 py-0.5 rounded-md border inline-flex items-center gap-1 ' + (
-                                lead.paymentStatus === '100% Fully Settled'
-                                  ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
-                                  : lead.paymentStatus === '75% Advance Paid'
-                                  ? 'text-blue-400 bg-blue-500/15 border-blue-500/30'
-                                  : 'text-on-surface-variant bg-surface-container-high border-outline-variant/60'
-                              )}>
-                                {lead.paymentStatus}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={'text-[10px] font-black px-2.5 py-1 rounded-lg border inline-flex items-center gap-1.5 ' + (
-                                lead.commState === 'Paid & Settled'
-                                  ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40'
-                                  : lead.commState === 'Eligible for Payout'
-                                  ? 'text-primary bg-primary/20 border-primary/40 animate-pulse'
-                                  : lead.commState === 'Accrued (In Production)'
-                                  ? 'text-amber-400 bg-amber-500/15 border-amber-500/30'
-                                  : 'text-on-surface-variant bg-surface-container-high border-outline-variant'
-                              )}>
-                                {lead.commState === 'Eligible for Payout' && <Sparkles size={10} />}
-                                {lead.commState}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={7} className="py-12 text-center text-on-surface-variant text-xs">
-                            <Layers size={36} className="mx-auto mb-2 opacity-25 text-on-surface-variant" />
-                            <p className="font-bold text-on-surface">No referrals yet</p>
-                            <p className="text-[11px] text-on-surface-variant mt-1">Share your QR flyer or referral link with clients to start earning LKR 53.50/SqFt commissions!</p>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Agreements Vault */}
-          {partnerTab === 'documents' && (
-            <div className="bg-surface-container p-6 rounded-3xl border border-outline-variant/60 space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-primary" /> Official Agreements & Operational Guidelines
-                </h3>
-                <p className="text-xs text-on-surface-variant mt-1">
-                  Securely stored legal agreements, business registrations, and operational quality guidelines.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                {[
-                  {
-                    key: 'brCert',
-                    title: 'Business Registration (BR) Certificate',
-                    desc: 'Official BR document proving studio business registration in Sri Lanka.',
-                    doc: currentPartner?.documents?.brCert,
-                  },
-                  {
-                    key: 'frameworkAgreement',
-                    title: 'Signed Partner Framework Agreement',
-                    desc: 'Bilateral referral terms, commission schedule (LKR 53.50/SqFt), and monthly settlements.',
-                    doc: currentPartner?.documents?.frameworkAgreement,
-                  },
-                  {
-                    key: 'qualityGuidelines',
-                    title: 'Signed Operational Quality Guidelines PDF',
-                    desc: 'Print To Frame standard manufacturing, glass handling, and framing assembly specs.',
-                    doc: currentPartner?.documents?.qualityGuidelines,
-                  },
-                  {
-                    key: 'nicDoc',
-                    title: 'Signatory Identity Verification (NIC/Passport)',
-                    desc: 'National identity card or passport scan of the studio owner/director.',
-                    doc: currentPartner?.documents?.nicDoc,
-                  },
-                ].map((item) => (
-                  <div key={item.key} className="bg-surface-container-low p-5 rounded-2xl border border-outline-variant/60 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-on-surface flex items-center gap-1.5">
-                          <FileText size={15} className="text-primary" /> {item.title}
-                        </span>
-                        {item.doc?.url ? (
-                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
-                            <CheckCircle2 size={10} /> Verified
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            Pending Upload
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-on-surface-variant mt-1.5">{item.desc}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/30">
-                      {item.doc?.url && (
-                        <a
-                          href={item.doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[11px] font-bold rounded-xl border border-outline-variant flex items-center gap-1.5 transition-colors"
-                        >
-                          <Eye size={12} /> View Document
-                        </a>
-                      )}
-                      <label className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-bold rounded-xl border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer">
-                        <Upload size={12} />
-                        <span>{uploadingDocKey === item.key ? 'Uploading...' : item.doc?.url ? 'Re-Upload' : 'Upload File'}</span>
-                        <input
-                          type="file"
-                          accept=".pdf,.png,.jpg,.jpeg"
-                          className="hidden"
-                          disabled={uploadingDocKey === item.key}
-                          onChange={(e) => handleFileUpload(e, item.key, currentPartner)}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Marketing Kit & QR Flyer */}
-          {partnerTab === 'marketing' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-surface-container p-6 sm:p-8 rounded-3xl border border-outline-variant/60 space-y-5">
-                <div>
-                  <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                    <QrCode size={18} className="text-primary" /> Your Dedicated Referral Link
-                  </h3>
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    Share this link with your customers or on your studio website. Clients get an exclusive 15% discount, and you get LKR 53.50/SqFt credit automatically!
-                  </p>
-                </div>
-
-                <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-2">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Public Client URL</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={partnerQr}
-                      className="w-full bg-transparent font-mono text-xs text-primary focus:outline-none select-all"
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(partnerQr);
-                        toast.success('Referral link copied to clipboard!');
-                      }}
-                      className="p-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl border border-primary/30 transition-colors flex-shrink-0 cursor-pointer"
-                      title="Copy Link"
-                    >
-                      <Copy size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => setQrPartner(currentPartner)}
-                    className="w-full py-3.5 bg-primary text-on-primary font-bold text-xs rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                  >
-                    <Download size={15} /> Download Printable Counter Display Flyer (1200x1600)
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-surface-container p-6 sm:p-8 rounded-3xl border border-outline-variant/60 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="p-4 bg-white rounded-2xl shadow-md border border-outline-variant/40">
-                  <img
-                    src={'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(partnerQr)}
-                    alt="Partner QR Code"
-                    className="w-48 h-48 object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="font-bold text-sm text-on-surface">{currentPartner?.name}</p>
-                  <p className="text-[11px] font-mono text-primary mt-0.5">Code: {currentPartner?.partnerId || 'P-1001'}</p>
-                  <p className="text-[10px] text-on-surface-variant/70 mt-1">Instant 5-minute framing specialist callback guaranteed</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Claim Modal */}
-        <ModalWrapper
-          isOpen={showClaimModal}
-          onClose={() => setShowClaimModal(false)}
-          maxWidth="max-w-md"
-          height="h-auto"
-          ariaLabel="Claim Missing Referral"
-        >
-          <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
-              <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                <Handshake size={18} className="text-primary" /> Claim Missing Referral
-              </h3>
-              <button onClick={() => setShowClaimModal(false)} className="text-on-surface-variant hover:text-on-surface p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSubmitClaim} className="space-y-3.5">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Client Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Kasun Jayawardena"
-                  value={claimForm.clientName}
-                  onChange={(e) => setClaimForm(p => ({ ...p, clientName: e.target.value }))}
-                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Client Mobile (+94) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+94 77 123 4567"
-                  value={claimForm.clientPhone}
-                  onChange={(e) => setClaimForm(p => ({ ...p, clientPhone: formatPhone(e.target.value) }))}
-                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Date of Referral</label>
-                <input
-                  type="date"
-                  value={claimForm.referralDate}
-                  onChange={(e) => setClaimForm(p => ({ ...p, referralDate: e.target.value }))}
-                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Notes / Scope (Optional)</label>
-                <textarea
-                  rows={2}
-                  placeholder="Details of the job discussed..."
-                  value={claimForm.notes}
-                  onChange={(e) => setClaimForm(p => ({ ...p, notes: e.target.value }))}
-                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
-                />
-              </div>
-              <div className="pt-2 flex justify-end gap-2 border-t border-outline-variant/60">
-                <button
-                  type="button"
-                  onClick={() => setShowClaimModal(false)}
-                  className="px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingClaim}
-                  className="px-5 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md"
-                >
-                  {isSubmittingClaim ? 'Submitting...' : 'Submit Claim'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </ModalWrapper>
-
-        {/* QR Modal */}
-        {qrPartner && (
-          <PartnerQRModal
-            partner={qrPartner}
-            isOpen={!!qrPartner}
-            onClose={() => setQrPartner(null)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 2. ADMIN & INTERNAL MANAGEMENT MASTER-DETAIL VIEW
+  // UNIFIED 2-PANEL MASTER-DETAIL VIEW (100% Consistent Across All Roles)
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
@@ -869,10 +539,10 @@ export default function Partners({
         title="Partners"
         subtitle="Manage framing partner studios, vetting queue, referral tracking, and monthly commission settlements."
         metrics={[
-          { label: "Total Partners", value: partners.length, color: "cyan" },
+          { label: "Total Partners", value: basePartnersList.length, color: "cyan" },
           { label: "Active Studios", value: activePartnersCount, color: "emerald" },
-          { label: "Vetting Queue", value: pendingAppsCount, color: "amber" },
-          { label: "Missing Claims", value: pendingClaimsCount, color: "rose" }
+          { label: "Vetting Queue", value: isPartnerUser ? 0 : pendingAppsCount, color: "amber" },
+          { label: "Missing Claims", value: isPartnerUser ? 0 : pendingClaimsCount, color: "rose" }
         ]}
         actions={
           <div className="flex items-center gap-2">
@@ -885,11 +555,11 @@ export default function Partners({
               <span className="hidden sm:inline">Export CSV</span>
             </button>
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => isPartnerUser ? setShowClaimModal(true) : setShowCreateModal(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
             >
-              <Plus size={16} />
-              <span>Register Partner</span>
+              {isPartnerUser ? <Handshake size={16} /> : <Plus size={16} />}
+              <span>{isPartnerUser ? 'Claim Offline Referral' : 'Register Partner'}</span>
             </button>
           </div>
         }
@@ -908,21 +578,23 @@ export default function Partners({
           }
         }}
         filterOptions={[
-          { id: 'all', label: 'All Partners', count: partners.length },
+          { id: 'all', label: 'All Partners', count: basePartnersList.length },
           { id: 'active', label: 'Active Studios', count: activePartnersCount },
-          { id: 'applications', label: 'Vetting Queue', count: pendingAppsCount },
-          { id: 'claims', label: 'Referral Claims', count: pendingClaimsCount },
-          { id: 'settlements', label: 'Monthly Settlements', count: partners.length }
+          ...(!isPartnerUser ? [
+            { id: 'applications', label: 'Vetting Queue', count: pendingAppsCount },
+            { id: 'claims', label: 'Referral Claims', count: pendingClaimsCount },
+            { id: 'settlements', label: 'Monthly Settlements', count: basePartnersList.length }
+          ] : [])
         ]}
-        totalCount={partners.length}
+        totalCount={basePartnersList.length}
         filteredCount={filteredPartners.length}
       />
 
       {/* Main Master-Detail Layout */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
         
-        {/* VIEW 1: Vetting Applications Queue */}
-        {activeFilter === 'applications' ? (
+        {/* VIEW 1: Vetting Applications Queue (Admin Only) */}
+        {!isPartnerUser && activeFilter === 'applications' ? (
           <div className="flex-1 bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
             <div className="p-4 border-b border-outline-variant/60 bg-surface-container-low/80 flex justify-between items-center">
               <div>
@@ -986,8 +658,8 @@ export default function Partners({
               )}
             </div>
           </div>
-        ) : activeFilter === 'claims' ? (
-          /* VIEW 2: Referral Claims Desk */
+        ) : !isPartnerUser && activeFilter === 'claims' ? (
+          /* VIEW 2: Referral Claims Desk (Admin Only) */
           <div className="flex-1 bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
             <div className="p-4 border-b border-outline-variant/60 bg-surface-container-low/80 flex justify-between items-center">
               <div>
@@ -1040,8 +712,8 @@ export default function Partners({
               )}
             </div>
           </div>
-        ) : activeFilter === 'settlements' ? (
-          /* VIEW 3: Monthly Settlements */
+        ) : !isPartnerUser && activeFilter === 'settlements' ? (
+          /* VIEW 3: Monthly Settlements (Admin Only) */
           <div className="flex-1 bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col p-6 space-y-4">
             <div>
               <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
@@ -1052,24 +724,28 @@ export default function Partners({
               </p>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/30">
-              {partners.map(p => {
+              {basePartnersList.map(p => {
                 const partnerLeads = getPartnerReferrals(p);
                 const eligiblePayout = partnerLeads.filter(l => l.commState === 'Eligible for Payout').reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
                 const totalSettled = partnerLeads.filter(l => l.commState === 'Paid & Settled').reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
+                const avatarPhoto = getPartnerAvatar(p);
 
                 return (
                   <div key={p.partnerId || p.id} className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-sm text-on-surface">{p.name}</p>
-                        <span className="font-mono text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">{p.partnerId}</span>
-                      </div>
-                      <p className="text-[11px] text-on-surface-variant font-mono mt-0.5">
-                        Bank: <strong className="text-on-surface">{p.bankName || 'Not Set'}</strong> · A/C: <strong className="text-on-surface">{p.accountNumber || 'Not Set'}</strong> · Branch: {p.branchName || 'N/A'}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs mt-1">
-                        <span className="text-emerald-400 font-mono font-bold">Eligible: LKR {eligiblePayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        <span className="text-on-surface-variant font-mono">Settled: LKR {totalSettled.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <div className="flex items-center gap-3">
+                      <UserAvatar user={{ ...p, photoURL: avatarPhoto, role: 'partner' }} size="md" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm text-on-surface">{p.name}</p>
+                          <span className="font-mono text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">{p.partnerId}</span>
+                        </div>
+                        <p className="text-[11px] text-on-surface-variant font-mono mt-0.5">
+                          Bank: <strong className="text-on-surface">{p.bankName || 'Not Set'}</strong> · A/C: <strong className="text-on-surface">{p.accountNumber || 'Not Set'}</strong> · Branch: {p.branchName || 'N/A'}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs mt-1">
+                          <span className="text-emerald-400 font-mono font-bold">Eligible: LKR {eligiblePayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="text-on-surface-variant font-mono">Settled: LKR {totalSettled.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -1088,7 +764,7 @@ export default function Partners({
             </div>
           </div>
         ) : (
-          /* VIEW 4: MASTER-DETAIL 2-PANEL VIEW (Matching Customers & User Management) */
+          /* VIEW 4: MASTER-DETAIL 2-PANEL VIEW (Unified for both Admin & Partner) */
           <>
             {/* LEFT COLUMN: Partner Directory List (1/3 Width) */}
             <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
@@ -1114,13 +790,14 @@ export default function Partners({
                     const isSelected = (selectedPartner?.partnerId === partner.partnerId) || (selectedPartner?.id === partner.id);
                     const partnerLeads = getPartnerReferrals(partner);
                     const partnerCommRate = Number(partner.commissionRate) > 1 ? Number(partner.commissionRate) : 53.5;
+                    const avatarPhoto = getPartnerAvatar(partner);
 
                     return (
                       <div
                         key={partner._firestoreId || partner.id || partner.partnerId}
                         onClick={() => {
-                          setSelectedPartner(partner);
-                          setEditFormData({ ...partner, commissionRate: partnerCommRate });
+                          setSelectedPartner({ ...partner, photoURL: avatarPhoto });
+                          setEditFormData({ ...partner, photoURL: avatarPhoto, commissionRate: partnerCommRate });
                           setMobileView('detail');
                         }}
                         className={`p-4 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
@@ -1130,9 +807,11 @@ export default function Partners({
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-surface-container-high border border-outline-variant flex items-center justify-center text-primary font-bold text-sm shadow-inner flex-shrink-0">
-                            {partner.name ? partner.name.charAt(0).toUpperCase() : 'P'}
-                          </div>
+                          {/* Rich Profile Avatar supporting Google & Custom Photo */}
+                          <UserAvatar
+                            user={{ ...partner, photoURL: avatarPhoto, role: 'partner' }}
+                            size="md"
+                          />
 
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
@@ -1193,8 +872,27 @@ export default function Partners({
                         <X size={16} />
                       </button>
 
-                      <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-black text-lg shadow-sm flex-shrink-0">
-                        {selectedPartner.name.charAt(0).toUpperCase()}
+                      {/* Large Partner Avatar with Edit Photo trigger */}
+                      <div className="relative group">
+                        <UserAvatar 
+                          user={{ ...selectedPartner, photoURL: getPartnerAvatar(selectedPartner), role: 'partner' }}
+                          size="lg"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center text-white transition-opacity cursor-pointer shadow-lg"
+                          title="Change Studio Profile Photo"
+                        >
+                          <Camera size={18} />
+                        </button>
+                        <input
+                          ref={photoInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handlePartnerPhotoSelect}
+                        />
                       </div>
 
                       <div className="min-w-0">
@@ -1248,6 +946,7 @@ export default function Partners({
                         onClick={() => {
                           setEditFormData({ 
                             ...selectedPartner, 
+                            photoURL: getPartnerAvatar(selectedPartner),
                             commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
                           });
                           setShowEditModal(true);
@@ -1256,13 +955,15 @@ export default function Partners({
                       >
                         <Edit3 size={12} /> Edit
                       </button>
-                      <button
-                        onClick={() => setDeletePartnerId(selectedPartner._firestoreId || selectedPartner.id || selectedPartner.partnerId)}
-                        className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
-                        title="Delete Partner"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {!isPartnerUser && (
+                        <button
+                          onClick={() => setDeletePartnerId(selectedPartner._firestoreId || selectedPartner.id || selectedPartner.partnerId)}
+                          className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
+                          title="Delete Partner"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1320,8 +1021,8 @@ export default function Partners({
                           <table className="w-full text-left text-xs">
                             <thead className="bg-surface-container-high/80 text-[10px] font-black uppercase tracking-wider text-on-surface-variant border-b border-outline-variant/60">
                               <tr>
-                                <th className="py-3 px-4">Client Name</th>
-                                <th className="py-3 px-4">Date</th>
+                                <th className="py-3 px-4">Client Name & Contact</th>
+                                <th className="py-3 px-4">Date Referred</th>
                                 <th className="py-3 px-4 text-right">Deal Value</th>
                                 <th className="py-3 px-4 text-right">Commission (LKR/SqFt)</th>
                                 <th className="py-3 px-4">Payment</th>
@@ -1334,7 +1035,19 @@ export default function Partners({
                                   <tr key={lead.id} className="hover:bg-surface-container-high/40 transition-colors">
                                     <td className="py-3 px-4">
                                       <div className="font-bold text-on-surface">{lead.name || 'Direct Client'}</div>
-                                      <div className="text-[10px] text-on-surface-variant font-mono">{lead.phone || 'No phone'}</div>
+                                      <div className="text-[10px] text-on-surface-variant flex items-center gap-2 mt-0.5">
+                                        <span className="font-mono">{lead.phone || 'No phone'}</span>
+                                        {lead.phone && (
+                                          <button
+                                            type="button"
+                                            onClick={() => window.open('https://wa.me/' + lead.phone.replace(/[^0-9]/g, ''), '_blank')}
+                                            className="text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                                            title="WhatsApp Client"
+                                          >
+                                            <Phone size={10} />
+                                          </button>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="py-3 px-4 text-[11px] text-on-surface-variant font-mono">
                                       {lead.date || new Date().toISOString().split('T')[0]}
@@ -1362,7 +1075,7 @@ export default function Partners({
                                       </span>
                                     </td>
                                     <td className="py-3 px-4">
-                                      <span className={'text-[10px] font-black px-2 py-0.5 rounded-md border inline-flex items-center gap-1 ' + (
+                                      <span className={'text-[10px] font-black px-2.5 py-1 rounded-lg border inline-flex items-center gap-1.5 ' + (
                                         lead.commState === 'Paid & Settled'
                                           ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/40'
                                           : lead.commState === 'Eligible for Payout'
@@ -1371,6 +1084,7 @@ export default function Partners({
                                           ? 'text-amber-400 bg-amber-500/15 border-amber-500/30'
                                           : 'text-on-surface-variant bg-surface-container-high border-outline-variant'
                                       )}>
+                                        {lead.commState === 'Eligible for Payout' && <Sparkles size={10} />}
                                         {lead.commState}
                                       </span>
                                     </td>
@@ -1378,8 +1092,10 @@ export default function Partners({
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={6} className="py-8 text-center text-on-surface-variant text-xs">
-                                    No referrals linked to {selectedPartner.name} yet.
+                                  <td colSpan={6} className="py-12 text-center text-on-surface-variant text-xs">
+                                    <Layers size={36} className="mx-auto mb-2 opacity-25" />
+                                    <p className="font-bold text-on-surface">No referrals linked yet</p>
+                                    <p className="text-[11px] text-on-surface-variant mt-1">Share your dedicated QR flyer or referral link with clients to start earning LKR 53.50/SqFt commissions!</p>
                                   </td>
                                 </tr>
                               )}
@@ -1495,11 +1211,12 @@ export default function Partners({
                             onClick={() => {
                               setEditFormData({ 
                                 ...selectedPartner, 
+                                photoURL: getPartnerAvatar(selectedPartner),
                                 commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
                               });
                               setShowEditModal(true);
                             }}
-                            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 transition-colors"
+                            className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 transition-colors cursor-pointer"
                           >
                             Update Bank Details
                           </button>
@@ -1764,6 +1481,98 @@ export default function Partners({
             </div>
           </div>
         </ModalWrapper>
+      )}
+
+      {/* ── CLAIM MODAL (For Partner or Admin) ────────────────────── */}
+      <ModalWrapper
+        isOpen={showClaimModal}
+        onClose={() => setShowClaimModal(false)}
+        maxWidth="max-w-md"
+        height="h-auto"
+        ariaLabel="Claim Missing Referral"
+      >
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+            <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+              <Handshake size={18} className="text-primary" /> Claim Missing Referral
+            </h3>
+            <button onClick={() => setShowClaimModal(false)} className="text-on-surface-variant hover:text-on-surface p-1">
+              <X size={18} />
+            </button>
+          </div>
+          <form onSubmit={handleSubmitClaim} className="space-y-3.5">
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Client Full Name *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. Kasun Jayawardena"
+                value={claimForm.clientName}
+                onChange={(e) => setClaimForm(p => ({ ...p, clientName: e.target.value }))}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Client Mobile (+94) *</label>
+              <input
+                type="text"
+                required
+                placeholder="+94 77 123 4567"
+                value={claimForm.clientPhone}
+                onChange={(e) => setClaimForm(p => ({ ...p, clientPhone: formatPhone(e.target.value) }))}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Date of Referral</label>
+              <input
+                type="date"
+                value={claimForm.referralDate}
+                onChange={(e) => setClaimForm(p => ({ ...p, referralDate: e.target.value }))}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Notes / Scope (Optional)</label>
+              <textarea
+                rows={2}
+                placeholder="Details of the job discussed..."
+                value={claimForm.notes}
+                onChange={(e) => setClaimForm(p => ({ ...p, notes: e.target.value }))}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-xs text-on-surface"
+              />
+            </div>
+            <div className="pt-2 flex justify-end gap-2 border-t border-outline-variant/60">
+              <button
+                type="button"
+                onClick={() => setShowClaimModal(false)}
+                className="px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingClaim}
+                className="px-5 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md"
+              >
+                {isSubmittingClaim ? 'Submitting...' : 'Submit Claim'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </ModalWrapper>
+
+      {/* ── IMAGE CROP MODAL (For Studio Logo / Profile Photo) ─────── */}
+      {showCropModal && rawImageForCrop && (
+        <ImageCropModal
+          isOpen={showCropModal}
+          onClose={() => {
+            setShowCropModal(false);
+            setRawImageForCrop(null);
+          }}
+          imageSrc={rawImageForCrop}
+          onCropComplete={handlePartnerCropComplete}
+        />
       )}
 
       {/* ── DELETE MODAL ─────────────────────────────────────────── */}
