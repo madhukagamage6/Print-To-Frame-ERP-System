@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Mail, Copy, Check, ExternalLink, Sparkles, X, FileText, 
-  Send, RefreshCw, Layers, User, Shield 
+  Send, RefreshCw, Layers, User, Shield, CheckCheck, Eye
 } from 'lucide-react';
 import ModalWrapper from './detail-modal/ModalWrapper';
 import { EMAIL_TEMPLATES, interpolateTemplate } from '../../../constants/emailTemplates';
@@ -23,7 +23,7 @@ export default function EmailTemplateModal({
     if (['Admin', 'Manager', 'Sales', 'Operations', 'Support', 'Accounts', 'Logistics'].includes(role)) {
       return 'employee_invite';
     }
-    return 'partner_approval';
+    return 'quote_submission';
   }, [recipient, initialTemplateId]);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState(defaultTemplateId);
@@ -63,6 +63,23 @@ export default function EmailTemplateModal({
       portalUrl: origin,
       senderName: currentUser?.name ? `${currentUser.name} (${currentUser.role || 'Admin'})` : 'Print To Frame Admin Desk',
       supportEmail: 'support@print2frame.xyz',
+      quoteRef: recipient?.quoteId || 'QT-PREVIEW',
+      jobScope: recipient?.jobScope || recipient?.scope || 'Custom Steel Frame Fabrication & Tension Mounting',
+      totalSqFt: recipient?.totalSqFt || '120.00',
+      totalValue: Number(recipient?.value || 240000).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+      advanceAmount: Number((recipient?.value || 240000) * 0.75).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+      balanceAmount: Number((recipient?.value || 240000) * 0.25).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+      commissionAmount: Number((recipient?.totalSqFt || 120) * 53.5).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+      invoiceId: 'INV-' + String(Date.now()).slice(-6),
+      jobNo: 'JOB-' + String(Date.now()).slice(-6),
+      dueDate: 'Within 7 Days',
+      deliveryDate: 'Scheduled Handover',
+      qaDate: 'Tomorrow, 4:00 PM',
+      deliveryAddress: recipient?.address || recipient?.deliveryLocation || 'Client Designated Site / Gallery',
+      deliveryTime: '10:00 AM – 2:00 PM',
+      vehicleNumber: 'WP-CAR-7845',
+      driverName: 'Kasun Perera',
+      driverPhone: '+94 77 345 8912',
     };
   }, [recipient, currentUser]);
 
@@ -128,12 +145,12 @@ export default function EmailTemplateModal({
     <ModalWrapper
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-3xl"
-      height="h-[95dvh] sm:h-[90vh] max-h-[900px]"
+      maxWidth="max-w-6xl"
+      height="h-[95dvh] sm:h-[92vh] max-h-[960px]"
       ariaLabel="Email Communication Composer"
     >
       {/* Modal Top Header */}
-      <div className="px-6 py-4.5 border-b border-outline-variant bg-surface-container-low/80 flex justify-between items-center flex-shrink-0">
+      <div className="px-6 py-4 border-b border-outline-variant bg-surface-container-low/80 flex justify-between items-center flex-shrink-0">
         <div className="flex items-center space-x-3 min-w-0">
           <div className="p-2 bg-primary/10 text-primary rounded-xl border border-primary/20 flex-shrink-0">
             <Mail size={20} />
@@ -150,129 +167,145 @@ export default function EmailTemplateModal({
 
         <button
           onClick={onClose}
-          className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-full border border-outline-variant/60 transition-colors"
+          className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-full border border-outline-variant/60 transition-colors cursor-pointer"
           title="Close Modal"
         >
           <X size={18} />
         </button>
       </div>
 
-      {/* Modal Content Body */}
-      <div className="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar space-y-5">
-        
-        {/* Template Selector Bar */}
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
-            <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
-              Select Email Template ({filteredTemplates.length} of {EMAIL_TEMPLATES.length}):
-            </label>
-            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setTemplateCategory(cat)}
-                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border transition-colors whitespace-nowrap cursor-pointer ${
-                    templateCategory === cat
-                      ? 'bg-primary/20 text-primary border-primary/40'
-                      : 'bg-surface-container-high text-on-surface-variant border-outline-variant/60 hover:text-on-surface'
-                  }`}
-                >
-                  {cat === 'ALL' ? 'All Templates' : cat}
-                </button>
-              ))}
+      {/* Modal Content Body — Spacious 2-Column Responsive Workspace */}
+      <div className="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+          
+          {/* LEFT PANEL: 5 Columns on Desktop (Category Filter, Templates List, Data Context) */}
+          <div className="lg:col-span-5 space-y-4 flex flex-col">
+            
+            {/* Category Filter Pills */}
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-2 tracking-widest">
+                Template Category ({categories.length}):
+              </label>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setTemplateCategory(cat)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors whitespace-nowrap cursor-pointer ${
+                      templateCategory === cat
+                        ? 'bg-primary/20 text-primary border-primary/40 shadow-sm'
+                        : 'bg-surface-container-high text-on-surface-variant border-outline-variant/60 hover:text-on-surface'
+                    }`}
+                  >
+                    {cat === 'ALL' ? 'All Templates' : cat}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Template Selector Cards List */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-2 tracking-widest">
+                Select Template ({filteredTemplates.length} of {EMAIL_TEMPLATES.length}):
+              </label>
+              <div className="space-y-2 max-h-[320px] lg:max-h-[440px] overflow-y-auto custom-scrollbar pr-1 flex-1">
+                {filteredTemplates.map((tmpl) => {
+                  const isSelected = selectedTemplateId === tmpl.id;
+                  return (
+                    <button
+                      key={tmpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateId(tmpl.id)}
+                      className={`w-full p-3 text-left rounded-xl border transition-all text-xs flex flex-col justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-primary/15 border-primary text-on-surface ring-1 ring-primary shadow-sm'
+                          : 'bg-surface-container-low hover:bg-surface-container-high/60 border-outline-variant/60 text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      <div className="font-bold text-xs line-clamp-1 mb-1">{tmpl.title}</div>
+                      <div className="flex items-center justify-between text-[9px] opacity-70 font-mono mt-1">
+                        <span>{tmpl.category}</span>
+                        {isSelected && <span className="font-bold text-primary uppercase">Active</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Live Context Data Card */}
+            <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center gap-2 flex-wrap text-[11px] flex-shrink-0">
+              <span className="text-on-surface-variant font-bold text-[10px] uppercase tracking-wider mr-1">
+                Data Context:
+              </span>
+              <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-medium text-on-surface">
+                To: <span className="font-bold text-primary">{recipient?.identifier || recipient?.email || 'N/A'}</span>
+              </span>
+              <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-medium text-on-surface">
+                Role: <span className="font-bold">{recipient?.role || 'Partner'}</span>
+              </span>
+              {recipient?.partnerId && (
+                <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-mono text-on-surface">
+                  ID: <span className="font-bold text-amber-400">{recipient.partnerId}</span>
+                </span>
+              )}
+            </div>
+
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto custom-scrollbar p-1">
-            {filteredTemplates.map((tmpl) => {
-              const isSelected = selectedTemplateId === tmpl.id;
-              return (
+          {/* RIGHT PANEL: 7 Columns on Desktop (Subject line & Wide Message Body) */}
+          <div className="lg:col-span-7 space-y-4 flex flex-col">
+            
+            {/* Subject Line Input + Copy Button */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+                  Email Subject Line
+                </label>
                 <button
-                  key={tmpl.id}
                   type="button"
-                  onClick={() => setSelectedTemplateId(tmpl.id)}
-                  className={`p-3 text-left rounded-xl border transition-all text-xs flex flex-col justify-between cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary/15 border-primary text-on-surface ring-1 ring-primary shadow-sm'
-                      : 'bg-surface-container-low hover:bg-surface-container-high/60 border-outline-variant/60 text-on-surface-variant hover:text-on-surface'
-                  }`}
+                  onClick={handleCopySubject}
+                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors cursor-pointer"
                 >
-                  <div className="font-bold text-xs line-clamp-1 mb-1">{tmpl.title}</div>
-                  <div className="flex items-center justify-between text-[9px] opacity-70 font-mono mt-1">
-                    <span>{tmpl.category}</span>
-                    {isSelected && <span className="font-bold text-primary uppercase">Active</span>}
-                  </div>
+                  {copiedSubject ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                  <span>{copiedSubject ? 'Copied!' : 'Copy Subject'}</span>
                 </button>
-              );
-            })}
+              </div>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs sm:text-sm font-bold text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            {/* Email Message Body Textarea + Copy Button */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+                  Message Body (Editable Preview)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleCopyBody}
+                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                >
+                  {copiedBody ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                  <span>{copiedBody ? 'Copied Body!' : 'Copy Body'}</span>
+                </button>
+              </div>
+              <textarea
+                rows={16}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="w-full flex-1 min-h-[320px] lg:min-h-[420px] p-4 bg-surface-container-low border border-outline-variant rounded-2xl text-xs font-mono leading-relaxed text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary custom-scrollbar resize-y"
+              />
+            </div>
+
           </div>
-        </div>
 
-        {/* Live Variables Chip Summary */}
-        <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center gap-2 flex-wrap text-[11px]">
-          <span className="text-on-surface-variant font-bold text-[10px] uppercase tracking-wider mr-1">
-            Data Context:
-          </span>
-          <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-medium text-on-surface">
-            To: <span className="font-bold text-primary">{recipient?.identifier || recipient?.email || 'N/A'}</span>
-          </span>
-          <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-medium text-on-surface">
-            Role: <span className="font-bold">{recipient?.role || 'Partner'}</span>
-          </span>
-          {recipient?.partnerId && (
-            <span className="bg-surface-container-high px-2 py-0.5 rounded-md font-mono text-on-surface">
-              ID: <span className="font-bold text-amber-400">{recipient.partnerId}</span>
-            </span>
-          )}
         </div>
-
-        {/* Subject Line Input + Copy Button */}
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
-              Email Subject Line
-            </label>
-            <button
-              type="button"
-              onClick={handleCopySubject}
-              className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors cursor-pointer"
-            >
-              {copiedSubject ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-              <span>{copiedSubject ? 'Copied!' : 'Copy Subject'}</span>
-            </button>
-          </div>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs sm:text-sm font-bold text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
-        {/* Email Message Body Textarea + Copy Button */}
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
-              Message Body (Editable Preview)
-            </label>
-            <button
-              type="button"
-              onClick={handleCopyBody}
-              className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors cursor-pointer"
-            >
-              {copiedBody ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-              <span>{copiedBody ? 'Copied Body!' : 'Copy Body'}</span>
-            </button>
-          </div>
-          <textarea
-            rows={12}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className="w-full p-4 bg-surface-container-low border border-outline-variant rounded-2xl text-xs font-mono leading-relaxed text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary custom-scrollbar resize-y"
-          />
-        </div>
-
       </div>
 
       {/* Modal Bottom Footer Actions */}
