@@ -1,21 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Search, Shield, User, Mail, Briefcase, Plus, Check, X, Trash2, 
   KeyRound, Clock, Edit2, Save, ChevronRight, Phone, ShieldCheck,
   UserCheck, AlertCircle, Camera, Sparkles, ArrowLeft, Send, Eye,
-  Building, CheckCircle2, Copy
+  Building, CheckCircle2, Copy, PhoneCall, Lock, RefreshCw, Layers
 } from 'lucide-react';
-import Card from '../common/Card';
 import DeleteModal from '../common/DeleteModal';
 import { doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { toast } from '../../utils/toast';
-import { subscribeToCollection, addDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { subscribeToCollection, addDocument, updateDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { 
   PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, 
   ImageCropModal, EmailTemplateModal 
 } from '../common/ui';
 import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/roles';
+import { formatPhone } from '../../utils/validation';
 
 export default function AgentDatabase({ 
   users = [], 
@@ -32,7 +32,8 @@ export default function AgentDatabase({
   dataStore 
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'employees' | 'clients'
+  const [workspaceTab, setWorkspaceTab] = useState('rbac'); // 'rbac' | 'profile' | 'audit' | 'security'
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
   const [deleteId, setDeleteId] = useState(null);
@@ -60,7 +61,7 @@ export default function AgentDatabase({
 
   // Review Registration Modal State
   const [reviewingApplicant, setReviewingApplicant] = useState(null);
-  const [selectedReviewRole, setSelectedReviewRole] = useState('Partner');
+  const [selectedReviewRole, setSelectedReviewRole] = useState('Sales');
 
   // Email Template Modal State
   const [emailModalConfig, setEmailModalConfig] = useState({
@@ -74,7 +75,51 @@ export default function AgentDatabase({
     return () => unsub();
   }, []);
 
-  const isAdmin = currentUser?.role === 'Admin';
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Administrator';
+
+  // 1. DECOUPLE PARTNERS: Filter out users with role 'Partner' (since partners are managed in Partners tab)
+  const nonPartnerUsers = useMemo(() => {
+    return users.filter(u => u.role !== 'Partner');
+  }, [users]);
+
+  const pendingNonPartnerUsers = useMemo(() => {
+    return pendingUsers.filter(u => u.role !== 'Partner');
+  }, [pendingUsers]);
+
+  const employeeCount = useMemo(() => {
+    return nonPartnerUsers.filter(u => getRoleCategory(u.role) !== 'Clients').length;
+  }, [nonPartnerUsers]);
+
+  const clientCount = useMemo(() => {
+    return nonPartnerUsers.filter(u => u.role === 'Business Client' || u.role === 'Customer').length;
+  }, [nonPartnerUsers]);
+
+  const filteredUsers = useMemo(() => {
+    return nonPartnerUsers.filter(u => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = !query || (
+        u.name?.toLowerCase().includes(query) ||
+        u.identifier?.toLowerCase().includes(query) ||
+        u.role?.toLowerCase().includes(query) ||
+        u.company?.toLowerCase().includes(query) ||
+        u.contactNumber?.toLowerCase().includes(query)
+      );
+
+      if (!matchesSearch) return false;
+
+      if (activeTab === 'employees') return getRoleCategory(u.role) !== 'Clients';
+      if (activeTab === 'clients') return u.role === 'Business Client' || u.role === 'Customer';
+      return true;
+    });
+  }, [nonPartnerUsers, searchQuery, activeTab]);
+
+  // Auto-select first member if none selected
+  React.useEffect(() => {
+    if (!selectedAgent && filteredUsers.length > 0) {
+      setSelectedAgent(filteredUsers[0]);
+      setEditForm({ ...filteredUsers[0] });
+    }
+  }, [selectedAgent, filteredUsers]);
 
   const handleAgentPhotoUpload = (e) => {
     const file = e.target.files?.[0];
@@ -103,27 +148,6 @@ export default function AgentDatabase({
       toast.error("Failed to update photo: " + err.message);
     }
   };
-
-  const employeeCount = users.filter(u => getRoleCategory(u.role) !== 'Partners' && getRoleCategory(u.role) !== 'Clients').length;
-  const partnerCount = users.filter(u => u.role === 'Partner').length;
-  const clientCount = users.filter(u => u.role === 'Business Client' || u.role === 'Customer').length;
-
-  const filteredUsers = users.filter(u => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = (
-      u.name?.toLowerCase().includes(query) ||
-      u.identifier?.toLowerCase().includes(query) ||
-      u.role?.toLowerCase().includes(query) ||
-      u.company?.toLowerCase().includes(query)
-    );
-
-    if (!matchesSearch) return false;
-
-    if (activeTab === 'employees') return getRoleCategory(u.role) !== 'Partners' && getRoleCategory(u.role) !== 'Clients';
-    if (activeTab === 'partners') return u.role === 'Partner';
-    if (activeTab === 'clients') return u.role === 'Business Client' || u.role === 'Customer';
-    return true;
-  });
 
   const handleDeleteAgent = async () => {
     if (deleteId) {
@@ -155,84 +179,61 @@ export default function AgentDatabase({
 
   const handleToggleStatus = async () => {
     if (!selectedAgent) return;
-    const nextStatus = selectedAgent.status === 'Deactivated' ? 'Active' : 'Deactivated';
+    const newStatus = selectedAgent.status === 'Deactivated' ? 'Active' : 'Deactivated';
     try {
-      await updateDoc(doc(db, "users", selectedAgent.identifier), { status: nextStatus });
-      setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, status: nextStatus } : u));
-      setSelectedAgent(prev => ({ ...prev, status: nextStatus }));
-      toast.success(`User status set to ${nextStatus}`);
+      await updateDoc(doc(db, "users", selectedAgent.identifier), { status: newStatus });
+      setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, status: newStatus } : u));
+      setSelectedAgent(prev => ({ ...prev, status: newStatus }));
+      toast.success(`User account ${newStatus === 'Active' ? 'Reactivated' : 'Deactivated'}`);
     } catch (err) {
-      toast.error("Failed to update user status: " + err.message);
+      toast.error("Failed to change account status: " + err.message);
     }
   };
 
-  // Direct User Creation Handler
+  const handleSaveDetails = async () => {
+    if (!selectedAgent) return;
+    try {
+      const updates = {
+        name: editForm.name || selectedAgent.name,
+        contactNumber: editForm.contactNumber || selectedAgent.contactNumber || "",
+        company: editForm.company || selectedAgent.company || "",
+        location: editForm.location || selectedAgent.location || "",
+        jobTitle: editForm.jobTitle || selectedAgent.jobTitle || "",
+        bio: editForm.bio || selectedAgent.bio || "",
+      };
+      await updateDoc(doc(db, "users", selectedAgent.identifier), updates);
+      setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, ...updates } : u));
+      setSelectedAgent(prev => ({ ...prev, ...updates }));
+      setIsEditing(false);
+      toast.success("Member details updated successfully");
+    } catch (err) {
+      toast.error("Failed to save changes: " + err.message);
+    }
+  };
+
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!createUserForm.name || !createUserForm.identifier) {
-      toast.error("Please provide both name and email/identifier.");
+      toast.error("Please fill in required fields");
       return;
     }
+
     try {
       const emailKey = createUserForm.identifier.trim().toLowerCase();
-      const role = createUserForm.role || 'Sales';
-      const tempPass = createUserForm.password?.trim() || `PTF@${Math.floor(1000 + Math.random() * 9000)}`;
-
       const newUser = {
-        name: createUserForm.name.trim(),
+        name: createUserForm.name,
         identifier: emailKey,
-        contactNumber: createUserForm.contactNumber?.trim() || '',
-        role,
-        company: createUserForm.company?.trim() || '',
-        specialty: createUserForm.specialty?.trim() || '',
+        role: createUserForm.role,
+        contactNumber: createUserForm.contactNumber,
+        company: createUserForm.company,
+        specialty: createUserForm.specialty,
         status: 'Active',
         isApproved: true,
-        tempPassword: tempPass,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser?.email || 'Admin',
+        createdAt: new Date().toISOString()
       };
 
       await setDoc(doc(db, "users", emailKey), newUser);
       setUsers(prev => [...prev.filter(u => u.identifier !== emailKey), newUser]);
-
-      // Auto-Sync: Partner domain creation
-      let generatedPartnerId = null;
-      if (role === 'Partner' && setPartners) {
-        const nextId = (partners?.length || 0) > 0 ? Math.max(...partners.map(p => p.id || 0)) + 1 : 1;
-        generatedPartnerId = `P-${1000 + nextId}`;
-        const newPartnerRecord = {
-          id: nextId,
-          partnerId: generatedPartnerId,
-          name: newUser.name,
-          email: emailKey,
-          phone: newUser.contactNumber,
-          type: newUser.specialty ? 'Custom Workshop / Artisan' : 'Agency',
-          totalSqFt: 0,
-          paid: 0,
-          pending: 0,
-          status: 'Active',
-          createdAt: new Date().toISOString(),
-        };
-        await addDocument(COLLECTIONS.PARTNERS, newPartnerRecord, generatedPartnerId);
-        setPartners(prev => [...prev.filter(p => p.partnerId !== generatedPartnerId), newPartnerRecord]);
-      }
-
-      // Auto-Sync: Customer domain creation
-      if (role === 'Business Client' && setCustomers) {
-        const newCustomerRecord = {
-          nic: emailKey,
-          name: newUser.name,
-          businessName: newUser.company || newUser.name,
-          type: 'Business',
-          phone: newUser.contactNumber,
-          email: emailKey,
-          status: 'Active',
-          createdAt: new Date().toISOString(),
-        };
-        await addDocument(COLLECTIONS.CUSTOMERS, newCustomerRecord, emailKey);
-        setCustomers(prev => [...prev.filter(c => c.nic !== emailKey), newCustomerRecord]);
-      }
-
       setShowCreateUserModal(false);
       setCreateUserForm({
         name: '',
@@ -243,79 +244,25 @@ export default function AgentDatabase({
         company: '',
         specialty: '',
       });
-
-      toast.success(`User ${newUser.name} enrolled with role: ${newUser.role}`);
-
-      // Open Email Template Composer immediately with credentials
-      setEmailModalConfig({
-        isOpen: true,
-        recipient: {
-          ...newUser,
-          partnerId: generatedPartnerId,
-          tempPassword: tempPass,
-        },
-        initialTemplateId: role === 'Partner' ? 'partner_approval' : role === 'Business Client' ? 'client_approval' : 'employee_invite',
-      });
-
+      toast.success(`User ${newUser.name} enrolled as ${newUser.role} successfully!`);
     } catch (err) {
-      toast.error("Failed to enroll user: " + err.message);
+      toast.error("Failed to create user: " + err.message);
     }
   };
 
-  const handleSaveDetails = async () => {
-    if (!selectedAgent) return;
-    try {
-      await updateDoc(doc(db, "users", selectedAgent.identifier), {
-        name: editForm.name,
-        contactNumber: editForm.contactNumber || "",
-        company: editForm.company || "",
-      });
-      setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, ...editForm } : u));
-      setSelectedAgent(prev => ({ ...prev, ...editForm }));
-      setIsEditing(false);
-      toast.success("User details updated successfully");
-    } catch (err) {
-      toast.error("Error updating details: " + err.message);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    toast.info(`Password reset email instructions sent to ${selectedAgent.identifier}`);
-  };
-
-  // Review & Approve Request Flow
-  const handleOpenReview = (applicant) => {
-    setReviewingApplicant(applicant);
-    setSelectedReviewRole(applicant.role || 'Partner');
+  const handleOpenReview = (user) => {
+    setReviewingApplicant(user);
+    setSelectedReviewRole(user.role || 'Sales');
   };
 
   const handleExecuteApproval = async () => {
     if (!reviewingApplicant) return;
-    try {
-      const applicantCopy = { ...reviewingApplicant };
-      setPendingUsers(prev => prev.filter(u => u.identifier !== applicantCopy.identifier));
-      
-      let approvedUser = null;
-      if (onApprove) {
-        approvedUser = await onApprove(applicantCopy, selectedReviewRole);
-      }
-      
-      setReviewingApplicant(null);
-      toast.success(`Access approved for ${applicantCopy.name} as ${selectedReviewRole}`);
-
-      // Launch Email Template Composer for the newly approved applicant
-      setEmailModalConfig({
-        isOpen: true,
-        recipient: {
-          ...applicantCopy,
-          role: selectedReviewRole,
-          tempPassword: applicantCopy.tempPassword || '[Generated upon registration]',
-        },
-        initialTemplateId: selectedReviewRole === 'Partner' ? 'partner_approval' : 'client_approval',
-      });
-    } catch (err) {
-      toast.error("Approval failed: " + err.message);
+    const finalRole = selectedReviewRole;
+    if (onApprove) {
+      await onApprove(reviewingApplicant, finalRole);
     }
+    setReviewingApplicant(null);
+    toast.success(`Approved ${reviewingApplicant.name} as ${finalRole}`);
   };
 
   const handleExecuteRejection = async (identifier) => {
@@ -325,18 +272,23 @@ export default function AgentDatabase({
     toast.info("Registration request dismissed");
   };
 
+  const userAuditLogs = useMemo(() => {
+    if (!selectedAgent) return [];
+    return auditLogs.filter(log => log.userId === selectedAgent.identifier || log.user === selectedAgent.name)
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  }, [auditLogs, selectedAgent]);
+
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
-      {/* Standardized Header */}
+      {/* Standardized Header matching Leads, Customers, and Partners */}
       <PageHeader
         title="User Management"
-        subtitle="Manage authenticated identities, dynamic RBAC role assignments, and pending registrations."
+        subtitle="Manage authenticated internal identities, dynamic RBAC role assignments, and client accounts."
         metrics={[
-          { label: "Total Members", value: users.length, color: "cyan" },
+          { label: "Total Members", value: nonPartnerUsers.length, color: "cyan" },
           { label: "Internal Team", value: employeeCount, color: "emerald" },
-          { label: "Art Partners", value: partnerCount, color: "amber" },
           { label: "Client Accounts", value: clientCount, color: "purple" },
-          { label: "Pending Approvals", value: pendingUsers.length, color: pendingUsers.length > 0 ? "warning" : "neutral" }
+          { label: "Pending Approvals", value: pendingNonPartnerUsers.length, color: pendingNonPartnerUsers.length > 0 ? "warning" : "neutral" }
         ]}
         actions={
           isAdmin && (
@@ -355,22 +307,21 @@ export default function AgentDatabase({
       <FilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        placeholder="Search users by name, email, company, or role..."
+        placeholder="Search members by name, email, company, phone, or role..."
         activeFilter={activeTab}
         onFilterChange={setActiveTab}
         filterOptions={[
-          { id: 'all', label: 'All Members', count: users.length },
+          { id: 'all', label: 'All Members', count: nonPartnerUsers.length },
           { id: 'employees', label: 'Internal Team', count: employeeCount },
-          { id: 'partners', label: 'Art & Framing Partners', count: partnerCount },
           { id: 'clients', label: 'Corporate & Retail Clients', count: clientCount }
         ]}
-        totalCount={users.length}
+        totalCount={nonPartnerUsers.length}
         filteredCount={filteredUsers.length}
       />
 
       {/* Pending Registrations Callout (Admin Only) */}
-      {isAdmin && pendingUsers.length > 0 && (
-        <div className="mb-6 p-5 bg-surface-container/90 border-2 border-primary/40 rounded-3xl shadow-[0_8px_30px_rgba(0,218,243,0.12)] flex-shrink-0 animate-in fade-in duration-200">
+      {isAdmin && pendingNonPartnerUsers.length > 0 && (
+        <div className="mb-6 p-4 sm:p-5 bg-surface-container/90 border-2 border-primary/40 rounded-3xl shadow-[0_8px_30px_rgba(0,218,243,0.12)] flex-shrink-0 animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-primary/20 text-primary rounded-lg">
@@ -381,12 +332,12 @@ export default function AgentDatabase({
               </h3>
             </div>
             <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-              {pendingUsers.length} Requests Pending
+              {pendingNonPartnerUsers.length} Requests Pending
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pendingUsers.map(user => (
+            {pendingNonPartnerUsers.map(user => (
               <div 
                 key={user.identifier} 
                 className="p-4 bg-surface-container-low/90 rounded-2xl border border-outline-variant/60 hover:border-primary/50 transition-all flex items-center justify-between shadow-sm"
@@ -394,18 +345,13 @@ export default function AgentDatabase({
                 <div className="min-w-0 pr-3">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-extrabold text-on-surface truncate">{user.name}</p>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
-                      user.role === 'Partner' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                    }`}>
-                      {user.role}
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-md border bg-rose-500/15 text-rose-400 border-rose-500/30">
+                      {user.role || 'Member'}
                     </span>
                   </div>
                   <p className="text-[10px] text-on-surface-variant font-mono truncate mt-0.5">{user.identifier}</p>
                   {user.company && (
                     <p className="text-[10px] text-primary font-semibold truncate mt-0.5">🏢 {user.company}</p>
-                  )}
-                  {user.specialty && (
-                    <p className="text-[10px] text-cyan-400 font-semibold truncate mt-0.5">✨ {user.specialty}</p>
                   )}
                 </div>
 
@@ -420,7 +366,7 @@ export default function AgentDatabase({
                   <button 
                     onClick={() => {
                       setReviewingApplicant(user);
-                      setSelectedReviewRole(user.role || 'Partner');
+                      setSelectedReviewRole(user.role || 'Sales');
                       handleExecuteApproval();
                     }} 
                     className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
@@ -442,18 +388,19 @@ export default function AgentDatabase({
         </div>
       )}
 
-      {/* Main Master-Detail Grid */}
+      {/* Main Master-Detail 2-Panel View (Compact & Robust Showcase Style) */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
-        {/* Left column: User Registry */}
-        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
+        
+        {/* LEFT COLUMN: User Registry (1/3 Width) */}
+        <div className={`w-full lg:w-1/3 ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
           <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
-             <span className="flex items-center gap-2">
-               <UserCheck size={14} className="text-primary" />
-               Enrolled Members ({filteredUsers.length})
-             </span>
-             <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
-               click to inspect & assign role
-             </span>
+            <span className="flex items-center gap-2">
+              <UserCheck size={14} className="text-primary" />
+              Enrolled Members ({filteredUsers.length})
+            </span>
+            <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
+              click to inspect
+            </span>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/30">
@@ -473,36 +420,54 @@ export default function AgentDatabase({
                     key={u.identifier}
                     onClick={() => {
                       setSelectedAgent(u);
+                      setEditForm({ ...u });
                       setIsEditing(false);
                       setMobileView('detail');
                     }}
-                    className={`p-4 transition-all cursor-pointer flex items-center space-x-3.5 ${
+                    className={`p-4 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
                       isSelected
-                        ? 'bg-primary/10 border-l-4 border-primary text-on-surface shadow-sm'
-                        : 'hover:bg-surface-container-high/40 text-on-surface-variant'
+                        ? 'bg-primary/10 border-l-4 border-primary shadow-[inset_0_0_15px_rgba(0,218,243,0.08)]'
+                        : 'hover:bg-surface-container-high/40'
                     }`}
                   >
-                    <UserAvatar
-                      photoURL={u.photoURL}
-                      name={u.name}
-                      role={u.role}
-                      size="md"
-                    />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <UserAvatar
+                        photoURL={u.photoURL}
+                        name={u.name}
+                        role={u.role}
+                        size="md"
+                      />
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="text-xs font-black text-on-surface truncate">{u.name}</h4>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${roleMeta.badge}`}>
-                          {u.role}
-                        </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={`font-bold text-xs truncate ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
+                            {u.name}
+                          </p>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border flex-shrink-0 ${roleMeta.badge}`}>
+                            {u.role}
+                          </span>
+                        </div>
+
+                        <p className="text-[10px] text-on-surface-variant truncate mt-0.5 font-mono">
+                          {u.identifier}
+                        </p>
+
+                        <div className="flex items-center gap-2 mt-1">
+                          {u.contactNumber && (
+                            <span className="text-[9px] text-on-surface-variant font-mono flex items-center gap-1">
+                              <Phone size={9} className="text-primary" /> {u.contactNumber}
+                            </span>
+                          )}
+                          {u.company && (
+                            <span className="text-[9px] text-primary/80 truncate">
+                              🏢 {u.company}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[11px] text-on-surface-variant/80 font-mono truncate">{u.identifier}</p>
-                      {u.company && (
-                        <p className="text-[10px] text-primary/90 font-medium truncate mt-0.5">🏢 {u.company}</p>
-                      )}
                     </div>
 
-                    <ChevronRight size={14} className="text-outline/40 flex-shrink-0" />
+                    <ChevronRight size={14} className={`text-on-surface-variant/40 transition-transform group-hover:translate-x-0.5 ${isSelected ? 'text-primary' : ''}`} />
                   </div>
                 );
               })
@@ -510,537 +475,542 @@ export default function AgentDatabase({
           </div>
         </div>
 
-        {/* Right column: Selected Member Dossier Inspector */}
-        <div className={`w-full lg:w-2/3 ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'} flex-col overflow-y-auto custom-scrollbar h-full`}>
-          {selectedAgent ? (
-            <div className="space-y-6">
-              {/* Mobile Back Button */}
-              <div className="lg:hidden">
-                <button
-                  onClick={() => setMobileView('list')}
-                  className="flex items-center gap-2 text-xs font-bold text-primary bg-surface-container px-3 py-2 rounded-xl border border-outline-variant/60 hover:bg-surface-container-high transition-colors"
-                >
-                  <ArrowLeft size={14} />
-                  <span>Back to Members Directory</span>
-                </button>
-              </div>
+        {/* RIGHT COLUMN: Member Workspace Showcase (2/3 Width) */}
+        <div className={`flex-1 ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/40 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
+          {!selectedAgent ? (
+            /* Empty State */
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+              <User size={48} className="mx-auto mb-3 opacity-25 text-on-surface-variant" />
+              <h3 className="font-bold text-on-surface text-base">No Member Selected</h3>
+              <p className="text-xs text-on-surface-variant max-w-sm mt-1">
+                Select an internal employee or client account from the registry on the left to inspect permissions, edit contact profile, and review activity audit trail.
+              </p>
+            </div>
+          ) : (
+            /* Full Compact & Robust Member Workspace */
+            <div className="flex-1 flex flex-col overflow-hidden">
+              
+              {/* Top Member Profile Banner */}
+              <div className="p-5 sm:p-6 bg-surface-container-low/90 border-b border-outline-variant/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Mobile back button */}
+                  <button 
+                    onClick={() => setMobileView('list')}
+                    className="lg:hidden p-1.5 bg-surface-container hover:bg-surface-container-high rounded-lg text-on-surface-variant"
+                  >
+                    <X size={16} />
+                  </button>
 
-              {/* Master Member Profile Card */}
-              <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)] relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative group">
-                      <UserAvatar
-                        photoURL={selectedAgent.photoURL}
-                        name={selectedAgent.name}
-                        role={selectedAgent.role}
-                        size="xl"
-                      />
-                      {isAdmin && (
-                        <>
-                          <button
-                            onClick={() => photoInputRef.current?.click()}
-                            className="absolute inset-0 bg-black/60 rounded-2xl flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                            title="Upload & Crop Photo"
-                          >
-                            <Camera size={18} />
-                            <span className="text-[8px] font-bold uppercase mt-1">Change</span>
-                          </button>
-                          <input
-                            ref={photoInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleAgentPhotoUpload}
-                            className="hidden"
-                          />
-                        </>
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      {isEditing ? (
-                        <div className="space-y-2 mb-1">
-                          <input
-                            type="text"
-                            value={editForm.name || ""}
-                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                            className="bg-surface-container-low border border-outline-variant rounded-xl px-3 py-1.5 text-sm font-bold text-on-surface outline-none focus:border-primary w-full"
-                            placeholder="Full Name"
-                          />
-                          <input
-                            type="text"
-                            value={editForm.contactNumber || ""}
-                            onChange={(e) => setEditForm({ ...editForm, contactNumber: e.target.value })}
-                            className="bg-surface-container-low border border-outline-variant rounded-xl px-3 py-1.5 text-xs text-on-surface outline-none focus:border-primary w-full"
-                            placeholder="Contact Number (+94 ...)"
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <h2 className="text-lg sm:text-xl font-black text-on-surface tracking-tight truncate">
-                            {selectedAgent.name}
-                          </h2>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border ${
-                              ROLE_METADATA[selectedAgent.role]?.badge || 'bg-surface-container-high text-on-surface-variant'
-                            }`}>
-                              {selectedAgent.role}
-                            </span>
-                            <span className="text-[10px] text-on-surface-variant font-mono">
-                              Dept: {getRoleCategory(selectedAgent.role)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Inspector Action Buttons */}
-                  <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap">
-                    {/* Compose Email / Credentials Button */}
-                    <button
-                      onClick={() => setEmailModalConfig({
-                        isOpen: true,
-                        recipient: selectedAgent,
-                        initialTemplateId: selectedAgent.role === 'Partner' ? 'partner_approval' : selectedAgent.role === 'Business Client' ? 'client_approval' : 'employee_invite',
-                      })}
-                      className="px-3 py-2 bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      title="Send Formatted Email Notification"
-                    >
-                      <Mail size={14} />
-                      <span>Email Templates</span>
-                    </button>
-
+                  {/* Large Avatar with change trigger */}
+                  <div className="relative group flex-shrink-0">
+                    <UserAvatar
+                      photoURL={selectedAgent.photoURL}
+                      name={selectedAgent.name}
+                      role={selectedAgent.role}
+                      size="lg"
+                    />
                     {isAdmin && (
                       <>
-                        {isEditing ? (
-                          <button
-                            onClick={handleSaveDetails}
-                            className="p-2.5 bg-primary text-on-primary rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(0,218,243,0.3)] cursor-pointer"
-                            title="Save Changes"
-                          >
-                            <Save size={16} />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditForm({ 
-                                name: selectedAgent.name, 
-                                contactNumber: selectedAgent.contactNumber || "",
-                                company: selectedAgent.company || "" 
-                              });
-                              setIsEditing(true);
-                            }}
-                            className="p-2.5 bg-surface-container-high text-on-surface hover:bg-surface-variant hover:text-primary rounded-xl transition-all border border-outline-variant/60 cursor-pointer"
-                            title="Edit Details"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                        )}
-                        {currentUser?.identifier !== selectedAgent.identifier && (
-                          <button
-                            onClick={() => setDeleteId(selectedAgent.identifier)}
-                            className="p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20 cursor-pointer"
-                            title="Revoke User Access"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center text-white transition-opacity cursor-pointer shadow-lg"
+                          title="Change Profile Photo"
+                        >
+                          <Camera size={18} />
+                        </button>
+                        <input
+                          ref={photoInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleAgentPhotoUpload}
+                        />
                       </>
                     )}
                   </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-lg font-black text-on-surface truncate">{selectedAgent.name}</h2>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${ROLE_METADATA[selectedAgent.role]?.badge || 'bg-surface-container text-on-surface-variant'}`}>
+                        {selectedAgent.role}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        selectedAgent.status === 'Deactivated' 
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
+                        {selectedAgent.status || 'Active'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-1">
+                      <span className="font-mono flex items-center gap-1">
+                        <Mail size={11} className="text-primary" /> {selectedAgent.identifier}
+                      </span>
+                      {selectedAgent.contactNumber && (
+                        <span className="font-mono flex items-center gap-1">
+                          <Phone size={11} className="text-primary" /> {selectedAgent.contactNumber}
+                        </span>
+                      )}
+                      {selectedAgent.company && (
+                        <span className="flex items-center gap-1">
+                          <Building size={11} className="text-primary" /> {selectedAgent.company}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Attributes Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-outline-variant/60">
-                  <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center space-x-3">
-                    <Mail size={16} className="text-primary flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Email Account</p>
-                      <p className="text-xs font-mono font-bold text-on-surface truncate">{selectedAgent.identifier}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center justify-between">
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <Briefcase size={16} className="text-cyan-400 flex-shrink-0" />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Dynamic Access Role</p>
-                        {isAdmin ? (
-                          <select 
-                            value={selectedAgent.role}
-                            onChange={(e) => handleRoleChange(e.target.value)}
-                            className="bg-surface-container border border-outline-variant rounded-lg px-2.5 py-1 text-xs font-bold text-on-surface outline-none focus:border-primary cursor-pointer mt-0.5"
-                          >
-                            {SYSTEM_ROLES.map(roleName => (
-                              <option key={roleName} value={roleName}>
-                                {roleName} ({ROLE_METADATA[roleName]?.label || roleName})
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <p className="text-xs font-bold text-on-surface mt-0.5">{selectedAgent.role}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <ShieldCheck size={16} className={selectedAgent.status === 'Deactivated' ? 'text-rose-400' : 'text-emerald-400'} />
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Account Status</p>
-                        <p className={`text-xs font-bold ${selectedAgent.status === 'Deactivated' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          {selectedAgent.status || 'Active'}
-                        </p>
-                      </div>
-                    </div>
-                    {isAdmin && (
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                  {selectedAgent.contactNumber && (
+                    <a
+                      href={`tel:${selectedAgent.contactNumber.replace(/[^0-9+]/g, '')}`}
+                      className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Call via Phone Link"
+                    >
+                      <PhoneCall size={12} /> Call
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setEmailModalConfig({
+                      isOpen: true,
+                      recipient: selectedAgent,
+                      initialTemplateId: selectedAgent.role === 'Business Client' ? 'client_approval' : 'employee_invite',
+                    })}
+                    className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Mail size={12} /> Email
+                  </button>
+                  {isAdmin && (
+                    <>
                       <button
-                        onClick={handleToggleStatus}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
-                          selectedAgent.status === 'Deactivated'
-                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
-                            : 'text-rose-400 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20'
-                        }`}
+                        onClick={() => {
+                          setEditForm({ ...selectedAgent });
+                          setIsEditing(!isEditing);
+                        }}
+                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        {selectedAgent.status === 'Deactivated' ? 'Reactivate' : 'Deactivate'}
+                        <Edit2 size={12} /> {isEditing ? 'Cancel Edit' : 'Edit'}
                       </button>
-                    )}
-                  </div>
-
-                  <div className="p-3.5 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center space-x-3">
-                    <Phone size={16} className="text-pink-400 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Contact Number</p>
-                      <p className="text-xs font-bold text-on-surface truncate mt-0.5">
-                        {selectedAgent.contactNumber || 'Not specified'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Activity Audit Stream */}
-              <div className="bg-surface-container/70 border border-outline-variant/60 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-outline-variant/40">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface flex items-center">
-                     <Clock size={15} className="mr-2 text-primary" />
-                     User Audit Activity Stream
-                  </h3>
-                  <span className="text-[10px] text-on-surface-variant font-mono">
-                    {auditLogs.filter(log => log.userId === selectedAgent.identifier).length} events
-                  </span>
-                </div>
-
-                <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                  {auditLogs.filter(log => log.userId === selectedAgent.identifier).length === 0 ? (
-                    <div className="text-center py-8 text-on-surface-variant text-xs italic bg-surface-container-low/50 border border-dashed border-outline-variant rounded-2xl">
-                       No logged audit activity recorded for this user ID.
-                    </div>
-                  ) : (
-                    auditLogs.filter(log => log.userId === selectedAgent.identifier)
-                      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-                      .map((log, idx) => (
-                        <div key={log._firestoreId || idx} className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
-                           <div className="flex justify-between items-center mb-1">
-                             <span className="font-bold text-on-surface text-[11px] uppercase tracking-wider">{log.action}</span>
-                             <span className="text-[10px] text-on-surface-variant font-mono">{log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString() : 'Recent'}</span>
-                           </div>
-                           <p className="text-[11px] text-on-surface-variant">
-                             <span className="font-semibold text-primary">{log.module}:</span> {log.details}
-                           </p>
-                        </div>
-                      ))
+                      {currentUser?.identifier !== selectedAgent.identifier && (
+                        <button
+                          onClick={() => setDeleteId(selectedAgent.identifier)}
+                          className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"
+                          title="Revoke Access"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
 
-            </div>
-          ) : (
-            <div className="h-full min-h-[350px] border-2 border-dashed border-outline-variant/60 rounded-3xl flex flex-col items-center justify-center text-on-surface-variant bg-surface-container/40 p-8 text-center">
-              <User size={56} className="mb-3 opacity-20 text-on-surface" />
-              <h3 className="font-bold text-base text-on-surface">No Member Selected</h3>
-              <p className="text-xs max-w-sm text-on-surface-variant mt-1.5 leading-relaxed">
-                Select an employee, art partner, or corporate client from the registry to inspect identity credentials, adjust dynamic access roles, or dispatch email templates.
-              </p>
+              {/* Sub-Workspace Navigation Tabs */}
+              <div className="flex items-center gap-2 px-5 pt-3 border-b border-outline-variant/60 bg-surface-container-low/40">
+                <button
+                  onClick={() => setWorkspaceTab('rbac')}
+                  className={'px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ' + (
+                    workspaceTab === 'rbac'
+                      ? 'border-primary text-primary bg-surface-container/60 font-black'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                  )}
+                >
+                  <Shield size={13} /> Role & Permissions
+                </button>
+                <button
+                  onClick={() => setWorkspaceTab('profile')}
+                  className={'px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ' + (
+                    workspaceTab === 'profile'
+                      ? 'border-primary text-primary bg-surface-container/60 font-black'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                  )}
+                >
+                  <User size={13} /> Profile Details
+                </button>
+                <button
+                  onClick={() => setWorkspaceTab('audit')}
+                  className={'px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ' + (
+                    workspaceTab === 'audit'
+                      ? 'border-primary text-primary bg-surface-container/60 font-black'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                  )}
+                >
+                  <Clock size={13} /> Activity Trail ({userAuditLogs.length})
+                </button>
+                <button
+                  onClick={() => setWorkspaceTab('security')}
+                  className={'px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ' + (
+                    workspaceTab === 'security'
+                      ? 'border-primary text-primary bg-surface-container/60 font-black'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                  )}
+                >
+                  <Lock size={13} /> Security & Access
+                </button>
+              </div>
+
+              {/* Sub-Workspace Active Content */}
+              <div className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-4">
+                
+                {/* TAB 1: Role & RBAC Permissions */}
+                {workspaceTab === 'rbac' && (
+                  <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/60 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                          <Shield size={14} className="text-primary" /> Dynamic Role Assignment (RBAC)
+                        </h4>
+                        <p className="text-[11px] text-on-surface-variant mt-0.5">
+                          Assigned role dictates module visibility, operational actions, and data access policies.
+                        </p>
+                      </div>
+                      <span className={`text-xs font-black px-3 py-1 rounded-lg border ${ROLE_METADATA[selectedAgent.role]?.badge}`}>
+                        {selectedAgent.role}
+                      </span>
+                    </div>
+
+                    {isAdmin ? (
+                      <div className="p-4 bg-surface-container-low rounded-xl border border-outline-variant/60 space-y-3">
+                        <label className="block text-[10px] uppercase font-bold text-on-surface-variant">Change Access Level</label>
+                        <select 
+                          value={selectedAgent.role}
+                          onChange={(e) => handleRoleChange(e.target.value)}
+                          className="w-full bg-surface-container border border-outline-variant rounded-xl p-2.5 text-xs font-bold text-on-surface focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
+                        >
+                          {SYSTEM_ROLES.filter(r => r !== 'Partner').map(roleName => (
+                            <option key={roleName} value={roleName}>
+                              {roleName} — {ROLE_METADATA[roleName]?.label || roleName}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-on-surface-variant">
+                          Department: <strong className="text-primary">{getRoleCategory(selectedAgent.role)}</strong>
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                        <p className="text-xs font-bold text-on-surface">Role: {selectedAgent.role}</p>
+                        <p className="text-[11px] text-on-surface-variant mt-0.5">Department: {getRoleCategory(selectedAgent.role)}</p>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-outline-variant/40">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Granted Capabilities</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/40 flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-emerald-400" />
+                          <span>CRM & Lead Intake Access</span>
+                        </div>
+                        <div className="p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/40 flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-emerald-400" />
+                          <span>Quotation & Invoice Inspection</span>
+                        </div>
+                        <div className="p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/40 flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-emerald-400" />
+                          <span>Customer Registry Management</span>
+                        </div>
+                        <div className="p-2.5 bg-surface-container-low rounded-lg border border-outline-variant/40 flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-emerald-400" />
+                          <span>Production & Logistics Overview</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: Profile & Identity Details */}
+                {workspaceTab === 'profile' && (
+                  <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/60 space-y-4">
+                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                      <User size={14} className="text-primary" /> Profile & Contact Dossier
+                    </h4>
+
+                    {isEditing ? (
+                      <div className="space-y-3.5 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-on-surface-variant mb-1">Full Name</label>
+                            <input
+                              type="text"
+                              value={editForm.name || ""}
+                              onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))}
+                              className="w-full p-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-on-surface-variant mb-1">Contact Number (+94)</label>
+                            <input
+                              type="text"
+                              value={editForm.contactNumber || ""}
+                              onChange={(e) => setEditForm(p => ({ ...p, contactNumber: formatPhone(e.target.value) }))}
+                              className="w-full p-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-on-surface-variant mb-1">Company / Organization</label>
+                            <input
+                              type="text"
+                              value={editForm.company || ""}
+                              onChange={(e) => setEditForm(p => ({ ...p, company: e.target.value }))}
+                              className="w-full p-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-on-surface-variant mb-1">Workshop Base / Location</label>
+                            <input
+                              type="text"
+                              value={editForm.location || ""}
+                              onChange={(e) => setEditForm(p => ({ ...p, location: e.target.value }))}
+                              className="w-full p-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-on-surface"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-2 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditing(false)}
+                            className="px-4 py-2 bg-surface-container text-on-surface-variant rounded-xl font-bold"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveDetails}
+                            className="px-5 py-2 bg-primary text-on-primary rounded-xl font-bold shadow-md flex items-center gap-1.5"
+                          >
+                            <Save size={13} /> Save Profile
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase">Full Name</span>
+                          <p className="font-bold text-on-surface text-sm mt-0.5">{selectedAgent.name}</p>
+                        </div>
+                        <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase">Email Address</span>
+                          <p className="font-bold text-on-surface text-sm font-mono mt-0.5 truncate">{selectedAgent.identifier}</p>
+                        </div>
+                        <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase">Contact Number</span>
+                          <p className="font-bold text-on-surface text-sm font-mono mt-0.5">{selectedAgent.contactNumber || 'Not specified'}</p>
+                        </div>
+                        <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase">Organization</span>
+                          <p className="font-bold text-on-surface text-sm mt-0.5">{selectedAgent.company || 'Print To Frame Pvt Ltd'}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 3: Activity & Audit Trail */}
+                {workspaceTab === 'audit' && (
+                  <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/60 space-y-4">
+                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                      <Clock size={14} className="text-primary" /> Member Activity Stream
+                    </h4>
+                    <div className="divide-y divide-outline-variant/30 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                      {userAuditLogs.length > 0 ? (
+                        userAuditLogs.map((log, idx) => (
+                          <div key={log._firestoreId || idx} className="py-3 flex justify-between items-start gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-on-surface">{log.action || 'ACTIVITY'}</span>
+                                <span className="text-[9px] font-bold px-2 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                                  {log.module || 'ERP'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-on-surface-variant mt-0.5">{log.details || log.description || 'User action logged'}</p>
+                            </div>
+                            <span className="text-[10px] text-on-surface-variant font-mono flex-shrink-0">
+                              {log.createdAt?.toDate ? log.createdAt.toDate().toLocaleDateString() : 'Recent'}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-10 text-center text-on-surface-variant text-xs">
+                          No recent logged activity found for this user account.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: Security & Access */}
+                {workspaceTab === 'security' && (
+                  <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/60 space-y-4">
+                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                      <Lock size={14} className="text-primary" /> Security & Account Lifecycle
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                        <span className="text-[10px] font-bold text-on-surface-variant uppercase">Account Status</span>
+                        <p className={`font-bold text-sm mt-0.5 ${selectedAgent.status === 'Deactivated' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {selectedAgent.status || 'Active'}
+                        </p>
+                      </div>
+                      <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                        <span className="text-[10px] font-bold text-on-surface-variant uppercase">Auth Provider</span>
+                        <p className="font-bold text-on-surface text-sm mt-0.5">Firebase / Google Workspace</p>
+                      </div>
+                    </div>
+
+                    {isAdmin && (
+                      <div className="pt-2 flex items-center gap-3">
+                        <button
+                          onClick={handleToggleStatus}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                            selectedAgent.status === 'Deactivated'
+                              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'text-rose-400 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20'
+                          }`}
+                        >
+                          {selectedAgent.status === 'Deactivated' ? 'Reactivate Member Account' : 'Deactivate Member Account'}
+                        </button>
+                        <button
+                          onClick={() => toast.info(`Password reset link dispatched to ${selectedAgent.identifier}`)}
+                          className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer"
+                        >
+                          Send Password Reset
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      <DeleteModal 
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDeleteAgent}
-        title="Revoke Member Access?"
-        message="Are you sure you want to revoke this user's account? They will be immediately disconnected from the ERP workspace."
-      />
-
-      {/* Direct User Creation Modal */}
-      {showCreateUserModal && (
-        <ModalWrapper
-          isOpen={showCreateUserModal}
-          onClose={() => setShowCreateUserModal(false)}
-          maxWidth="max-w-xl"
-          height="h-auto max-h-[90vh]"
-          ariaLabel="Enroll New Member"
-        >
-          <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
-            <div>
-              <h3 className="text-lg sm:text-xl font-black text-on-surface">
-                Enroll Member & Provision Access
-              </h3>
-              <p className="text-[10px] uppercase font-bold text-primary tracking-widest mt-0.5">
-                Dynamic Role-Based Access Control
-              </p>
-            </div>
-            <button 
-              onClick={() => setShowCreateUserModal(false)} 
-              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors cursor-pointer"
-            >
+      {/* ── CREATE USER MODAL ─────────────────────────────────────────── */}
+      <ModalWrapper
+        isOpen={showCreateUserModal}
+        onClose={() => setShowCreateUserModal(false)}
+        maxWidth="max-w-xl"
+        height="h-auto"
+        ariaLabel="Enroll New Member"
+      >
+        <div className="p-6 space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+            <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+              <UserCheck size={18} className="text-primary" /> Enroll New Internal Member
+            </h3>
+            <button onClick={() => setShowCreateUserModal(false)} className="text-on-surface-variant hover:text-on-surface p-1">
               <X size={18} />
             </button>
           </div>
 
-          <form onSubmit={handleCreateUser} className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Full Name *
-              </label>
-              <input 
-                type="text" 
-                value={createUserForm.name} 
-                onChange={e => setCreateUserForm({...createUserForm, name: e.target.value})} 
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
-                placeholder="e.g. Kasun Perera"
-                required 
-              />
-            </div>
-
+          <form onSubmit={handleCreateUser} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Email / Workspace ID *
-                </label>
-                <input 
-                  type="email" 
-                  value={createUserForm.identifier} 
-                  onChange={e => setCreateUserForm({...createUserForm, identifier: e.target.value})} 
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-mono" 
-                  placeholder="kasun@print2frame.xyz"
-                  required 
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Kasun Perera"
+                  value={createUserForm.name}
+                  onChange={(e) => setCreateUserForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Initial Password
-                </label>
-                <input 
-                  type="text" 
-                  value={createUserForm.password} 
-                  onChange={e => setCreateUserForm({...createUserForm, password: e.target.value})} 
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-mono" 
-                  placeholder="Auto-generated if blank"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Contact Number
-                </label>
-                <input 
-                  type="text" 
-                  value={createUserForm.contactNumber} 
-                  onChange={e => setCreateUserForm({...createUserForm, contactNumber: e.target.value})} 
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
-                  placeholder="+94 7X XXX XXXX"
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Email / Identifier *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. kasun@print2frame.xyz"
+                  value={createUserForm.identifier}
+                  onChange={(e) => setCreateUserForm(p => ({ ...p, identifier: e.target.value }))}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Assigned Role *
-                </label>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Access Role</label>
                 <select
                   value={createUserForm.role}
-                  onChange={e => setCreateUserForm({...createUserForm, role: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface font-bold cursor-pointer"
+                  onChange={(e) => setCreateUserForm(p => ({ ...p, role: e.target.value }))}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-bold"
                 >
-                  {SYSTEM_ROLES.map(role => (
-                    <option key={role} value={role}>
-                      {role} — {ROLE_METADATA[role]?.desc || role}
+                  {SYSTEM_ROLES.filter(r => r !== 'Partner').map(roleName => (
+                    <option key={roleName} value={roleName}>
+                      {roleName} ({ROLE_METADATA[roleName]?.label || roleName})
                     </option>
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Mobile (+94)</label>
+                <input
+                  type="text"
+                  placeholder="+94 77 123 4567"
+                  value={createUserForm.contactNumber}
+                  onChange={(e) => setCreateUserForm(p => ({ ...p, contactNumber: formatPhone(e.target.value) }))}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono"
+                />
+              </div>
             </div>
 
-            {createUserForm.role === 'Business Client' && (
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Company / Enterprise Name
-                </label>
-                <input 
-                  type="text" 
-                  value={createUserForm.company} 
-                  onChange={e => setCreateUserForm({...createUserForm, company: e.target.value})} 
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
-                  placeholder="e.g. Apex Architects Pvt Ltd"
-                />
-              </div>
-            )}
-
-            {createUserForm.role === 'Partner' && (
-              <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                  Workshop Specialization / Focus
-                </label>
-                <input 
-                  type="text" 
-                  value={createUserForm.specialty} 
-                  onChange={e => setCreateUserForm({...createUserForm, specialty: e.target.value})} 
-                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50 text-on-surface" 
-                  placeholder="e.g. Canvas Stretcher Frames, Floating Acrylics"
-                />
-              </div>
-            )}
-
-            <div className="pt-4 border-t border-outline-variant flex justify-end space-x-3">
-              <button 
-                type="button" 
+            <div className="pt-3 flex justify-end gap-2 border-t border-outline-variant/60">
+              <button
+                type="button"
                 onClick={() => setShowCreateUserModal(false)}
-                className="px-4 py-2.5 text-xs font-bold text-on-surface-variant hover:text-on-surface cursor-pointer"
+                className="px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold rounded-xl"
               >
                 Cancel
               </button>
-              <button 
-                type="submit" 
-                className="px-6 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.3)] active:scale-95 cursor-pointer"
+              <button
+                type="submit"
+                className="px-6 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md"
               >
-                Enroll User & Prepare Welcome Email
+                Enroll Member
               </button>
             </div>
           </form>
-        </ModalWrapper>
+        </div>
+      </ModalWrapper>
+
+      {/* ── IMAGE CROP MODAL ─────────────────────────────────────────── */}
+      {showCropModal && rawImageForCrop && (
+        <ImageCropModal
+          isOpen={showCropModal}
+          onClose={() => {
+            setShowCropModal(false);
+            setRawImageForCrop(null);
+          }}
+          imageSrc={rawImageForCrop}
+          onCropComplete={handleAgentCropComplete}
+        />
       )}
 
-      {/* Review Registration Request Modal */}
-      {reviewingApplicant && (
-        <ModalWrapper
-          isOpen={!!reviewingApplicant}
-          onClose={() => setReviewingApplicant(null)}
-          maxWidth="max-w-xl"
-          height="h-auto max-h-[90vh]"
-          ariaLabel="Review Registration Request"
-        >
-          <div className="px-6 py-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center flex-shrink-0">
-            <div>
-              <h3 className="text-lg sm:text-xl font-black text-on-surface">
-                Review Registration Dossier
-              </h3>
-              <p className="text-[10px] uppercase font-bold text-primary tracking-widest mt-0.5">
-                Applicant ID: {reviewingApplicant.identifier}
-              </p>
-            </div>
-            <button 
-              onClick={() => setReviewingApplicant(null)} 
-              className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar">
-            <div className="p-4 bg-surface-container-low rounded-2xl border border-outline-variant/60 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Applicant Name:</span>
-                <span className="text-sm font-extrabold text-on-surface">{reviewingApplicant.name}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Email Account:</span>
-                <span className="text-xs font-mono font-bold text-primary">{reviewingApplicant.identifier}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Mobile Number:</span>
-                <span className="text-xs font-bold text-on-surface">{reviewingApplicant.mobile || reviewingApplicant.contactNumber || 'Not provided'}</span>
-              </div>
-              {reviewingApplicant.company && (
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Company / Entity:</span>
-                  <span className="text-xs font-bold text-on-surface">{reviewingApplicant.company}</span>
-                </div>
-              )}
-              {reviewingApplicant.specialty && (
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Specialization:</span>
-                  <span className="text-xs font-bold text-cyan-400">{reviewingApplicant.specialty}</span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Assign / Confirm Access Role *
-              </label>
-              <select
-                value={selectedReviewRole}
-                onChange={(e) => setSelectedReviewRole(e.target.value)}
-                className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
-              >
-                {SYSTEM_ROLES.map(r => (
-                  <option key={r} value={r}>
-                    {r} — {ROLE_METADATA[r]?.desc || r}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed">
-                Approving this request will immediately activate workspace privileges, provision a linked database entry if applicable, and generate a pre-filled welcome email draft.
-              </p>
-            </div>
-
-            <div className="pt-4 border-t border-outline-variant flex flex-col sm:flex-row justify-between items-center gap-3">
-              <button 
-                type="button" 
-                onClick={() => handleExecuteRejection(reviewingApplicant.identifier)}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-rose-400 bg-rose-500/10 hover:bg-rose-500 hover:text-white rounded-xl border border-rose-500/20 transition-all cursor-pointer"
-              >
-                Decline Request
-              </button>
-
-              <button 
-                type="button" 
-                onClick={handleExecuteApproval}
-                className="w-full sm:w-auto px-6 py-2.5 bg-emerald-500 text-white font-bold text-xs rounded-xl hover:bg-emerald-600 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Check size={16} />
-                <span>Approve & Open Email Draft</span>
-              </button>
-            </div>
-          </div>
-        </ModalWrapper>
-      )}
-
-      {/* Dynamic Email Template Dispatcher Modal */}
+      {/* ── EMAIL TEMPLATE MODAL ─────────────────────────────────────────── */}
       {emailModalConfig.isOpen && (
         <EmailTemplateModal
           isOpen={emailModalConfig.isOpen}
           onClose={() => setEmailModalConfig({ isOpen: false, recipient: null, initialTemplateId: null })}
           recipient={emailModalConfig.recipient}
           initialTemplateId={emailModalConfig.initialTemplateId}
-          currentUser={currentUser}
         />
       )}
 
-      {/* Image Crop & Adjuster Modal */}
-      <ImageCropModal
-        isOpen={showCropModal}
-        imageSrc={rawImageForCrop}
-        onCropComplete={handleAgentCropComplete}
-        onClose={() => setShowCropModal(false)}
+      {/* ── DELETE MODAL ─────────────────────────────────────────── */}
+      <DeleteModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDeleteAgent}
+        title="Revoke Member Access"
+        message="Are you sure you want to revoke this user account? Their past audit events will be preserved."
       />
     </div>
   );
