@@ -100,11 +100,13 @@ export default function SortableTable({
             <thead>
               <tr className="bg-surface-container-high border-b-2 border-outline text-xs uppercase font-extrabold text-on-surface tracking-wider">
                 {selectable && (
-                  <th className="p-3 w-10 text-center">
+                  <th className="p-3 w-10 text-center" scope="col">
                     <button
                       type="button"
                       onClick={toggleSelectAll}
-                      className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+                      aria-label="Select all rows"
+                      aria-checked={allSelected ? "true" : someSelected ? "mixed" : "false"}
+                      className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center p-1 rounded min-w-[28px] min-h-[28px] focus-visible:ring-2 focus-visible:ring-primary mx-auto"
                     >
                       {allSelected ? (
                         <CheckSquare size={14} className="text-primary" />
@@ -116,28 +118,43 @@ export default function SortableTable({
                     </button>
                   </th>
                 )}
-                {columns.map(col => (
-                  <th
-                    key={col.key}
-                    onClick={() => col.sortable !== false && handleSort(col.key)}
-                    className={`p-3 font-extrabold ${col.className || ''} ${
-                      col.sortable !== false ? 'cursor-pointer select-none hover:text-on-surface transition-colors' : ''
-                    }`}
-                  >
-                    <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
-                      <span>{col.label}</span>
-                      {col.sortable !== false && (
-                        <span className="opacity-60">
-                          {sortKey === col.key ? (
-                            sortDirection === 'asc' ? <ChevronUp size={12} className="text-primary" /> : <ChevronDown size={12} className="text-primary" />
-                          ) : (
-                            <ChevronsUpDown size={11} />
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                ))}
+                {columns.map(col => {
+                  const isSorted = sortKey === col.key;
+                  const ariaSortValue = isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+                  return (
+                    <th
+                      key={col.key}
+                      scope="col"
+                      aria-sort={col.sortable !== false ? ariaSortValue : undefined}
+                      onClick={() => col.sortable !== false && handleSort(col.key)}
+                      onKeyDown={(e) => {
+                        if (col.sortable !== false && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          handleSort(col.key);
+                        }
+                      }}
+                      tabIndex={col.sortable !== false ? 0 : undefined}
+                      role={col.sortable !== false ? "columnheader button" : "columnheader"}
+                      aria-label={col.sortable !== false ? `Sort by ${col.label}, currently ${ariaSortValue}` : col.label}
+                      className={`p-3 font-extrabold ${col.className || ''} ${
+                        col.sortable !== false ? 'cursor-pointer select-none hover:text-on-surface transition-colors focus-visible:ring-2 focus-visible:ring-primary rounded' : ''
+                      }`}
+                    >
+                      <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
+                        <span>{col.label}</span>
+                        {col.sortable !== false && (
+                          <span className="opacity-60">
+                            {sortKey === col.key ? (
+                              sortDirection === 'asc' ? <ChevronUp size={12} className="text-primary" /> : <ChevronDown size={12} className="text-primary" />
+                            ) : (
+                              <ChevronsUpDown size={11} />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-outline">
@@ -155,8 +172,16 @@ export default function SortableTable({
                     <tr
                       key={rowId}
                       onClick={() => onRowClick && onRowClick(row)}
+                      onKeyDown={(e) => {
+                        if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      role={onRowClick ? "button" : undefined}
                       className={`transition-colors ${
-                        onRowClick ? 'cursor-pointer hover:bg-surface-container-high/60' : ''
+                        onRowClick ? 'cursor-pointer hover:bg-surface-container-high/60 focus-visible:bg-surface-container-high/60 focus-visible:outline-none' : ''
                       } ${isSelected ? 'bg-primary/10' : idx % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-high/40'}`}
                     >
                       {selectable && (
@@ -164,7 +189,9 @@ export default function SortableTable({
                           <button
                             type="button"
                             onClick={(e) => toggleSelectRow(rowId, e)}
-                            className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center"
+                            aria-label={`Select row ${rowId}`}
+                            aria-checked={isSelected}
+                            className="text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center p-1 rounded min-w-[28px] min-h-[28px] focus-visible:ring-2 focus-visible:ring-primary mx-auto"
                           >
                             {isSelected ? (
                               <CheckSquare size={14} className="text-primary" />
