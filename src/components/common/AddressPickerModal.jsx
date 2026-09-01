@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, X, Check, Globe } from 'lucide-react';
 import { loadGoogleMapsScript, geocodeAddress } from '../../services/googleMapsService';
+import { ModalWrapper } from './ui';
 import { toast } from '../../utils/toast';
 
 export default function AddressPickerModal({ isOpen, onClose, onSelect, initialAddress = '' }) {
@@ -18,7 +19,6 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
   useEffect(() => {
     if (isOpen) {
       setAddressInput(initialAddress);
-      // Initialize map if DOM is ready
       initMap();
     }
   }, [isOpen, initialAddress]);
@@ -117,79 +117,89 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-surface border border-outline-variant rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
-          <div className="flex items-center space-x-2">
-            <MapPin className="text-primary" size={22} />
-            <h3 className="text-lg font-bold text-on-surface">Select Location on Google Maps</h3>
+    <ModalWrapper
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      height="h-[95dvh] sm:h-[88vh] max-h-[860px]"
+      ariaLabel="Google Maps Location Pinpoint Picker"
+    >
+      {/* Header */}
+      <div className="px-5 sm:px-6 py-4 border-b border-outline-variant flex items-center justify-between bg-surface-container-low flex-shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-primary/10 text-primary rounded-xl border border-primary/20 flex-shrink-0">
+            <MapPin size={20} />
           </div>
-          <button
-            onClick={onClose}
-            className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="p-4 bg-surface-container-low border-b border-outline-variant flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 text-on-surface-variant" size={18} />
-            <input
-              type="text"
-              value={addressInput}
-              onChange={(e) => setAddressInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Enter delivery address, street, or city in Sri Lanka..."
-              className="w-full bg-surface border border-outline-variant rounded-xl pl-10 pr-4 py-2 text-sm text-on-surface focus:outline-none focus:border-primary"
-            />
-          </div>
-          <button
-            onClick={handleSearch}
-            disabled={isSearching}
-            className="px-5 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:opacity-90 transition-opacity flex items-center space-x-2"
-          >
-            <span>{isSearching ? 'Locating...' : 'Search'}</span>
-          </button>
-        </div>
-
-        {/* Map Container */}
-        <div className="relative w-full h-80 bg-surface-container">
-          <div ref={mapRef} className="w-full h-full" />
-          {/* Fallback indicator if maps script is slow/simulated */}
-          <div className="absolute bottom-3 left-3 bg-surface/90 backdrop-blur border border-outline-variant px-3 py-1.5 rounded-lg text-xs text-on-surface-variant flex items-center space-x-1.5 shadow-lg pointer-events-none">
-            <Globe size={14} className="text-primary" />
-            <span>Click map or drag marker to pinpoint precise delivery spot</span>
+          <div>
+            <h3 className="text-base sm:text-lg font-black text-on-surface">Delivery Location Pinpoint</h3>
+            <p className="text-[10px] sm:text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-0.5">
+              Google Maps Interactive Geocoding
+            </p>
           </div>
         </div>
+        <button
+          onClick={onClose}
+          className="p-2 text-on-surface-variant hover:text-on-surface bg-surface-container-high rounded-full border border-outline-variant/60 transition-colors cursor-pointer"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-outline-variant flex items-center justify-between bg-surface-container-low">
-          <div className="text-xs text-on-surface-variant truncate max-w-md">
-            <span className="font-bold text-on-surface">Selected:</span> {selectedLocation.address}
-          </div>
-          <div className="flex space-x-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-outline-variant rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                onSelect(selectedLocation);
-                onClose();
-              }}
-              className="px-5 py-2 bg-primary text-on-primary font-bold text-sm rounded-xl hover:opacity-90 flex items-center space-x-2"
-            >
-              <Check size={16} />
-              <span>Confirm Location</span>
-            </button>
-          </div>
+      {/* Search Bar */}
+      <div className="p-3 sm:p-4 bg-surface-container-low border-b border-outline-variant flex gap-2 flex-shrink-0">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 text-on-surface-variant" size={16} />
+          <input
+            type="text"
+            value={addressInput}
+            onChange={(e) => setAddressInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Enter delivery address, street, or city in Sri Lanka..."
+            className="w-full bg-surface-container border border-outline-variant/60 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <button
+          onClick={handleSearch}
+          disabled={isSearching}
+          className="px-4 sm:px-5 py-2 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+        >
+          <span>{isSearching ? 'Locating...' : 'Search'}</span>
+        </button>
+      </div>
+
+      {/* Map Container */}
+      <div className="relative w-full flex-1 min-h-[260px] sm:min-h-[340px] bg-surface-container">
+        <div ref={mapRef} className="w-full h-full" />
+        <div className="absolute bottom-3 left-3 right-3 sm:right-auto bg-surface-container/90 backdrop-blur border border-outline-variant px-3 py-1.5 rounded-xl text-[11px] text-on-surface-variant flex items-center space-x-1.5 shadow-lg pointer-events-none">
+          <Globe size={14} className="text-primary flex-shrink-0" />
+          <span className="truncate">Drag pin or tap map to adjust coordinates</span>
         </div>
       </div>
-    </div>
+
+      {/* Footer */}
+      <div className="px-5 sm:px-6 py-4 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3 bg-surface-container-low flex-shrink-0">
+        <div className="text-xs text-on-surface-variant truncate max-w-sm text-center sm:text-left">
+          <span className="font-bold text-on-surface">Selected:</span> {selectedLocation.address}
+        </div>
+        <div className="flex space-x-2.5 w-full sm:w-auto justify-end">
+          <button
+            onClick={onClose}
+            className="flex-1 sm:flex-none px-4 py-2.5 border border-outline-variant/60 rounded-xl text-xs sm:text-sm font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              onSelect(selectedLocation);
+              onClose();
+            }}
+            className="flex-1 sm:flex-none px-5 py-2.5 bg-primary text-on-primary font-bold text-xs sm:text-sm rounded-xl hover:bg-primary/90 transition-all shadow-sm active:scale-95 flex items-center justify-center space-x-1.5 cursor-pointer"
+          >
+            <Check size={14} />
+            <span>Confirm Location</span>
+          </button>
+        </div>
+      </div>
+    </ModalWrapper>
   );
 }

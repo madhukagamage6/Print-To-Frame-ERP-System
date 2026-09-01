@@ -1047,7 +1047,7 @@ function App() {
           }
         }}
       >
-        <div className="max-w-7xl mx-auto p-3 sm:p-5 md:p-8 lg:p-10 relative min-h-full pb-24 md:pb-20">
+        <div className="max-w-7xl mx-auto p-3 sm:p-5 md:p-8 lg:p-10 relative min-h-full pb-28 md:pb-20">
           <ErrorBoundary>
             <React.Suspense fallback={<LoadingSpinner message="Loading module..." />}>
             {activeTab === "dashboard" && canAccess(currentUser?.role, 'dashboard') && (
@@ -1200,20 +1200,142 @@ function App() {
           )}
           </React.Suspense>
 
-          {/* Footer */}
-          <footer className="absolute bottom-6 left-10 right-10 flex justify-between items-center text-[10px] text-on-surface-variant border-t border-outline-variant/30 pt-4">
-            <p>© 2024 Print To Frame Pvt Ltd. Sri Lanka Specialist Framing.</p>
-            <div className="flex space-x-4">
-              <span>print2frame.xyz</span>
-              <span>Contact: +94 711 141 9027</span>
-            </div>
-          </footer>
+            {/* Footer */}
+            <footer className="hidden md:flex absolute bottom-6 left-10 right-10 justify-between items-center text-[10px] text-on-surface-variant border-t border-outline-variant/30 pt-4">
+              <p>© 2024 Print To Frame Pvt Ltd. Sri Lanka Specialist Framing.</p>
+              <div className="flex space-x-4">
+                <span>print2frame.xyz</span>
+                <span>Contact: +94 711 141 9027</span>
+              </div>
+            </footer>
           </ErrorBoundary>
         </div>
       </main>
+
+      {/* Mobile Ergonomic Bottom Navigation Dock (md:hidden) */}
+      <nav 
+        aria-label="Mobile Quick Dock"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-container/95 backdrop-blur-2xl border-t border-outline-variant/50 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_25px_rgba(0,0,0,0.5)]"
+      >
+        {currentUser?.role === 'Partner' ? (
+          <>
+            <button
+              onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'dashboard' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <LayoutDashboard size={18} />
+              <span className="text-[10px] font-bold">Home</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('partners'); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'partners' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Handshake size={18} />
+              <span className="text-[10px] font-bold">Network</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('notifications'); setUnreadNotificationsCount(0); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl relative transition-all cursor-pointer ${
+                activeTab === 'notifications' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Bell size={18} />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-0 right-1/4 w-3.5 h-3.5 bg-error text-on-error text-[8px] font-black rounded-full flex items-center justify-center">
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
+              <span className="text-[10px] font-bold">Alerts</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('messages'); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'messages' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <MessageSquare size={18} />
+              <span className="text-[10px] font-bold">Messages</span>
+            </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all cursor-pointer"
+            >
+              <Menu size={18} />
+              <span className="text-[10px] font-bold">Menu</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => { setActiveTab('dashboard'); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'dashboard' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <LayoutDashboard size={18} />
+              <span className="text-[10px] font-bold">Home</span>
+            </button>
+
+            <button
+              onClick={() => { 
+                setActiveTab(canAccess(currentUser?.role, 'leads') ? 'leads' : 'pipeline'); 
+                setMobileMenuOpen(false); 
+              }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'leads' || activeTab === 'pipeline' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Target size={18} />
+              <span className="text-[10px] font-bold">CRM</span>
+            </button>
+
+            <button
+              onClick={() => { 
+                if (canAccess(currentUser?.role, 'fabrication')) setActiveTab('fabrication');
+                else if (canAccess(currentUser?.role, 'logistics')) setActiveTab('logistics');
+                else if (canAccess(currentUser?.role, 'invoices')) setActiveTab('invoices');
+                else setActiveTab('customers');
+                setMobileMenuOpen(false); 
+              }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                ['fabrication', 'logistics', 'invoices', 'customers'].includes(activeTab) ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Hammer size={18} />
+              <span className="text-[10px] font-bold">Ops</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('messages'); setMobileMenuOpen(false); }}
+              className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'messages' ? 'text-primary font-black' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <MessageSquare size={18} />
+              <span className="text-[10px] font-bold">Messages</span>
+            </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl text-on-surface-variant hover:text-on-surface transition-all cursor-pointer"
+            >
+              <Menu size={18} />
+              <span className="text-[10px] font-bold">Menu</span>
+            </button>
+          </>
+        )}
+      </nav>
     </div>
-    </MessagingProvider>
-  );
+  </MessagingProvider>
+);
 }
 
 export default App;
