@@ -1235,6 +1235,23 @@ export default function LeadCardDetails({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Row 1, Col 1: Full Name */}
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
+                <div className="relative">
+                  <User size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                  <input 
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="e.g. Amal Silva"
+                  />
+                </div>
+              </div>
+
+              {/* Row 1, Col 2: Contact Number + Inline Quick Action Pills */}
               <div>
                 <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Contact Number</label>
                 <div className="flex bg-surface-container-highest/60 border border-outline rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
@@ -1251,79 +1268,69 @@ export default function LeadCardDetails({
                     placeholder="+94 7X XXX XXXX"
                   />
                 </div>
-              </div>
 
-              {/* Call Execution & Live Recording Quick-Bar */}
-              <div className="sm:col-span-2 flex flex-wrap items-center gap-2 p-2.5 bg-surface-container-low/60 rounded-xl border border-outline-variant/60">
-                <button
-                  type="button"
-                  onClick={handlePhoneLinkCall}
-                  disabled={!formData.phone}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
-                    formData.phone
-                      ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 cursor-pointer'
-                      : 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/40 cursor-not-allowed opacity-60'
-                  }`}
-                  title={formData.phone ? `Open Windows Phone Link for ${formData.phone}` : 'Enter contact number first'}
-                >
-                  <PhoneCall size={13} className={formData.phone ? 'text-emerald-400' : 'text-on-surface-variant/40'} />
-                  <span>Call via Phone Link</span>
-                </button>
-
-                {!isRecording ? (
+                {/* Compact Action Pills right under phone input */}
+                <div className="flex items-center gap-1.5 mt-2">
                   <button
                     type="button"
-                    onClick={startCallRecording}
-                    className="px-3 py-1.5 bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
-                    title="Record this conversation directly in browser"
+                    onClick={handlePhoneLinkCall}
+                    disabled={!formData.phone}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 ${
+                      formData.phone
+                        ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 cursor-pointer'
+                        : 'bg-surface-container text-on-surface-variant/40 border border-outline-variant/40 cursor-not-allowed opacity-60'
+                    }`}
+                    title={formData.phone ? `Open Windows Phone Link for ${formData.phone}` : 'Enter contact number first'}
                   >
-                    <Mic size={13} className="text-primary" />
-                    <span>Record Live Call</span>
+                    <PhoneCall size={12} className={formData.phone ? 'text-emerald-400' : 'text-on-surface-variant/40'} />
+                    <span className="truncate">Call via Phone Link</span>
                   </button>
-                ) : (
-                  <div className="flex items-center gap-2 bg-error/15 border border-error/40 px-3 py-1 rounded-xl">
-                    <span className="flex h-2.5 w-2.5 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
-                    </span>
-                    <span className="text-xs font-mono font-black text-error">
-                      REC {formatTimer(recordingSeconds)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={stopCallRecording}
-                      className="px-2.5 py-1 bg-error text-on-error hover:bg-error/90 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer"
-                      title="Stop recording and feed audio into AI Scope Extractor"
-                    >
-                      <Square size={9} /> Stop & Send to AI
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelCallRecording}
-                      className="p-1 text-on-surface-variant hover:text-error rounded-md transition-colors cursor-pointer"
-                      title="Cancel Recording"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
-                <div className="relative">
-                  <User size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
-                  <input 
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    placeholder="e.g. Amal Silva"
-                  />
+                  {!isRecording ? (
+                    <button
+                      type="button"
+                      onClick={startCallRecording}
+                      className="flex-1 py-1.5 px-2 bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm active:scale-95 cursor-pointer"
+                      title="Record this conversation directly in browser"
+                    >
+                      <Mic size={12} className="text-primary" />
+                      <span className="truncate">Record Live Call</span>
+                    </button>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-between gap-1 bg-error/15 border border-error/40 px-2 py-1 rounded-lg">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="flex h-2 w-2 relative flex-shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+                        </span>
+                        <span className="text-[11px] font-mono font-black text-error truncate">
+                          {formatTimer(recordingSeconds)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={stopCallRecording}
+                          className="px-1.5 py-0.5 bg-error text-on-error hover:bg-error/90 rounded text-[9px] font-bold transition-all flex items-center gap-0.5 shadow-sm active:scale-95 cursor-pointer"
+                          title="Stop recording and prepare AI analysis"
+                        >
+                          <Square size={8} /> Stop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelCallRecording}
+                          className="p-0.5 text-on-surface-variant hover:text-error rounded transition-colors cursor-pointer"
+                          title="Cancel Recording"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* Row 2, Col 1: Company / Business */}
               <div>
                 <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Company / Business</label>
                 <div className="relative">
@@ -1339,6 +1346,7 @@ export default function LeadCardDetails({
                 </div>
               </div>
 
+              {/* Row 2, Col 2: Email Address */}
               <div>
                 <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Email Address</label>
                 <div className="relative">
@@ -1354,7 +1362,7 @@ export default function LeadCardDetails({
                 </div>
               </div>
 
-              {/* Lead Source and Agent Selection */}
+              {/* Row 3, Col 1: Lead Source */}
               <div>
                 <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Lead Source</label>
                 <select 
@@ -1372,6 +1380,7 @@ export default function LeadCardDetails({
                 </select>
               </div>
 
+              {/* Row 3, Col 2: Assigned Agent (paired with Lead Source) */}
               <div>
                 <label className={`block text-[9px] uppercase font-bold mb-1.5 tracking-widest ${formData.source === 'Referral' ? 'text-primary' : 'text-on-surface-variant'}`}>
                   Assigned Agent {formData.source === 'Referral' && '— REQUIRED'}
