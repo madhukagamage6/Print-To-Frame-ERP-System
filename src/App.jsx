@@ -831,7 +831,7 @@ function App() {
                 badge={unreadNotificationsCount} collapsed={effectivelyCollapsed}
                 onNavigate={() => setMobileMenuOpen(false)}
               />
-              <NavLink icon={Handshake} label="Partner Hub" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
+              <NavLink icon={Handshake} label="Partners" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
               <NavLink icon={User} label="My Profile" id="profile" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />
               <NavLink
                 icon={LogOut}
