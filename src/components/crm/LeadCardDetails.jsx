@@ -950,7 +950,7 @@ export default function LeadCardDetails({
               </button>
               <button 
                 onClick={() => { setShowCloseConfirm(false); handleSaveLead(); onClose(); }}
-                className="flex-1 py-2 bg-primary text-on-primary hover:bg-primary/80 text-on-primary font-bold text-sm rounded-lg transition-colors shadow-[0_0_15px_rgba(0,218,243,0.15)] hover:shadow-[0_0_20px_rgba(0,218,243,0.3)]"
+                className="flex-1 py-2 bg-primary text-on-primary hover:bg-primary/80 font-bold text-sm rounded-lg transition-colors shadow-[0_0_15px_rgba(0,218,243,0.15)] hover:shadow-[0_0_20px_rgba(0,218,243,0.3)]"
               >
                 Save and Close
               </button>
@@ -980,722 +980,768 @@ export default function LeadCardDetails({
         onClose={handleClose}
       />
 
-      {/* Content Body */}
-      <div className="flex-1 overflow-y-auto lg:grid lg:grid-cols-[1fr_420px] custom-scrollbar">
+      {/* Content Body — Smooth unified vertical scroll, no horizontal slider */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col lg:flex-row custom-scrollbar">
         
-        {/* Left Column: Scope, Audio Analyzer, Pricing Engine, Client Details */}
-        <DetailModalContent>
-            
-            {/* Job Requirements & Scope */}
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-                <FileText size={14} className="mr-2 text-primary" />
-                Job Requirements & Scope
-              </h3>
+        {/* ── LEFT COLUMN (Primary Operational Flow) ─────────────────────────────────── */}
+        <DetailModalContent className="space-y-6">
+          
+          {/* 1. Client Profile Details */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <User size={14} className="mr-2 text-primary" />
+              Client Profile Details
+            </h3>
 
-              <div>
-                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Scope Details</label>
-                <textarea 
-                  name="jobScope"
-                  value={formData.jobScope}
-                  onChange={handleInputChange}
-                  rows={4}
-                  className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="e.g. Dimensions, wrapping specifications, steel box bar grade..."
-                />
+            {/* Inline Cross-Checking autofill prompt */}
+            {matchedCustomer && (
+              <div className="p-4 bg-primary/10 rounded-2xl border border-primary/30 flex items-center justify-between shadow-[0_4px_20px_rgba(0,218,243,0.05)] animate-bounce">
+                <div>
+                  <p className="text-xs font-bold text-yellow-500">Existing Customer Found in Database!</p>
+                  <p className="text-[10px] text-primary mt-0.5">Matched profile: {matchedCustomer.name} {matchedCustomer.businessName ? `(${matchedCustomer.businessName})` : ''}</p>
+                </div>
+                <button 
+                  onClick={autofillCustomerDetails}
+                  className="px-3 py-1.5 bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 rounded-lg text-[10px] font-bold shadow-[0_4px_20px_rgba(0,218,243,0.05)]"
+                >
+                  Auto-Fill Profile
+                </button>
               </div>
+            )}
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Delivery Address / Logistics Info</label>
-                <div className="relative">
-                  <MapPin size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Contact Number</label>
+                <div className="flex bg-surface-container-highest/60 border border-outline rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
+                  <div className="flex items-center px-3 bg-surface-container border-r border-outline-variant text-sm font-bold text-on-surface-variant select-none">
+                    <Phone size={14} className="mr-1.5 text-on-surface-variant" />
+                    +94
+                  </div>
                   <input 
                     type="text"
-                    name="deliveryLocation"
-                    value={formData.deliveryLocation}
+                    name="phone"
+                    value={formData.phone}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-transparent text-sm focus:outline-none"
+                    placeholder="+94 7X XXX XXXX"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
+                <div className="relative">
+                  <User size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                  <input 
+                    type="text"
+                    name="name"
+                    value={formData.name}
                     onChange={handleInputChange}
                     className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    placeholder="Provide full location or address"
+                    placeholder="e.g. Amal Silva"
                   />
                 </div>
               </div>
-            </div>
 
-            {/* OPTIMIZATION 5: Visual Audio Recording Scope Analyzer */}
-            <div className="p-6 bg-error/10 rounded-2xl border border-error/30 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="p-2 bg-error text-on-error rounded-xl">
-                    <Sparkles size={16} />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">AI Call Recording Analyzer</h3>
-                    <p className="text-[10px] text-on-surface-variant font-medium">Extract simple, visual scope drafts from caller recordings</p>
-                  </div>
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Company / Business</label>
+                <div className="relative">
+                  <Building size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                  <input 
+                    type="text"
+                    name="company"
+                    value={formData.company}
+                    onChange={handleInputChange}
+                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="e.g. Silva Art Printers"
+                  />
                 </div>
-                {audioFile && (
-                  <button 
-                    onClick={resetAudioFile}
-                    className="text-[10px] font-bold text-on-surface-variant hover:text-error flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-lg border border-outline transition-colors"
-                    title="Change / Remove Audio File"
-                  >
-                    <RefreshCw size={10} /> Replace File
-                  </button>
-                )}
               </div>
 
-              <input 
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac"
-                onChange={handleAudioFileChange}
-                className="hidden"
-              />
-
-              {!audioFile ? (
-                /* Empty Dropzone State */
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-error/30 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-error/10 hover:border-error/50 transition-all group"
-                >
-                  <div className="text-center space-y-1.5">
-                    <div className="w-10 h-10 rounded-xl bg-error/15 text-error flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                      <Music size={20} />
-                    </div>
-                    <p className="text-xs font-bold text-on-surface group-hover:text-error transition-colors">Attach telephone call recording</p>
-                    <p className="text-[10px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG, AAC up to 25MB • Auto-optimized</p>
-                  </div>
-                </div>
-              ) : (
-                /* File Ingestion & Preparation Stage */
-                <div className="p-4 bg-surface-container-low rounded-xl border border-outline-variant space-y-3">
-                  {/* File Info Bar */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1.5 bg-error/15 text-error rounded-lg flex-shrink-0">
-                        <Volume2 size={14} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-on-surface truncate">{audioFile.name}</p>
-                        <p className="text-[9px] text-on-surface-variant font-mono">
-                          {preparedAudioData?.isCompressed ? (
-                            <>
-                              Original: {(audioFile.size / 1024 / 1024).toFixed(2)} MB
-                              <span className="text-primary font-bold ml-1.5">
-                                → Optimized: {preparedAudioData.finalSizeMB} MB (8kHz WAV)
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-emerald-400 font-semibold">
-                              {(audioFile.size / 1024 / 1024).toFixed(2)} MB ({preparedAudioData?.formatLabel || 'Audio'} Native Stream)
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    {uploadStage === 'ready' && (
-                      <span className="flex-shrink-0 inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                        <CheckCircle2 size={10} /> Ready
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Upload & Compression Progress Bar */}
-                  {uploadStage !== 'ready' && uploadStage !== 'error' && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between text-[10px] font-bold">
-                        <span className="text-on-surface-variant flex items-center gap-1.5">
-                          <Loader2 size={10} className="animate-spin text-error" />
-                          {uploadStageText}
-                        </span>
-                        <span className="text-error font-mono">{uploadProgress}%</span>
-                      </div>
-                      <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-outline">
-                        <div 
-                          className="bg-gradient-to-r from-error to-primary h-full transition-all duration-300 ease-out rounded-full"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Audio Preview Player */}
-                  {uploadStage === 'ready' && audioPreviewUrl && (
-                    <div className="pt-1">
-                      <p className="text-[9px] uppercase font-bold text-on-surface-variant mb-1 tracking-widest flex items-center gap-1">
-                        <Play size={10} /> Call Recording Audio Preview:
-                      </p>
-                      <audio 
-                        controls 
-                        src={audioPreviewUrl} 
-                        className="w-full h-8 rounded-lg bg-surface-container"
-                        preload="metadata"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Action Button */}
-              {audioFile && !audioAnalysisResult && (
-                <button 
-                  onClick={analyzeCallRecording}
-                  disabled={uploadStage !== 'ready' || isAnalyzingAudio}
-                  className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
-                    isAnalyzingAudio 
-                      ? 'bg-error/50 text-on-surface cursor-wait' 
-                      : uploadStage !== 'ready'
-                        ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed opacity-60'
-                        : 'bg-error text-on-error hover:bg-error/90 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
-                  }`}
-                >
-                  {isAnalyzingAudio ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin mr-1" />
-                      <span>{audioAnalysisStage || 'AI is transcribing & analyzing speech...'}</span>
-                    </>
-                  ) : uploadStage !== 'ready' ? (
-                    <>
-                      <Loader2 size={12} className="animate-spin mr-1" />
-                      <span>Preparing audio file ({uploadProgress}%)...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} />
-                      <span>Extract Scope using Gemini AI</span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {audioError && (
-                <div className="p-3 bg-error/20 text-error border border-error/30 rounded-xl text-[10px] font-bold flex items-start gap-2">
-                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                  <span>{audioError}</span>
-                </div>
-              )}
-
-              {audioAnalysisResult && (
-                <div className="space-y-3">
-                  <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">Visual Scope Analysis</label>
-                  <textarea 
-                    value={audioAnalysisResult.scope || ''}
-                    onChange={(e) => setAudioAnalysisResult({ ...audioAnalysisResult, scope: e.target.value })}
-                    rows={6}
-                    className="w-full p-4 bg-surface-container border border-error/30 rounded-xl text-xs text-on-surface font-mono focus:outline-none"
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Email Address</label>
+                <div className="relative">
+                  <Mail size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                  <input 
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="example@test.com"
                   />
-                  <button 
-                    onClick={applyAudioAnalysisToScope}
-                    className="w-full py-2.5 bg-secondary text-on-secondary hover:bg-secondary/80 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
-                  >
-                    Confirm and Set as Job Scope
-                  </button>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* OPTIMIZATION 4: AI Quote Draft Display */}
-            {formData.quotationGenerated && formData.quotationDraft && (
-              <div className="space-y-2 flex flex-col flex-1 min-h-[220px]">
-                <div className="flex justify-between items-center">
-                  <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">Quotation Body Preview</label>
-                  <button 
-                    onClick={() => setFormData(prev => ({ ...prev, quotationDraft: '', quotationGenerated: false }))} 
-                    className="text-error hover:text-error p-1.5 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
-                    title="Erase Draft"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-                <textarea 
-                  name="quotationDraft"
-                  value={formData.quotationDraft}
+              {/* Lead Source and Agent Selection */}
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Lead Source</label>
+                <select 
+                  name="source"
+                  value={formData.source}
                   onChange={handleInputChange}
-                  rows={8}
-                  className="w-full flex-1 p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <span className="text-[9px] text-secondary font-bold block bg-secondary/10 border border-secondary/30 p-2.5 rounded-lg">
-                  ✔ Structured into cost breakdown categories matching the pricing engine.
-                </span>
-              </div>
-            )}
-
-            {/* Advance Invoice section (shown after Intake stage) */}
-            {lead.stage !== 'Intake' && (
-              <div className="space-y-4 border-t border-outline-variant pt-6">
-                <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center">
-                  <Printer size={16} className="mr-2 text-secondary" />
-                  Advance Invoice (75%)
-                </h3>
-
-                <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-4">
-                  <button 
-                    onClick={handleGenerateInvoice}
-                    disabled={isGeneratingInvoice || (formData.invoiceGenerated && !!formData.invoiceDraft)}
-                    className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
-                      isGeneratingInvoice
-                        ? 'bg-emerald-400 text-on-surface cursor-wait'
-                        : formData.invoiceGenerated && formData.invoiceDraft
-                          ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
-                          : 'bg-secondary text-on-secondary hover:bg-secondary/80 text-on-primary shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
-                    }`}
-                  >
-                    {isGeneratingInvoice ? 'Drafting Invoice...' : formData.invoiceGenerated ? 'Invoice Draft Ready' : 'AI Generate 75% Invoice'}
-                  </button>
-
-                  {invoiceError && (
-                    <p className="text-[10px] font-bold text-error uppercase tracking-tight">{invoiceError}</p>
-                  )}
-                </div>
-
-                {formData.invoiceGenerated && formData.invoiceDraft && (
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">AI Generated Invoice Details</label>
-                      <button 
-                        onClick={() => setFormData(prev => ({ ...prev, invoiceDraft: '', invoiceGenerated: false }))} 
-                        className="text-error hover:text-error p-1.5 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
-                        title="Erase Draft"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                    <textarea 
-                      value={formData.invoiceDraft}
-                      onChange={(e) => setFormData(prev => ({ ...prev, invoiceDraft: e.target.value }))}
-                      rows={6}
-                      className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none"
-                    />
-
-                    {/* OPTIMIZATION 6: Print redesigned premium PDF and save to Database */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={printInvoice}
-                        className="py-2.5 bg-surface-container-highest/60 border border-outline text-on-surface hover:bg-surface-container-low hover:text-primary rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1"
-                      >
-                        <Printer size={13} />
-                        <span>Print PDF</span>
-                      </button>
-                      <button 
-                        onClick={saveInvoiceToDb}
-                        className="py-2.5 bg-secondary/20 text-secondary hover:bg-emerald-200 rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1"
-                      >
-                        <Check size={13} />
-                        <span>Save to DB</span>
-                      </button>
-                      {formData.invoicePaid ? (
-                        <div className="py-2.5 bg-green-500 text-on-surface rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1 col-span-2">
-                          <Check size={13} />
-                          <span>Payment Received</span>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => {
-                             const updatedData = { ...formData, invoicePaid: true };
-                             setFormData(updatedData);
-                             handleSaveLead(updatedData);
-                             if (onMarkInvoicePaid) {
-                               onMarkInvoicePaid(lead.id);
-                             }
-                          }}
-                          className="py-2.5 bg-primary/10 text-primary hover:bg-blue-200 rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center justify-center space-x-1 col-span-2"
-                        >
-                          <Check size={13} />
-                          <span>Mark Paid</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Pricing Engine */}
-            <div className="p-6 bg-violet-50/50 rounded-2xl border border-violet-100/80 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="p-2 bg-violet-600 text-white rounded-xl">
-                    <Calculator size={18} />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">Automated Pricing Engine</h3>
-                    <p className="text-[10px] text-on-surface-variant font-medium">Input dimensions to auto-calculate price brackets</p>
-                  </div>
-                </div>
-                {calcSqFt > 0 && activePricing && (
-                  <div className="flex items-center space-x-2">
-                    {dimensionsLocked && currentUser?.role === 'Admin' && (
-                      <button onClick={() => setDimensionsLocked(false)} className="text-[10px] font-bold text-violet-600 bg-violet-100 px-2 py-1 rounded-md hover:bg-violet-200">
-                        Unlock Dims
-                      </button>
-                    )}
-                    <span className="px-2.5 py-1 bg-violet-100 text-violet-700 rounded-full text-[10px] font-bold">
-                      Tier: {activePricing.tierInfo.range}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Length (ft)</label>
-                  <input 
-                    type="number"
-                    value={calcLength || ''}
-                    onChange={(e) => setCalcLength(Number(e.target.value))}
-                    disabled={dimensionsLocked && currentUser?.role !== 'Admin'}
-                    className={`w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${dimensionsLocked && currentUser?.role !== 'Admin' ? 'opacity-60 cursor-not-allowed bg-surface-container-low' : ''}`}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Height (ft)</label>
-                  <input 
-                    type="number"
-                    value={calcHeight || ''}
-                    onChange={(e) => setCalcHeight(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              {calcSqFt > 0 && activePricing && (
-                <div className="bg-surface-container p-4 rounded-xl border border-violet-100 flex items-center justify-between shadow-inner">
-                  <div className="text-left">
-                    <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Total area & Rate per SqFt</p>
-                    <p className="text-xs font-bold text-on-surface mt-1">
-                      {calcSqFt} SQFT @ LKR {activePricing.finalAmountPerSq.toFixed(2)}/SqFt
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase font-bold text-violet-500 tracking-wider">Discounted Final amount</p>
-                    <p className="text-base font-extrabold text-violet-700">LKR {activePricing.finalAmount.toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-
-              {calcSqFt > 0 && (
-                <button 
-                  onClick={applyPricingToLead}
-                  className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-on-surface rounded-xl font-bold text-xs shadow-[0_4px_20px_rgba(0,218,243,0.05)] transition-all active:scale-[0.98]"
+                  className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                 >
-                  Apply Calculator Results to Lead Quotation
-                </button>
-              )}
-            </div>
+                  <option value="Manual">Manual Entry</option>
+                  <option value="Referral">Referral (Commission Agent)</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Website">Website</option>
+                  <option value="Walk-in">Walk-in</option>
+                </select>
+              </div>
 
-            {/* Client Details Section */}
-            <div className="space-y-6">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-                <User size={14} className="mr-2 text-primary" />
-                Client Profile Details
-              </h3>
-
-              {/* OPTIMIZATION 2: Inline Cross-Checking autofill prompt */}
-              {matchedCustomer && (
-                <div className="p-4 bg-primary/10 rounded-2xl border border-primary/30 flex items-center justify-between shadow-[0_4px_20px_rgba(0,218,243,0.05)] animate-bounce">
-                  <div>
-                    <p className="text-xs font-bold text-yellow-500">Existing Customer Found in Database!</p>
-                    <p className="text-[10px] text-primary mt-0.5">Matched profile: {matchedCustomer.name} {matchedCustomer.businessName ? `(${matchedCustomer.businessName})` : ''}</p>
-                  </div>
-                  <button 
-                    onClick={autofillCustomerDetails}
-                    className="px-3 py-1.5 bg-yellow-500/20 text-yellow-500 text-on-surface hover:bg-yellow-500/20 text-yellow-500 rounded-lg text-[10px] font-bold shadow-[0_4px_20px_rgba(0,218,243,0.05)]"
-                  >
-                    Auto-Fill Profile
-                  </button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Contact Number</label>
-                  <div className="flex bg-surface-container-highest/60 border border-outline rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
-                    <div className="flex items-center px-3 bg-surface-container border-r border-outline-variant text-sm font-bold text-on-surface-variant select-none">
-                      <Phone size={14} className="mr-1.5 text-on-surface-variant" />
-                      +94
-                    </div>
-                    <input 
-                      type="text"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={(e) => {
-                         handlePhoneChange(e.target.value);
-                      }}
-                      className="w-full px-3 py-2.5 bg-transparent text-sm focus:outline-none"
-                      placeholder="+94 7X XXX XXXX"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Full Name</label>
-                  <div className="relative">
-                    <User size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
-                    <input 
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      placeholder="e.g. Amal Silva"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Company / Business</label>
-                  <div className="relative">
-                    <Building size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
-                    <input 
-                      type="text"
-                      name="company"
-                      value={formData.company}
-                      onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      placeholder="e.g. Silva Art Printers"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Email Address</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
-                    <input 
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      placeholder="example@test.com"
-                    />
-                  </div>
-                </div>
-
-                {/* OPTIMIZATION 3: Lead Source and Agent Selection triggers */}
-                <div>
-                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Lead Source</label>
-                  <select 
-                    name="source"
-                    value={formData.source}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface"
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                  >
-                    <option value="Manual">Manual Entry</option>
-                    <option value="Referral">Referral (Commission Agent)</option>
-                    <option value="Social Media">Social Media</option>
-                    <option value="Website">Website</option>
-                    <option value="Walk-in">Walk-in</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className={`block text-[9px] uppercase font-bold mb-1.5 tracking-widest ${formData.source === 'Referral' ? 'text-primary' : 'text-on-surface-variant'}`}>
-                    Assigned Agent {formData.source === 'Referral' && '— REQUIRED'}
-                  </label>
-                  <select 
-                    name="agentId"
-                    value={formData.agentId}
-                    onChange={handleInputChange}
-                    disabled={formData.source !== 'Referral'}
-                    className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface ${
-                      formData.source === 'Referral'
-                        ? 'bg-surface-container-low border-primary/50 font-bold text-on-surface shadow-[0_0_15px_rgba(0,218,243,0.1)]'
-                        : 'bg-surface-container/40 border-outline-variant/60 text-on-surface-variant cursor-not-allowed opacity-60'
-                    }`}
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                  >
-                    <option value="">Select Agent / Partner...</option>
-                    {partners.map(p => (
-                      <option key={p.partnerId || p.id} value={p.partnerId || p.id}>
-                        {p.name} ({p.partnerId || p.id} - {p.type || 'Partner'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className={`block text-[9px] uppercase font-bold mb-1.5 tracking-widest ${formData.source === 'Referral' ? 'text-primary' : 'text-on-surface-variant'}`}>
+                  Assigned Agent {formData.source === 'Referral' && '— REQUIRED'}
+                </label>
+                <select 
+                  name="agentId"
+                  value={formData.agentId}
+                  onChange={handleInputChange}
+                  disabled={formData.source !== 'Referral'}
+                  className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface ${
+                    formData.source === 'Referral'
+                      ? 'bg-surface-container-low border-primary/50 font-bold text-on-surface shadow-[0_0_15px_rgba(0,218,243,0.1)]'
+                      : 'bg-surface-container/40 border-outline-variant/60 text-on-surface-variant cursor-not-allowed opacity-60'
+                  }`}
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                >
+                  <option value="">Select Agent / Partner...</option>
+                  {partners.map(p => (
+                    <option key={p.partnerId || p.id} value={p.partnerId || p.id}>
+                      {p.name} ({p.partnerId || p.id} - {p.type || 'Partner'})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
+          </div>
 
-            
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-                <FileSpreadsheet size={16} className="mr-2 text-primary" />
-                Quotation & Pricing Breakdown
-              </h3>
-
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Total Contract Value (LKR)</label>
-                    <input 
-                      type="number"
-                      name="value"
-                      value={formData.value}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-base font-extrabold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      placeholder="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Gross Volume (SqFt)</label>
-                    <input 
-                      type="number"
-                      name="totalSqFt"
-                      value={formData.totalSqFt}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      placeholder="0"
-                    />
-                  </div>
+          {/* 2. Automated Pricing Engine */}
+          <div className="p-5 bg-violet-50/10 dark:bg-violet-950/20 rounded-2xl border border-violet-500/30 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-violet-600 text-white rounded-xl shadow-md">
+                  <Calculator size={16} />
                 </div>
-
-                {/* Structured Quotation Builder */}
-                <div className="pt-2 border-t border-outline">
-                  <QuotationBuilder
-                    lead={{ ...lead, ...formData }}
-                    allQuotations={allQuotations}
-                    onSaveInvoice={onSaveInvoice}
-                    currentUser={currentUser}
-                  />
+                <div>
+                  <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">Automated Pricing Engine</h3>
+                  <p className="text-[10px] text-on-surface-variant font-medium">Input dimensions to auto-calculate price brackets & tiers</p>
                 </div>
-
-                {/* AI Text Quotation Generator fallback */}
-                <div className="pt-3 border-t border-outline">
-                  <button 
-                    onClick={handleGenerateQuote}
-                    disabled={isGeneratingQuote || (formData.quotationGenerated && !!formData.quotationDraft)}
-                    className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
-                      isGeneratingQuote 
-                        ? 'bg-indigo-400 text-on-surface cursor-wait' 
-                        : formData.quotationGenerated && formData.quotationDraft
-                          ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
-                          : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
-                    }`}
-                  >
-                    <Sparkles size={13} />
-                    <span>{isGeneratingQuote ? 'Drafting with Gemini...' : formData.quotationGenerated ? 'AI Text Draft Ready (Below)' : 'AI Draft Formal Quotation Letter'}</span>
-                  </button>
-
-                  {quoteError && (
-                    <p className="text-[10px] font-bold text-error uppercase tracking-tight mt-2">{quoteError}</p>
+              </div>
+              {calcSqFt > 0 && activePricing && (
+                <div className="flex items-center space-x-2">
+                  {dimensionsLocked && currentUser?.role === 'Admin' && (
+                    <button onClick={() => setDimensionsLocked(false)} className="text-[10px] font-bold text-violet-400 bg-violet-500/10 px-2 py-1 rounded-md hover:bg-violet-500/20 border border-violet-500/30">
+                      Unlock Dims
+                    </button>
                   )}
+                  <span className="px-2.5 py-1 bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded-full text-[10px] font-bold">
+                    Tier: {activePricing.tierInfo.range}
+                  </span>
                 </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Length (ft)</label>
+                <input 
+                  type="number"
+                  value={calcLength || ''}
+                  onChange={(e) => setCalcLength(Number(e.target.value))}
+                  disabled={dimensionsLocked && currentUser?.role !== 'Admin'}
+                  className={`w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50 ${dimensionsLocked && currentUser?.role !== 'Admin' ? 'opacity-60 cursor-not-allowed bg-surface-container-low' : ''}`}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Height (ft)</label>
+                <input 
+                  type="number"
+                  value={calcHeight || ''}
+                  onChange={(e) => setCalcHeight(Number(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                  placeholder="0"
+                />
               </div>
             </div>
 
-            {convertError && (
-              <div className="p-3 mt-4 bg-error/20 border border-error/30 text-error text-xs rounded-xl font-bold">
-                {convertError}
-              </div>
-            )}
-
-          </DetailModalContent>
-
-          {/* Right Column: Pricing & Quotation Overview */}
-          <DetailModalSidebar>
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-                <FileSpreadsheet size={16} className="mr-2 text-primary" />
-                Quotation Summary
-              </h3>
-
-              <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline text-center space-y-3">
-                <FileSpreadsheet size={32} className="text-primary/40 mx-auto" />
-                <div>
-                  <p className="text-xs font-bold text-on-surface">Structured Quotation System</p>
-                  <p className="text-[10px] text-on-surface-variant mt-1 leading-relaxed">
-                    Manage itemized Bill of Quantities, 75%/25% payment split, and version history in the main panel. Accepted quotes convert directly to invoices.
+            {calcSqFt > 0 && activePricing && (
+              <div className="bg-surface-container-low p-4 rounded-xl border border-violet-500/20 flex items-center justify-between shadow-inner">
+                <div className="text-left">
+                  <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Total Area & Rate per SqFt</p>
+                  <p className="text-xs font-bold text-on-surface mt-0.5">
+                    {calcSqFt} SQFT @ LKR {activePricing.finalAmountPerSq.toFixed(2)}/SqFt
                   </p>
                 </div>
-                {formData.value > 0 && (
-                  <div className="p-3 bg-surface-container-low rounded-xl border border-outline text-left">
-                    <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Current Value</p>
-                    <p className="text-sm font-black text-primary font-mono mt-0.5">
-                      LKR {Number(formData.value).toLocaleString()}
-                    </p>
+                <div className="text-right">
+                  <p className="text-[9px] uppercase font-bold text-violet-400 tracking-wider">Calculated Final Amount</p>
+                  <p className="text-base font-black text-violet-400 font-mono">LKR {activePricing.finalAmount.toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+
+            {calcSqFt > 0 && (
+              <button 
+                onClick={applyPricingToLead}
+                className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-xs shadow-md transition-all active:scale-[0.98]"
+              >
+                Apply Calculator Results to Lead Quotation
+              </button>
+            )}
+          </div>
+
+          {/* 3. AI Call Recording Analyzer */}
+          <div className="p-5 bg-error/10 rounded-2xl border border-error/30 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-error text-on-error rounded-xl shadow-md">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-on-surface text-xs uppercase tracking-tight">AI Call Recording Analyzer</h3>
+                  <p className="text-[10px] text-on-surface-variant font-medium">Extract simple, visual scope drafts from caller recordings</p>
+                </div>
+              </div>
+              {audioFile && (
+                <button 
+                  onClick={resetAudioFile}
+                  className="text-[10px] font-bold text-on-surface-variant hover:text-error flex items-center gap-1 px-2.5 py-1 bg-surface-container rounded-lg border border-outline transition-colors"
+                  title="Change / Remove Audio File"
+                >
+                  <RefreshCw size={10} /> Replace File
+                </button>
+              )}
+            </div>
+
+            <input 
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac"
+              onChange={handleAudioFileChange}
+              className="hidden"
+            />
+
+            {!audioFile ? (
+              /* Empty Dropzone State */
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-error/30 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-error/15 hover:border-error/50 transition-all group"
+              >
+                <div className="text-center space-y-1.5">
+                  <div className="w-10 h-10 rounded-xl bg-error/15 text-error flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                    <Music size={20} />
+                  </div>
+                  <p className="text-xs font-bold text-on-surface group-hover:text-error transition-colors">Attach telephone call recording</p>
+                  <p className="text-[10px] text-on-surface-variant">Supports MP3, WAV, M4A, OGG, AAC up to 25MB • Auto-optimized</p>
+                </div>
+              </div>
+            ) : (
+              /* File Ingestion & Preparation Stage */
+              <div className="p-4 bg-surface-container-low rounded-xl border border-outline-variant space-y-3">
+                {/* File Info Bar */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="p-1.5 bg-error/15 text-error rounded-lg flex-shrink-0">
+                      <Volume2 size={14} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-on-surface truncate">{audioFile.name}</p>
+                      <p className="text-[9px] text-on-surface-variant font-mono">
+                        {preparedAudioData?.isCompressed ? (
+                          <>
+                            Original: {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                            <span className="text-primary font-bold ml-1.5">
+                              → Optimized: {preparedAudioData.finalSizeMB} MB (8kHz WAV)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-emerald-400 font-semibold">
+                            {(audioFile.size / 1024 / 1024).toFixed(2)} MB ({preparedAudioData?.formatLabel || 'Audio'} Native Stream)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {uploadStage === 'ready' && (
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      <CheckCircle2 size={10} /> Ready
+                    </span>
+                  )}
+                </div>
+
+                {/* Upload & Compression Progress Bar */}
+                {uploadStage !== 'ready' && uploadStage !== 'error' && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between text-[10px] font-bold">
+                      <span className="text-on-surface-variant flex items-center gap-1.5">
+                        <Loader2 size={10} className="animate-spin text-error" />
+                        {uploadStageText}
+                      </span>
+                      <span className="text-error font-mono">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden border border-outline">
+                      <div 
+                        className="bg-gradient-to-r from-error to-primary h-full transition-all duration-300 ease-out rounded-full"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {/* Direct Print Quick-Actions */}
-                <div className="pt-3 border-t border-outline-variant/30 space-y-2">
-                  <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider text-left">Print Documents</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => printInvoice('Advance')}
-                      className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-amber-400/40 text-on-surface hover:text-amber-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
-                    >
-                      <Printer size={11} /> 75% Advance
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => printInvoice('Final')}
-                      className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1"
-                    >
-                      <Printer size={11} /> 25% Final
-                    </button>
-                  </div>
-                </div>
-
-                {/* Logistics Delivery Dispatch Card for Deals */}
-                {(isDeal || lead.isDeal) && (
-                  <div className="pt-3 border-t border-outline-variant/30 space-y-2 text-left">
-                    <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider flex items-center gap-1">
-                      <Truck size={12} className="text-primary" /> Delivery Logistics
+                {/* Audio Preview Player */}
+                {uploadStage === 'ready' && audioPreviewUrl && (
+                  <div className="pt-1">
+                    <p className="text-[9px] uppercase font-bold text-on-surface-variant mb-1 tracking-widest flex items-center gap-1">
+                      <Play size={10} /> Call Recording Audio Preview:
                     </p>
-                    {(() => {
-                      const dealJob = (logisticsJobs || []).find(j => j.dealId === lead.id || j.leadId === lead.id || j.leadId === lead.originalLeadId);
-                      if (dealJob) {
-                        return (
-                          <div className="p-2.5 bg-surface-container-low rounded-xl border border-outline-variant space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono text-[9px] font-bold text-on-surface-variant">{dealJob.id}</span>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                                dealJob.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
-                                dealJob.status === 'In Transit' ? 'text-primary bg-primary/10 border-primary/30 animate-pulse' :
-                                'text-amber-400 bg-amber-500/10 border-amber-500/30'
-                              }`}>
-                                {dealJob.status === 'Completed' ? 'Delivered' : dealJob.status}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-on-surface truncate">📍 {dealJob.location || formData.deliveryLocation || 'Customer address'}</p>
-                            {dealJob.driver && (
-                              <p className="text-[9px] text-on-surface-variant font-medium">Driver: <strong>{dealJob.driver}</strong></p>
-                            )}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="p-2.5 bg-surface-container-low rounded-xl border border-outline-variant space-y-2">
-                          <p className="text-[10px] text-on-surface-variant leading-tight">
-                            Dispatch completed frames to: <strong className="text-on-surface">{formData.deliveryLocation || 'Destination TBD'}</strong>
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onCreateLogistics) {
-                                onCreateLogistics({ ...lead, ...formData });
-                              }
-                            }}
-                            className="w-full py-2 bg-primary/10 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
-                          >
-                            <Truck size={13} />
-                            <span>Dispatch Delivery</span>
-                          </button>
-                        </div>
-                      );
-                    })()}
+                    <audio 
+                      controls 
+                      src={audioPreviewUrl} 
+                      className="w-full h-8 rounded-lg bg-surface-container"
+                      preload="metadata"
+                    />
                   </div>
                 )}
               </div>
-            </div>
-          </DetailModalSidebar>
+            )}
 
-        </div>
+            {/* Action Button */}
+            {audioFile && !audioAnalysisResult && (
+              <button 
+                onClick={analyzeCallRecording}
+                disabled={uploadStage !== 'ready' || isAnalyzingAudio}
+                className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
+                  isAnalyzingAudio 
+                    ? 'bg-error/50 text-on-surface cursor-wait' 
+                    : uploadStage !== 'ready'
+                      ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed opacity-60'
+                      : 'bg-error text-on-error hover:bg-error/90 shadow-md active:scale-[0.98]'
+                }`}
+              >
+                {isAnalyzingAudio ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin mr-1" />
+                    <span>{audioAnalysisStage || 'AI is transcribing & analyzing speech...'}</span>
+                  </>
+                ) : uploadStage !== 'ready' ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin mr-1" />
+                    <span>Preparing audio file ({uploadProgress}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>Extract Scope using Gemini AI</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {audioError && (
+              <div className="p-3 bg-error/20 text-error border border-error/30 rounded-xl text-[10px] font-bold flex items-start gap-2">
+                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{audioError}</span>
+              </div>
+            )}
+
+            {audioAnalysisResult && (
+              <div className="space-y-3">
+                <label className="block text-xs uppercase font-bold text-on-surface tracking-wider">Visual Scope Analysis</label>
+                <textarea 
+                  value={audioAnalysisResult.scope || ''}
+                  onChange={(e) => setAudioAnalysisResult({ ...audioAnalysisResult, scope: e.target.value })}
+                  rows={6}
+                  className="w-full p-4 bg-surface-container border border-error/30 rounded-xl text-xs text-on-surface font-mono focus:outline-none"
+                />
+                <button 
+                  onClick={applyAudioAnalysisToScope}
+                  className="w-full py-2.5 bg-secondary text-on-secondary hover:bg-secondary/80 rounded-xl font-bold text-xs transition-all active:scale-[0.98]"
+                >
+                  Confirm and Set as Job Scope
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Job Requirements & Scope Details */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <FileText size={14} className="mr-2 text-primary" />
+              Job Requirements & Scope
+            </h3>
+
+            <div>
+              <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Scope Details</label>
+              <textarea 
+                name="jobScope"
+                value={formData.jobScope}
+                onChange={handleInputChange}
+                rows={4}
+                className="w-full p-4 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="e.g. Dimensions, wrapping specifications, steel box bar grade..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Delivery Address / Logistics Info</label>
+              <div className="relative">
+                <MapPin size={14} className="absolute left-3.5 top-3 text-on-surface-variant" />
+                <input 
+                  type="text"
+                  name="deliveryLocation"
+                  value={formData.deliveryLocation}
+                  onChange={handleInputChange}
+                  className="w-full pl-9 pr-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Provide full location or delivery address"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 5. Quotation & Pricing Breakdown */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <FileSpreadsheet size={16} className="mr-2 text-primary" />
+              Quotation & Pricing Breakdown
+            </h3>
+
+            <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Total Contract Value (LKR)</label>
+                  <input 
+                    type="number"
+                    name="value"
+                    value={formData.value}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-base font-extrabold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Gross Volume (SqFt)</label>
+                  <input 
+                    type="number"
+                    name="totalSqFt"
+                    value={formData.totalSqFt}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 bg-surface-container-highest/60 border border-outline rounded-xl text-sm font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              {/* Structured Quotation Builder */}
+              <div className="pt-2 border-t border-outline">
+                <QuotationBuilder
+                  lead={{ ...lead, ...formData }}
+                  allQuotations={allQuotations}
+                  onSaveInvoice={onSaveInvoice}
+                  currentUser={currentUser}
+                />
+              </div>
+            </div>
+          </div>
+
+          {convertError && (
+            <div className="p-3 bg-error/20 border border-error/30 text-error text-xs rounded-xl font-bold">
+              {convertError}
+            </div>
+          )}
+
+        </DetailModalContent>
+
+        {/* ── RIGHT COLUMN (Previews, AI Drafts & Logistics Hub) ──────────────────────── */}
+        <DetailModalSidebar className="space-y-6">
+          
+          {/* 1. Quotation Summary & Financial KPI Card */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <FileSpreadsheet size={16} className="mr-2 text-primary" />
+              Quotation Summary
+            </h3>
+
+            <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 text-primary rounded-xl">
+                  <FileSpreadsheet size={24} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-on-surface">Financial Split Overview</p>
+                  <p className="text-[10px] text-on-surface-variant">75% Advance on commencement • 25% Balance on dispatch</p>
+                </div>
+              </div>
+
+              {formData.value > 0 && (
+                <div className="space-y-2 pt-2 border-t border-outline-variant/30">
+                  <div className="p-3 bg-surface-container-low rounded-xl border border-outline flex justify-between items-center">
+                    <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Total Contract Value</span>
+                    <span className="text-sm font-black text-primary font-mono">
+                      LKR {Number(formData.value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center">
+                      <p className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">75% Advance</p>
+                      <p className="text-xs font-black text-amber-400 font-mono mt-0.5">
+                        LKR {(Number(formData.value) * 0.75).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="p-2.5 bg-primary/10 border border-primary/20 rounded-xl text-center">
+                      <p className="text-[9px] font-bold text-primary uppercase tracking-wider">25% Final</p>
+                      <p className="text-xs font-black text-primary font-mono mt-0.5">
+                        LKR {(Number(formData.value) * 0.25).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Direct Print Quick-Actions */}
+              <div className="pt-2 border-t border-outline-variant/30 space-y-2">
+                <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider text-left">Print Documents</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => printInvoice('Advance')}
+                    className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-amber-400/40 text-on-surface hover:text-amber-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Printer size={11} /> 75% Advance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printInvoice('Final')}
+                    className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Printer size={11} /> 25% Final
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. AI Text Quotation Drafts Card */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <Sparkles size={16} className="mr-2 text-primary" />
+              AI Text Quotation Draft
+            </h3>
+
+            <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-3">
+              <button 
+                onClick={handleGenerateQuote}
+                disabled={isGeneratingQuote || (formData.quotationGenerated && !!formData.quotationDraft)}
+                className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
+                  isGeneratingQuote 
+                    ? 'bg-indigo-400 text-on-surface cursor-wait' 
+                    : formData.quotationGenerated && formData.quotationDraft
+                      ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
+                      : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
+                }`}
+              >
+                <Sparkles size={13} />
+                <span>{isGeneratingQuote ? 'Drafting with Gemini...' : formData.quotationGenerated && formData.quotationDraft ? 'Quotation Letter Ready' : 'AI Draft Formal Quotation Letter'}</span>
+              </button>
+
+              {quoteError && (
+                <p className="text-[10px] font-bold text-error uppercase tracking-tight">{quoteError}</p>
+              )}
+
+              {formData.quotationGenerated && formData.quotationDraft && (
+                <div className="space-y-2 pt-2 border-t border-outline-variant/30">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Quotation Body Preview</label>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(formData.quotationDraft);
+                          toast.success('Quotation draft copied to clipboard!');
+                        }}
+                        className="text-primary hover:text-primary/80 p-1 bg-primary/10 rounded-md transition-colors flex items-center text-[10px] font-bold gap-1"
+                        title="Copy to Clipboard"
+                      >
+                        <FileText size={11} /> Copy
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, quotationDraft: '', quotationGenerated: false }))} 
+                        className="text-error hover:text-error p-1 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
+                        title="Erase Draft"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                  <textarea 
+                    name="quotationDraft"
+                    value={formData.quotationDraft}
+                    onChange={handleInputChange}
+                    rows={7}
+                    className="w-full p-3.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <span className="text-[9px] text-secondary font-bold block bg-secondary/10 border border-secondary/30 p-2 rounded-lg">
+                    ✔ Structured into cost breakdown categories matching the pricing engine.
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3. AI Advance Invoice (75%) Card */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+              <Printer size={16} className="mr-2 text-secondary" />
+              Advance Invoice (75%)
+            </h3>
+
+            <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-3">
+              <button 
+                onClick={handleGenerateInvoice}
+                disabled={isGeneratingInvoice || (formData.invoiceGenerated && !!formData.invoiceDraft)}
+                className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
+                  isGeneratingInvoice
+                    ? 'bg-emerald-400 text-on-surface cursor-wait'
+                    : formData.invoiceGenerated && formData.invoiceDraft
+                      ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
+                      : 'bg-secondary text-on-secondary hover:bg-secondary/80 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
+                }`}
+              >
+                {isGeneratingInvoice ? 'Drafting Invoice...' : formData.invoiceGenerated && formData.invoiceDraft ? 'Invoice Draft Ready' : 'AI Generate 75% Invoice'}
+              </button>
+
+              {invoiceError && (
+                <p className="text-[10px] font-bold text-error uppercase tracking-tight">{invoiceError}</p>
+              )}
+
+              {formData.invoiceGenerated && formData.invoiceDraft && (
+                <div className="space-y-3 pt-2 border-t border-outline-variant/30">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">AI Generated Invoice Details</label>
+                    <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, invoiceDraft: '', invoiceGenerated: false }))} 
+                      className="text-error hover:text-error p-1 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
+                      title="Erase Draft"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  <textarea 
+                    value={formData.invoiceDraft}
+                    onChange={(e) => setFormData(prev => ({ ...prev, invoiceDraft: e.target.value }))}
+                    rows={6}
+                    className="w-full p-3.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none"
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      type="button"
+                      onClick={printInvoice}
+                      className="py-2 bg-surface-container-highest/60 border border-outline text-on-surface hover:bg-surface-container-low hover:text-primary rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1"
+                    >
+                      <Printer size={12} />
+                      <span>Print PDF</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={saveInvoiceToDb}
+                      className="py-2 bg-secondary/20 text-secondary hover:bg-emerald-200 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1"
+                    >
+                      <Check size={12} />
+                      <span>Save to DB</span>
+                    </button>
+                    {formData.invoicePaid ? (
+                      <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2">
+                        <Check size={13} />
+                        <span>Payment Received</span>
+                      </div>
+                    ) : (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                           const updatedData = { ...formData, invoicePaid: true };
+                           setFormData(updatedData);
+                           handleSaveLead(updatedData);
+                           if (onMarkInvoicePaid) {
+                             onMarkInvoicePaid(lead.id);
+                           }
+                        }}
+                        className="py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2"
+                      >
+                        <Check size={12} />
+                        <span>Mark Paid</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 4. Delivery Logistics Dispatch Card for Deals */}
+          {(isDeal || lead.isDeal) && (
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
+                <Truck size={14} className="mr-2 text-primary" />
+                Delivery Logistics
+              </h3>
+
+              <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline space-y-3">
+                {(() => {
+                  const dealJob = (logisticsJobs || []).find(j => j.dealId === lead.id || j.leadId === lead.id || j.leadId === lead.originalLeadId);
+                  if (dealJob) {
+                    return (
+                      <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[9px] font-bold text-on-surface-variant">{dealJob.id}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                            dealJob.status === 'Completed' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' :
+                            dealJob.status === 'In Transit' ? 'text-primary bg-primary/10 border-primary/30 animate-pulse' :
+                            'text-amber-400 bg-amber-500/10 border-amber-500/30'
+                          }`}>
+                            {dealJob.status === 'Completed' ? 'Delivered' : dealJob.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-on-surface truncate">📍 {dealJob.location || formData.deliveryLocation || 'Customer address'}</p>
+                        {dealJob.driver && (
+                          <p className="text-[10px] text-on-surface-variant font-medium">Driver: <strong className="text-on-surface">{dealJob.driver}</strong></p>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-3">
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
+                        Dispatch completed frames to: <strong className="text-on-surface">{formData.deliveryLocation || 'Destination TBD'}</strong>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onCreateLogistics) {
+                            onCreateLogistics({ ...lead, ...formData });
+                          }
+                        }}
+                        className="w-full py-2.5 bg-primary/10 hover:bg-primary text-primary hover:text-on-primary border border-primary/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-sm"
+                      >
+                        <Truck size={14} />
+                        <span>Dispatch Delivery</span>
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+        </DetailModalSidebar>
+
+      </div>
 
       {/* Universal Footer */}
       <DetailModalFooter
