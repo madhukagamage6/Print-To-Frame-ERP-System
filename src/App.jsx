@@ -374,9 +374,13 @@ function App() {
         
         // Check if full 100% payment is complete
         const isPartnerReferral = Boolean(targetLead.partnerId || targetLead.partnerName || targetLead.source === 'Referral');
-        const commRate = Number(targetLead.commissionRate || 0.05);
+        const sqFt = Number(targetLead.totalSqFt || targetLead.sqFt || (targetLead.pricingMetadata?.costSalesAmount ? (targetLead.pricingMetadata.costSalesAmount / 53.5) : 0));
+        let commRate = Number(targetLead.commissionRate || 53.5);
+        if (commRate > 0 && commRate <= 1) commRate = 53.5;
         const dealVal = Number(targetLead.value || 0);
-        const commAmount = dealVal * commRate;
+        const commAmount = targetLead.pricingMetadata?.costSalesAmount 
+          ? Number(targetLead.pricingMetadata.costSalesAmount) 
+          : (sqFt > 0 ? sqFt * commRate : (dealVal / 850) * commRate);
 
         const updatedLeadPayload = {
           invoicePaid: true,
@@ -638,6 +642,7 @@ function App() {
           email: regData.identifier,
           phone: regData.mobile || regData.contactNumber || '',
           type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
+          commissionRate: 53.5,
           totalSqFt: 0,
           paid: 0,
           pending: 0,

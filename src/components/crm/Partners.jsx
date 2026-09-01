@@ -40,7 +40,6 @@ export default function Partners({
   const [partnerTab, setPartnerTab] = useState('referrals'); // 'referrals' | 'documents' | 'marketing'
   const [workspaceTab, setWorkspaceTab] = useState('referrals'); // 'referrals' | 'documents' | 'financial' | 'marketing'
   const [searchQuery, setSearchQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState('all');
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
 
@@ -80,7 +79,7 @@ export default function Partners({
     };
   }, []);
 
-  // New Partner Form State
+  // New Partner Form State (Default commission: 53.50 LKR per sq ft)
   const [newPartner, setNewPartner] = useState({
     name: '',
     partnerId: '',
@@ -89,7 +88,7 @@ export default function Partners({
     phone: '',
     email: '',
     address: 'Colombo, Sri Lanka',
-    commissionRate: 0.05,
+    commissionRate: 53.5, // LKR per SqFt
     brNumber: '',
     bankName: '',
     accountNumber: '',
@@ -113,7 +112,7 @@ export default function Partners({
     return {
       name: currentUser?.name || currentUser?.company || 'Partner Studio',
       partnerId: currentUser?.partnerId || (currentUser?.identifier ? 'P-' + String(currentUser.identifier).slice(0, 4).toUpperCase() : 'P-1001'),
-      commissionRate: 0.05,
+      commissionRate: 53.5,
       type: 'Art & Framing Studio',
       phone: currentUser?.contactNumber || currentUser?.phone || '',
       email: currentUser?.email || currentUser?.identifier || '',
@@ -125,7 +124,7 @@ export default function Partners({
     };
   }, [isPartnerUser, partners, currentUser]);
 
-  // Helper to calculate partner referral stats
+  // Helper to calculate partner referral stats with SqFt rate (53.5 LKR/SqFt)
   const getPartnerReferrals = (partner) => {
     if (!partner) return [];
     const pid = String(partner.partnerId || partner.id || '').toLowerCase();
@@ -141,8 +140,25 @@ export default function Partners({
       const totalPaid = leadInvoices.filter(i => i.status === 'Paid').reduce((s, i) => s + Number(i.amount || 0), 0);
       
       const dealVal = Number(lead.value || totalInvoiced || 0);
-      const commRate = Number(lead.commissionRate || partner.commissionRate || 0.05);
-      const commAmount = dealVal * commRate;
+      const totalSqFt = Number(lead.totalSqFt || lead.sqFt || (lead.pricingMetadata?.costSalesAmount ? (lead.pricingMetadata.costSalesAmount / 53.5) : 0));
+      
+      // Determine commission per SqFt (Default: 53.5 LKR/SqFt)
+      let commRate = Number(lead.commissionRate || partner.commissionRate || 53.5);
+      // Normalize if historical rate was stored as small fraction (e.g. 0.05)
+      if (commRate > 0 && commRate <= 1) {
+        commRate = 53.5;
+      }
+
+      // Calculate commission: exact costSalesAmount from pricing engine or sqFt * rate
+      let commAmount = 0;
+      if (lead.pricingMetadata?.costSalesAmount) {
+        commAmount = Number(lead.pricingMetadata.costSalesAmount);
+      } else if (totalSqFt > 0) {
+        commAmount = totalSqFt * commRate;
+      } else if (dealVal > 0) {
+        // Approximate standard 53.5 rate ratio if sqft unentered
+        commAmount = (dealVal / 850) * commRate;
+      }
 
       let paymentStatus = 'Unpaid';
       if (totalPaid > 0 && totalPaid < dealVal) {
@@ -167,6 +183,7 @@ export default function Partners({
       return {
         ...lead,
         calculatedDealVal: dealVal,
+        calculatedSqFt: totalSqFt,
         calculatedCommRate: commRate,
         calculatedCommAmount: commAmount,
         paymentStatus,
@@ -244,6 +261,7 @@ export default function Partners({
     const partnerPayload = {
       ...newPartner,
       partnerId,
+      commissionRate: Number(newPartner.commissionRate) || 53.5,
       createdAt: new Date().toISOString(),
     };
 
@@ -261,7 +279,7 @@ export default function Partners({
         phone: '',
         email: '',
         address: 'Colombo, Sri Lanka',
-        commissionRate: 0.05,
+        commissionRate: 53.5,
         brNumber: '',
         bankName: '',
         accountNumber: '',
@@ -281,13 +299,17 @@ export default function Partners({
     if (!editFormData || !selectedPartner) return;
     setIsSavingPartner(true);
     try {
+      const payload = {
+        ...editFormData,
+        commissionRate: Number(editFormData.commissionRate) || 53.5,
+      };
       const docId = selectedPartner._firestoreId || selectedPartner.id || selectedPartner.partnerId;
-      await updateDocument(COLLECTIONS.PARTNERS, docId, editFormData);
+      await updateDocument(COLLECTIONS.PARTNERS, docId, payload);
 
       if (setPartners) {
-        setPartners(prev => prev.map(p => (p.id === docId || p.partnerId === selectedPartner.partnerId) ? { ...p, ...editFormData } : p));
+        setPartners(prev => prev.map(p => (p.id === docId || p.partnerId === selectedPartner.partnerId) ? { ...p, ...payload } : p));
       }
-      setSelectedPartner(prev => ({ ...prev, ...editFormData }));
+      setSelectedPartner(prev => ({ ...prev, ...payload }));
       setShowEditModal(false);
       toast.success('Partner details updated successfully');
     } catch (err) {
@@ -382,7 +404,7 @@ export default function Partners({
         { key: 'contactPerson', label: 'Contact Person' },
         { key: 'phone', label: 'Phone' },
         { key: 'email', label: 'Email' },
-        { key: 'commissionRate', label: 'Commission Rate' },
+        { key: 'commissionRate', label: 'Commission Rate (LKR/SqFt)' },
         { key: 'brNumber', label: 'BR Number' },
         { key: 'bankName', label: 'Bank Name' },
         { key: 'accountNumber', label: 'Account Number' },
@@ -429,7 +451,7 @@ export default function Partners({
     const partnerQr = publicQrUrl(currentPartner);
     const totalAccumulatedComm = myReferralLeads.reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
     const eligiblePayoutComm = myReferralLeads.filter(l => l.commState === 'Eligible for Payout').reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
-    const inProductionCount = myReferralLeads.filter(l => l.commState === 'Accrued (In Production)').length;
+    const partnerCommRate = Number(currentPartner?.commissionRate) > 1 ? Number(currentPartner.commissionRate) : 53.5;
 
     return (
       <div className="h-[calc(100vh-140px)] flex flex-col pb-6 space-y-4">
@@ -439,9 +461,9 @@ export default function Partners({
           subtitle="Your personal partner workspace, referral tracking, agreements vault, and counter QR flyers."
           metrics={[
             { label: "Partner ID", value: currentPartner?.partnerId || 'P-1001', color: "cyan" },
-            { label: "Commission Rate", value: `${((Number(currentPartner?.commissionRate) || 0.05) * 100).toFixed(0)}%`, color: "amber" },
-            { label: "Eligible Payout", value: `LKR ${eligiblePayoutComm.toLocaleString()}`, color: "emerald" },
-            { label: "Total Accumulated", value: `LKR ${totalAccumulatedComm.toLocaleString()}`, color: "cyan" }
+            { label: "Commission Rate", value: `LKR ${partnerCommRate.toFixed(2)} / SqFt`, color: "amber" },
+            { label: "Eligible Payout", value: `LKR ${eligiblePayoutComm.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: "emerald" },
+            { label: "Total Accumulated", value: `LKR ${totalAccumulatedComm.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: "cyan" }
           ]}
           actions={
             <div className="flex items-center gap-2">
@@ -511,7 +533,7 @@ export default function Partners({
                         <th className="py-3 px-4">Date Referred</th>
                         <th className="py-3 px-4">Framing Scope</th>
                         <th className="py-3 px-4 text-right">Deal Value</th>
-                        <th className="py-3 px-4 text-right">Commission</th>
+                        <th className="py-3 px-4 text-right">Commission (LKR/SqFt)</th>
                         <th className="py-3 px-4">Client Payment Status</th>
                         <th className="py-3 px-4">Commission Status</th>
                       </tr>
@@ -550,7 +572,7 @@ export default function Partners({
                                 LKR {lead.calculatedCommAmount > 0 ? lead.calculatedCommAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
                               </div>
                               <div className="text-[9px] text-on-surface-variant font-mono">
-                                ({(lead.calculatedCommRate * 100).toFixed(1)}%)
+                                (LKR {Number(lead.calculatedCommRate || 53.5).toFixed(2)}/SqFt{lead.calculatedSqFt > 0 ? ` · ${lead.calculatedSqFt} SqFt` : ''})
                               </div>
                             </td>
                             <td className="py-3 px-4">
@@ -585,7 +607,7 @@ export default function Partners({
                           <td colSpan={7} className="py-12 text-center text-on-surface-variant text-xs">
                             <Layers size={36} className="mx-auto mb-2 opacity-25 text-on-surface-variant" />
                             <p className="font-bold text-on-surface">No referrals yet</p>
-                            <p className="text-[11px] text-on-surface-variant mt-1">Share your QR flyer or referral link with clients to start earning commissions!</p>
+                            <p className="text-[11px] text-on-surface-variant mt-1">Share your QR flyer or referral link with clients to start earning LKR 53.50/SqFt commissions!</p>
                           </td>
                         </tr>
                       )}
@@ -619,7 +641,7 @@ export default function Partners({
                   {
                     key: 'frameworkAgreement',
                     title: 'Signed Partner Framework Agreement',
-                    desc: 'Bilateral referral terms, commission schedule, and monthly settlement agreement.',
+                    desc: 'Bilateral referral terms, commission schedule (LKR 53.50/SqFt), and monthly settlements.',
                     doc: currentPartner?.documents?.frameworkAgreement,
                   },
                   {
@@ -692,7 +714,7 @@ export default function Partners({
                     <QrCode size={18} className="text-primary" /> Your Dedicated Referral Link
                   </h3>
                   <p className="text-xs text-on-surface-variant mt-1">
-                    Share this link with your customers or on your studio website. Clients get an exclusive 15% discount, and you get credit automatically!
+                    Share this link with your customers or on your studio website. Clients get an exclusive 15% discount, and you get LKR 53.50/SqFt credit automatically!
                   </p>
                 </div>
 
@@ -938,7 +960,7 @@ export default function Partners({
                             contactPerson: app.contactPerson || '',
                             phone: app.phone || '',
                             email: app.email || '',
-                            commissionRate: 0.05,
+                            commissionRate: 53.5, // 53.50 LKR/SqFt
                             type: 'Art & Framing Studio',
                             status: 'Active',
                             createdAt: new Date().toISOString(),
@@ -946,11 +968,11 @@ export default function Partners({
                           await addDocument(COLLECTIONS.PARTNERS, newP, newP.partnerId);
                           await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', app._firestoreId || app.id, { status: 'Approved' });
                           if (setPartners) setPartners(prev => [...prev, newP]);
-                          toast.success(`Approved ${newP.name} as Official Partner!`);
+                          toast.success(`Approved ${newP.name} as Official Partner (LKR 53.50/SqFt Comm)!`);
                         }}
                         className="px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-sm hover:bg-primary/90 flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Check size={13} /> Approve (5% Comm)
+                        <Check size={13} /> Approve (LKR 53.50/SqFt Comm)
                       </button>
                     </div>
                   </div>
@@ -1046,8 +1068,8 @@ export default function Partners({
                         Bank: <strong className="text-on-surface">{p.bankName || 'Not Set'}</strong> · A/C: <strong className="text-on-surface">{p.accountNumber || 'Not Set'}</strong> · Branch: {p.branchName || 'N/A'}
                       </p>
                       <div className="flex items-center gap-3 text-xs mt-1">
-                        <span className="text-emerald-400 font-mono font-bold">Eligible: LKR {eligiblePayout.toLocaleString()}</span>
-                        <span className="text-on-surface-variant font-mono">Settled: LKR {totalSettled.toLocaleString()}</span>
+                        <span className="text-emerald-400 font-mono font-bold">Eligible: LKR {eligiblePayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-on-surface-variant font-mono">Settled: LKR {totalSettled.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
@@ -1091,14 +1113,14 @@ export default function Partners({
                   filteredPartners.map(partner => {
                     const isSelected = (selectedPartner?.partnerId === partner.partnerId) || (selectedPartner?.id === partner.id);
                     const partnerLeads = getPartnerReferrals(partner);
-                    const partnerComm = partnerLeads.reduce((s, l) => s + (l.calculatedCommAmount || 0), 0);
+                    const partnerCommRate = Number(partner.commissionRate) > 1 ? Number(partner.commissionRate) : 53.5;
 
                     return (
                       <div
                         key={partner._firestoreId || partner.id || partner.partnerId}
                         onClick={() => {
                           setSelectedPartner(partner);
-                          setEditFormData({ ...partner });
+                          setEditFormData({ ...partner, commissionRate: partnerCommRate });
                           setMobileView('detail');
                         }}
                         className={`p-4 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
@@ -1128,7 +1150,7 @@ export default function Partners({
 
                             <div className="flex items-center gap-2 mt-1.5">
                               <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-mono">
-                                {((Number(partner.commissionRate) || 0.05) * 100).toFixed(0)}% Comm
+                                LKR {partnerCommRate.toFixed(2)}/SqFt
                               </span>
                               <span className="text-[9px] font-semibold text-on-surface-variant font-mono">
                                 {partnerLeads.length} referral{partnerLeads.length === 1 ? '' : 's'}
@@ -1184,6 +1206,9 @@ export default function Partners({
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             {selectedPartner.status || 'Active'}
                           </span>
+                          <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                            LKR {Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5).toFixed(2)}/SqFt
+                          </span>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant mt-1">
@@ -1221,7 +1246,10 @@ export default function Partners({
                       </button>
                       <button
                         onClick={() => {
-                          setEditFormData({ ...selectedPartner });
+                          setEditFormData({ 
+                            ...selectedPartner, 
+                            commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
+                          });
                           setShowEditModal(true);
                         }}
                         className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -1295,7 +1323,7 @@ export default function Partners({
                                 <th className="py-3 px-4">Client Name</th>
                                 <th className="py-3 px-4">Date</th>
                                 <th className="py-3 px-4 text-right">Deal Value</th>
-                                <th className="py-3 px-4 text-right">Commission</th>
+                                <th className="py-3 px-4 text-right">Commission (LKR/SqFt)</th>
                                 <th className="py-3 px-4">Payment</th>
                                 <th className="py-3 px-4">Commission Status</th>
                               </tr>
@@ -1317,6 +1345,9 @@ export default function Partners({
                                     <td className="py-3 px-4 text-right">
                                       <div className="font-mono font-black text-primary text-xs">
                                         LKR {lead.calculatedCommAmount > 0 ? lead.calculatedCommAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
+                                      </div>
+                                      <div className="text-[9px] text-on-surface-variant font-mono">
+                                        (LKR {Number(lead.calculatedCommRate || 53.5).toFixed(2)}/SqFt{lead.calculatedSqFt > 0 ? ` · ${lead.calculatedSqFt} SqFt` : ''})
                                       </div>
                                     </td>
                                     <td className="py-3 px-4">
@@ -1371,7 +1402,7 @@ export default function Partners({
                           {
                             key: 'frameworkAgreement',
                             title: 'Signed Partner Framework Agreement',
-                            desc: 'Bilateral referral terms, commission schedule, and monthly settlement agreement.',
+                            desc: 'Bilateral referral terms, commission schedule (LKR 53.50/SqFt), and monthly settlements.',
                             doc: selectedPartner?.documents?.frameworkAgreement,
                           },
                           {
@@ -1462,7 +1493,10 @@ export default function Partners({
                         <div className="pt-2">
                           <button
                             onClick={() => {
-                              setEditFormData({ ...selectedPartner });
+                              setEditFormData({ 
+                                ...selectedPartner, 
+                                commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
+                              });
                               setShowEditModal(true);
                             }}
                             className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 transition-colors"
@@ -1589,14 +1623,14 @@ export default function Partners({
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Commission Rate (%)</label>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Commission Rate (LKR / SqFt)</label>
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
-                  max="0.5"
+                  step="0.5"
+                  min="0"
+                  max="1000"
                   value={newPartner.commissionRate}
-                  onChange={(e) => setNewPartner(p => ({ ...p, commissionRate: Number(e.target.value) || 0.05 }))}
+                  onChange={(e) => setNewPartner(p => ({ ...p, commissionRate: Number(e.target.value) || 53.5 }))}
                   className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono font-bold"
                 />
               </div>
@@ -1679,14 +1713,14 @@ export default function Partners({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Commission Rate</label>
+                  <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Commission Rate (LKR / SqFt)</label>
                   <input
                     type="number"
-                    step="0.01"
-                    min="0.01"
-                    max="0.5"
-                    value={editFormData.commissionRate || 0.05}
-                    onChange={(e) => setEditFormData(p => ({ ...p, commissionRate: Number(e.target.value) || 0.05 }))}
+                    step="0.5"
+                    min="0"
+                    max="1000"
+                    value={editFormData.commissionRate || 53.5}
+                    onChange={(e) => setEditFormData(p => ({ ...p, commissionRate: Number(e.target.value) || 53.5 }))}
                     className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono font-bold"
                   />
                 </div>

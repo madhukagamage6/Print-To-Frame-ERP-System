@@ -157,7 +157,7 @@ export default function PartnerRegistration() {
         },
         notes: formData.notes,
         status: 'Pending',
-        defaultCommissionRate: 0.05,
+        defaultCommissionRate: 53.5, // 53.50 LKR per SqFt
         submittedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
