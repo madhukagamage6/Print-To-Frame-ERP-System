@@ -82,15 +82,15 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
           </p>
 
           {(errorMsg || localError) && (
-            <div className="bg-error-container/30 border border-error-container text-error text-sm p-3 rounded-lg mb-4 flex items-center">
-              <CircleAlert size={16} className="mr-2 flex-shrink-0" />
+            <div role="alert" aria-live="polite" className="bg-error-container/30 border border-error-container text-error text-sm p-3 rounded-lg mb-4 flex items-center">
+              <CircleAlert size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
               <span>{errorMsg || localError}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="bg-secondary/20 border border-secondary/40 text-secondary text-sm p-3 rounded-lg mb-4 flex items-center">
-              <CircleCheckBig size={16} className="mr-2 flex-shrink-0" />
+            <div role="status" aria-live="polite" className="bg-secondary/20 border border-secondary/40 text-secondary text-sm p-3 rounded-lg mb-4 flex items-center">
+              <CircleCheckBig size={16} className="mr-2 flex-shrink-0" aria-hidden="true" />
               <span>{successMsg}</span>
             </div>
           )}
@@ -100,13 +100,14 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
             {!isLoginView && (
               <div className="space-y-4 animate-fadeIn">
                 <div>
-                  <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Full Name</label>
+                  <label htmlFor="login-name" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Full Name</label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                     <input
+                      id="login-name"
                       type="text"
                       placeholder="Your Name"
-                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                     />
@@ -114,13 +115,14 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
                 </div>
                 
                 <div>
-                  <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Mobile Number</label>
+                  <label htmlFor="login-mobile" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Mobile Number</label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                     <input
+                      id="login-mobile"
                       type="tel"
                       placeholder="+94 7X XXX XXXX"
-                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                       value={form.mobile}
                       onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                     />
@@ -128,11 +130,12 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
                 </div>
 
                 <div>
-                  <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Requested Access Role</label>
+                  <label htmlFor="login-role" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Requested Access Role</label>
                   <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                     <select
-                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                      id="login-role"
+                      className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                       value={form.role}
                       onChange={(e) => setForm({ ...form, role: e.target.value })}
                     >
@@ -144,13 +147,14 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
 
                 {form.role === 'Business Client' && (
                   <div>
-                    <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Company / Enterprise Name *</label>
+                    <label htmlFor="login-company" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Company / Enterprise Name *</label>
                     <div className="relative">
-                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                       <input
+                        id="login-company"
                         type="text"
                         placeholder="e.g. Apex Architects Pvt Ltd"
-                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                         value={form.company}
                         onChange={(e) => setForm({ ...form, company: e.target.value })}
                         required
@@ -161,13 +165,14 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
 
                 {form.role === 'Partner' && (
                   <div>
-                    <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Specialization / Workshop Focus</label>
+                    <label htmlFor="login-specialty" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Specialization / Workshop Focus</label>
                     <div className="relative">
-                      <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                      <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                       <input
+                        id="login-specialty"
                         type="text"
                         placeholder="e.g. Canvas Framing, Gold Leafing, Acrylic"
-                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                        className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                         value={form.specialty}
                         onChange={(e) => setForm({ ...form, specialty: e.target.value })}
                       />
@@ -179,13 +184,15 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
 
             {/* Always visible fields */}
             <div>
-              <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Email or Mobile</label>
+              <label htmlFor="login-identifier" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Email or Mobile</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                 <input
+                  id="login-identifier"
                   type="text"
                   placeholder="admin or email..."
-                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                  autoComplete="username"
+                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                   value={form.identifier}
                   onChange={(e) => setForm({ ...form, identifier: e.target.value })}
                 />
@@ -193,13 +200,15 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
             </div>
 
             <div>
-              <label className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1">Password</label>
+              <label htmlFor="login-password" className="font-sans text-xs text-on-surface-variant block mb-1.5 ml-1 font-medium">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-outline/60 pointer-events-none" aria-hidden="true" />
                 <input
+                  id="login-password"
                   type="password"
                   placeholder="********"
-                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary-container transition-all"
+                  autoComplete={isLoginView ? "current-password" : "new-password"}
+                  className="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary focus-visible:ring-2 focus-visible:ring-primary transition-all"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                 />
@@ -209,7 +218,7 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full bg-primary-fixed/20 border border-primary-fixed/40 text-primary-container hover:bg-primary-fixed/30 py-2.5 rounded-lg text-sm font-semibold transition-all mt-6 shadow-[0_0_15px_rgba(0,218,243,0.1)] hover:shadow-[0_0_20px_rgba(0,218,243,0.25)] disabled:opacity-50"
+              className="w-full bg-primary-fixed/20 border border-primary-fixed/40 text-primary-container hover:bg-primary-fixed/30 py-2.5 rounded-lg text-sm font-semibold transition-all mt-6 shadow-[0_0_15px_rgba(0,218,243,0.1)] hover:shadow-[0_0_20px_rgba(0,218,243,0.25)] focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 cursor-pointer"
             >
               {isLoggingIn ? "Please wait..." : isLoginView ? "Login" : "Request Access"}
             </button>
