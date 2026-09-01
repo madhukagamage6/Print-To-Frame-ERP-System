@@ -263,9 +263,28 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
 
         </div>
         
-        <p className="mt-8 font-sans text-xs text-on-surface-variant/60">
-          © 2024 Print To Frame Pvt Ltd. All rights reserved.
-        </p>
+        <div className="mt-8 flex flex-col items-center gap-2 font-sans text-xs text-on-surface-variant/60">
+          <div className="flex items-center gap-3">
+            <a 
+              href="https://www.print2frame.xyz/privacy-policy" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-primary transition-colors underline"
+            >
+              Privacy Policy
+            </a>
+            <span>•</span>
+            <a 
+              href="https://www.print2frame.xyz/terms-of-service" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="hover:text-primary transition-colors underline"
+            >
+              Terms of Service
+            </a>
+          </div>
+          <p>© 2026 Print To Frame Pvt Ltd. All rights reserved.</p>
+        </div>
         </div>
       </div>
     </div>

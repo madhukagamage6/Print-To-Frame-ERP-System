@@ -39,10 +39,10 @@ export const storage = getStorage(app);
 
 // Google Workspace Scopes
 const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/drive.file');
 provider.addScope('https://www.googleapis.com/auth/drive.readonly');
 provider.addScope('https://www.googleapis.com/auth/contacts.readonly');
-provider.addScope('https://www.googleapis.com/auth/user.emails.read');
+provider.addScope('https://www.googleapis.com/auth/userinfo.email');
+provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
 
 let isSigningIn = false;
 let cachedAccessToken = null;
