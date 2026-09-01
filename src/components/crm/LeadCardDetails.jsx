@@ -1476,13 +1476,13 @@ export default function LeadCardDetails({
 
                 {/* OPTIMIZATION 3: Lead Source and Agent Selection triggers */}
                 <div>
-                  <label className="block text-xs uppercase font-bold text-on-surface mb-1.5 tracking-wider">Lead Source</label>
+                  <label className="block text-[9px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">Lead Source</label>
                   <select 
                     name="source"
                     value={formData.source}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-surface-container-highest/60 border border-outline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                    className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
                     <option value="Manual">Manual Entry</option>
                     <option value="Referral">Referral (Commission Agent)</option>
@@ -1501,12 +1501,18 @@ export default function LeadCardDetails({
                     value={formData.agentId}
                     onChange={handleInputChange}
                     disabled={formData.source !== 'Referral'}
-                    className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] ${formData.source === 'Referral' ? 'bg-primary/10/50 border-primary/30 font-semibold text-on-surface' : 'bg-surface-container border-outline-variant text-on-surface-variant'}`}
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                    className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em] [&>option]:bg-surface-container-high [&>option]:text-on-surface ${
+                      formData.source === 'Referral'
+                        ? 'bg-surface-container-low border-primary/50 font-bold text-on-surface shadow-[0_0_15px_rgba(0,218,243,0.1)]'
+                        : 'bg-surface-container/40 border-outline-variant/60 text-on-surface-variant cursor-not-allowed opacity-60'
+                    }`}
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2300daf3'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   >
-                    <option value="">Select Agent...</option>
+                    <option value="">Select Agent / Partner...</option>
                     {partners.map(p => (
-                      <option key={p.partnerId} value={p.partnerId}>{p.name} ({p.partnerId} - {p.type})</option>
+                      <option key={p.partnerId || p.id} value={p.partnerId || p.id}>
+                        {p.name} ({p.partnerId || p.id} - {p.type || 'Partner'})
+                      </option>
                     ))}
                   </select>
                 </div>

@@ -43,7 +43,7 @@ const BreakdownRow = ({
 }) => (
   <tr
     className={`border-b border-outline-variant/50 transition-colors ${isTotal ? "bg-surface-container-low" : ""} ${
-      isHighlight ? "bg-primary/10/60" : ""
+      isHighlight ? "bg-primary/10" : ""
     }`}
   >
     <td className="px-4 py-3">
