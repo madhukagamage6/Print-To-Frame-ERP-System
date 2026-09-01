@@ -4,7 +4,7 @@ import {
   ExternalLink, Filter, Clock, Sparkles, User, ArrowUpRight 
 } from 'lucide-react';
 import { useMessaging } from '../../context/MessagingContext';
-import { PageHeader, FilterBar, StatusBadge, UserAvatar } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, UserAvatar, TwoToneIcon } from '../common/ui';
 
 export default function NotificationsView({ notifications = [], setNotifications, users = [], setActiveTab }) {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'SYSTEM' | 'MESSAGES'
@@ -125,7 +125,7 @@ export default function NotificationsView({ notifications = [], setNotifications
                   className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-surface-container-high/40 transition-colors group"
                 >
                   <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                    {/* Dynamic Avatar / Icon */}
+                    {/* Dynamic Avatar / Two-Tone Icon */}
                     {isMessage ? (
                       <UserAvatar 
                         user={item.senderUser}
@@ -135,15 +135,10 @@ export default function NotificationsView({ notifications = [], setNotifications
                         size="md"
                       />
                     ) : (
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-                        item.type === 'error' 
-                          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                          : isOrder 
-                          ? 'bg-primary/15 text-primary border-primary/30'
-                          : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                      }`}>
-                        {item.type === 'error' ? <AlertCircle size={18} /> : isOrder ? <Sparkles size={18} /> : <Info size={18} />}
-                      </div>
+                      <TwoToneIcon 
+                        type={item.type || (isOrder ? 'order' : 'system')} 
+                        size="md" 
+                      />
                     )}
 
                     <div className="min-w-0">

@@ -5,7 +5,7 @@ import {
   Database, HardDrive, ShieldCheck, Clock, ArrowUpRight, Layers
 } from 'lucide-react';
 import PermissionsManager from './PermissionsManager';
-import { PageHeader, FilterBar, StatusBadge } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, TwoToneIcon } from '../common/ui';
 import { subscribeToCollection, COLLECTIONS } from '../../services/firestoreSync';
 
 export default function AdminPanel({ dataStore }) {
@@ -97,24 +97,19 @@ export default function AdminPanel({ dataStore }) {
           {/* Top 4 Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { title: "Total Pipeline Value", value: `LKR ${totalPipeline.toLocaleString()}`, icon: TrendingUp, color: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30" },
-              { title: "Invoiced Receivables", value: `LKR ${invoicedGap.toLocaleString()}`, icon: DollarSign, color: "bg-purple-500/15 text-purple-400 border-purple-500/30" },
-              { title: "Completed SqFt Output", value: `${deliveredVolume.toLocaleString()} SqFt`, icon: Activity, color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-              { title: "Framing Partner Accruals", value: `LKR ${partnerOwed.toLocaleString()}`, icon: Building, color: "bg-amber-500/15 text-amber-400 border-amber-500/30" }
-            ].map((stat, idx) => {
-              const Icon = stat.icon;
-              return (
-                <div key={idx} className="p-5 bg-surface-container/60 rounded-2xl border border-outline-variant/60 shadow-sm flex items-center gap-4">
-                  <div className={`p-3 rounded-xl border ${stat.color}`}>
-                    <Icon size={22} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{stat.title}</p>
-                    <p className="text-base sm:text-lg font-black text-on-surface font-mono mt-0.5">{stat.value}</p>
-                  </div>
+              { title: "Total Pipeline Value", value: `LKR ${totalPipeline.toLocaleString()}`, type: "lead" },
+              { title: "Invoiced Receivables", value: `LKR ${invoicedGap.toLocaleString()}`, type: "invoice" },
+              { title: "Completed SqFt Output", value: `${deliveredVolume.toLocaleString()} SqFt`, type: "status" },
+              { title: "Framing Partner Accruals", value: `LKR ${partnerOwed.toLocaleString()}`, type: "payment" }
+            ].map((stat, idx) => (
+              <div key={idx} className="p-5 bg-surface-container/60 rounded-2xl border border-outline-variant/60 shadow-sm flex items-center gap-4">
+                <TwoToneIcon type={stat.type} size="lg" />
+                <div>
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{stat.title}</p>
+                  <p className="text-base sm:text-lg font-black text-on-surface font-mono mt-0.5">{stat.value}</p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           {/* Symmetrical 2-Panel Breakdown */}
