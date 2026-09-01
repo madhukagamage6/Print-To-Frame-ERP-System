@@ -304,29 +304,32 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
                     <>
                       <a
                         href={`tel:${activeUser.contactNumber.replace(/[^0-9+]/g, '')}`}
-                        className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-primary"
                         title="Call Teammate"
+                        aria-label={`Call ${activeUser.name}`}
                       >
-                        <PhoneCall size={12} className="text-primary" /> Call
+                        <PhoneCall size={12} className="text-primary" aria-hidden="true" /> Call
                       </a>
                       <a
                         href={`https://wa.me/${activeUser.contactNumber.replace(/[^0-9]/g, '')}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                        className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-400"
                         title="Open WhatsApp Chat"
+                        aria-label={`Open WhatsApp chat with ${activeUser.name}`}
                       >
-                        <MessageCircle size={13} /> WhatsApp
+                        <MessageCircle size={13} aria-hidden="true" /> WhatsApp
                       </a>
                     </>
                   )}
                   <button
                     type="button"
                     onClick={() => setIsEmailModalOpen(true)}
-                    className="px-3 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                    className="px-3 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-primary"
                     title="Open Email Template Dispatcher & Gmail Web Compose"
+                    aria-label={`Open email template dispatcher for ${activeUser.name}`}
                   >
-                    <Mail size={13} /> Email Dispatcher
+                    <Mail size={13} aria-hidden="true" /> Email Dispatcher
                   </button>
                 </div>
               </div>
@@ -335,10 +338,13 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
               <div 
                 ref={chatContainerRef}
                 className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-3"
+                role="log"
+                aria-live="polite"
+                aria-label={`Conversation with ${activeUser.name}`}
               >
                 {activeChannelMessages.length === 0 ? (
                   <div className="py-16 text-center text-on-surface-variant text-xs">
-                    <MessageSquare size={36} className="mx-auto mb-2 opacity-25" />
+                    <MessageSquare size={36} className="mx-auto mb-2 opacity-25" aria-hidden="true" />
                     <p className="font-bold text-on-surface">Start a conversation with {activeUser.name}</p>
                     <p className="text-[11px] text-on-surface-variant mt-0.5">Direct messages are encrypted and synchronized across all devices in real time.</p>
                   </div>
@@ -367,7 +373,7 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
 
                         <div className="flex items-center gap-1.5 text-[9px] text-on-surface-variant font-mono mt-1 px-1">
                           <span>{new Date(Number(msg.timestamp) || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          {isMe && <CheckCheck size={11} className="text-primary" />}
+                          {isMe && <CheckCheck size={11} className="text-primary" aria-hidden="true" />}
                         </div>
                       </div>
                     );
@@ -377,7 +383,7 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
 
               {/* Typing indicator */}
               {typingState[activeUser.identifier] && (
-                <div className="px-5 py-1 text-[10px] text-primary font-bold italic animate-pulse">
+                <div role="status" aria-live="polite" className="px-5 py-1 text-[10px] text-primary font-bold italic animate-pulse">
                   {activeUser.name} is typing...
                 </div>
               )}
@@ -390,20 +396,22 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
                 <input
                   type="text"
                   placeholder={`Message ${activeUser.name}...`}
+                  aria-label={`Message ${activeUser.name}`}
                   value={inputText}
                   onChange={(e) => {
                     setInputText(e.target.value);
                     sendTypingIndicator(e.target.value.length > 0);
                   }}
-                  className="flex-1 bg-surface-container border border-outline-variant/60 rounded-xl px-4 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/50 outline-none"
+                  className="flex-1 bg-surface-container border border-outline-variant/60 rounded-xl px-4 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/50 focus-visible:ring-2 focus-visible:ring-primary outline-none"
                 />
 
                 <button
                   type="submit"
                   disabled={!inputText.trim()}
-                  className="p-2.5 bg-primary text-on-primary rounded-xl font-bold shadow-md hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  aria-label="Send message"
+                  className="p-2.5 bg-primary text-on-primary rounded-xl font-bold shadow-md hover:bg-primary/90 transition-all focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  <Send size={15} />
+                  <Send size={15} aria-hidden="true" />
                 </button>
               </form>
 
