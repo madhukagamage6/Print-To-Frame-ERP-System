@@ -38,23 +38,25 @@ const PipelineBar = ({ title, stages, data, getStageColor, onStageClick }) => {
         <span>{title}</span>
         <span className="text-[10px] text-primary font-mono lowercase">click to inspect</span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5" role="group" aria-label={`${title} progression`}>
         {stages.map((stage) => {
           const count = data.filter((item) => (item.stage || item.status) === stage).length;
           return (
-            <div
+            <button
               key={stage}
-              className={`flex-1 py-2 px-1.5 rounded-xl text-center cursor-pointer transition-all hover:opacity-90 hover:scale-[1.02] border border-outline/30 ${getStageColor(
+              type="button"
+              className={`flex-1 py-2 px-1.5 rounded-xl text-center cursor-pointer transition-all hover:opacity-90 hover:scale-[1.02] border border-outline/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${getStageColor(
                 stage
               )}`}
               title={`${stage}: ${count} item${count !== 1 ? "s" : ""}`}
+              aria-label={`${stage}: ${count} item${count !== 1 ? "s" : ""}, click to view`}
               onClick={onStageClick}
             >
               <div className="text-base font-extrabold leading-none">{count}</div>
               <div className="text-[8px] uppercase font-bold tracking-wider opacity-85 truncate mt-1 leading-none">
                 {stage}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -397,15 +399,18 @@ export default function Dashboard({
                         {lead.phone && (
                           <a
                             href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`}
-                            className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 border border-emerald-500/20"
+                            className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 border border-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-400"
                             title="Call Lead"
+                            aria-label={`Call lead ${lead.name || lead.phone}`}
                           >
-                            <PhoneCall size={12} />
+                            <PhoneCall size={12} aria-hidden="true" />
                           </a>
                         )}
                         <button
+                          type="button"
                           onClick={() => setActiveTab && setActiveTab('leads')}
-                          className="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[10px] font-bold rounded-lg border border-outline-variant"
+                          aria-label={`Inspect lead ${lead.name || 'record'}`}
+                          className="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[10px] font-bold rounded-lg border border-outline-variant focus-visible:ring-2 focus-visible:ring-primary"
                         >
                           Inspect
                         </button>
@@ -426,7 +431,7 @@ export default function Dashboard({
             <div className="bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
               <div className="p-3.5 px-4 bg-surface-container-low/80 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                 <span className="flex items-center gap-2">
-                  <Kanban size={14} className="text-primary" />
+                  <Kanban size={14} className="text-primary" aria-hidden="true" />
                   Deals in Fabrication & Assembly ({dealsActionQueue.length})
                 </span>
                 <button onClick={() => setActiveTab && setActiveTab('pipeline')} className="text-[10px] text-primary hover:underline lowercase font-medium">
@@ -451,8 +456,10 @@ export default function Dashboard({
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => setActiveTab && setActiveTab('pipeline')}
-                        className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-lg border border-primary/30"
+                        aria-label={`Advance stage for deal ${deal.name}`}
+                        className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-lg border border-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         Advance Stage
                       </button>
@@ -472,7 +479,7 @@ export default function Dashboard({
             <div className="bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
               <div className="p-3.5 px-4 bg-surface-container-low/80 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                 <span className="flex items-center gap-2">
-                  <DollarSign size={14} className="text-primary" />
+                  <DollarSign size={14} className="text-primary" aria-hidden="true" />
                   Unpaid Invoice Receivables ({financeActionQueue.length})
                 </span>
                 <button onClick={() => setActiveTab && setActiveTab('invoices')} className="text-[10px] text-primary hover:underline lowercase font-medium">
@@ -495,8 +502,10 @@ export default function Dashboard({
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => setActiveTab && setActiveTab('invoices')}
-                        className="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[10px] font-bold rounded-lg border border-outline-variant"
+                        aria-label={`Inspect invoice ${inv.id} for ${inv.customerName || 'customer'}`}
+                        className="px-2.5 py-1 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[10px] font-bold rounded-lg border border-outline-variant focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         Inspect
                       </button>
