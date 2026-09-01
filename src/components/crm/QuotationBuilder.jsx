@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Sparkles, FileText, Copy, ChevronRight, Check, X, Layers } from 'lucide-react';
+import { Plus, Trash2, Sparkles, FileText, Copy, ChevronRight, Check, X, Layers, HardDrive } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { generateStructuredQuotation } from '../../services/gemini';
 import { addDocument, updateDocument, COLLECTIONS } from '../../services/firestoreSync';
+import GoogleDrivePickerModal from '../common/GoogleDrivePickerModal';
 
 const STATUS_STYLES = {
   Draft: 'text-on-surface-variant bg-surface-container-high border-outline-variant',
@@ -47,6 +48,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
   const [notes, setNotes] = useState(latestQuote?.notes || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showDriveModal, setShowDriveModal] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState([]);
 
   // Sync if latestQuote changes and not dirty
   React.useEffect(() => {
@@ -537,7 +540,42 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
             <Plus size={13} /> Create Structured Line-Item Quotation
           </button>
         )}
+
+        {/* Google Drive Attachments */}
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowDriveModal(true)}
+            className="w-full py-2 bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
+          >
+            <HardDrive size={14} className="text-primary" />
+            <span>{attachedFiles.length > 0 ? `${attachedFiles.length} Google Drive File(s) Attached` : 'Attach Google Drive Art File / Proof'}</span>
+          </button>
+          {attachedFiles.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {attachedFiles.map(file => (
+                <div key={file.id} className="flex items-center justify-between px-3 py-1.5 bg-surface-container-low rounded-lg text-xs border border-outline-variant/50">
+                  <span className="truncate text-on-surface font-medium">{file.name}</span>
+                  <button onClick={() => setAttachedFiles(p => p.filter(f => f.id !== file.id))} className="text-rose-400 hover:text-rose-500">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      <GoogleDrivePickerModal
+        isOpen={showDriveModal}
+        onClose={() => setShowDriveModal(false)}
+        onSelectFile={(file) => {
+          if (!attachedFiles.some(f => f.id === file.id)) {
+            setAttachedFiles(prev => [...prev, file]);
+            toast.success(`Attached "${file.name}" from Google Drive`);
+          }
+        }}
+      />
     </div>
   );
 }

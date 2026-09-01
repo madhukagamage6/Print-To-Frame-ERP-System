@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { 
-  Search, User, Building, Phone, Mail, Clock, FileText, Trash2, 
+  Search, User, Users, Building, Phone, Mail, Clock, FileText, Trash2, 
   Sparkles, MessageSquare, Check, X, DollarSign, MapPin, Plus, 
   ChevronRight, Calendar, ExternalLink, Copy, ShieldCheck, Download, AlertTriangle, Camera, ArrowLeft
 } from 'lucide-react';
@@ -12,6 +12,8 @@ import ActivityTimeline from '../common/ui/ActivityTimeline';
 import { addDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { exportToCsv } from '../../utils/csvExport';
 import { findCustomerDuplicates } from '../../utils/stringMatch';
+import ContactSyncModal from './ContactSyncModal';
+import AddressPickerModal from '../common/AddressPickerModal';
 
 export default function Customers({ customers = [], setCustomers, dataStore, currentUser }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,7 +21,36 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showContactSync, setShowContactSync] = useState(false);
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
   const photoInputRef = useRef(null);
+
+  const handleImportContacts = async (importedList) => {
+    const newCustomers = [...customers];
+    for (const c of importedList) {
+      if (!newCustomers.some(existing => existing.email === c.email || existing.phone === c.phone)) {
+        const newCust = {
+          nic: `NIC-${String(Date.now()).slice(-6)}-${Math.floor(Math.random()*1000)}`,
+          name: c.name,
+          phone: c.phone,
+          email: c.email,
+          type: c.company ? 'Business' : 'Individual',
+          businessName: c.company || '',
+          address: 'Google Contacts Sync',
+          dateJoined: new Date().toISOString().split('T')[0],
+          orders: 0,
+          totalSpent: 0,
+        };
+        newCustomers.unshift(newCust);
+        try {
+          await addDocument(COLLECTIONS.CUSTOMERS, newCust, newCust.nic);
+        } catch (err) {
+          console.error('Failed to save imported customer:', err);
+        }
+      }
+    }
+    setCustomers(newCustomers);
+  };
 
   // Image Crop state
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
@@ -288,6 +319,14 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
         ]}
         actions={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowContactSync(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant hover:border-primary/40 text-on-surface rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0"
+              title="Sync Google Contacts & WhatsApp"
+            >
+              <Users size={15} className="text-primary" />
+              <span className="hidden sm:inline">Sync Contacts</span>
+            </button>
             <button
               onClick={handleExportCsv}
               className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant hover:border-primary/40 text-on-surface rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0"
@@ -827,9 +866,18 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 tracking-widest">
-                Delivery / Site Address
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+                  Delivery / Site Address
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddressPicker(true)}
+                  className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline"
+                >
+                  <MapPin size={11} /> Select on Google Maps
+                </button>
+              </div>
               <input
                 type="text"
                 placeholder="123 Galle Road, Colombo 03"
@@ -923,6 +971,24 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
         imageSrc={rawImageForCrop}
         onCropComplete={handleCustomerCropComplete}
         onClose={() => setShowCropModal(false)}
+      />
+
+      {/* Google Contacts & WhatsApp Sync Modal */}
+      <ContactSyncModal
+        isOpen={showContactSync}
+        onClose={() => setShowContactSync(false)}
+        onImportContacts={handleImportContacts}
+      />
+
+      {/* Address Picker Modal */}
+      <AddressPickerModal
+        isOpen={showAddressPicker}
+        onClose={() => setShowAddressPicker(false)}
+        onSelect={(loc) => {
+          setNewProfile(prev => ({ ...prev, address: loc.address }));
+          toast.success('Address selected from Google Maps!');
+        }}
+        initialAddress={newProfile.address}
       />
     </div>
   );
