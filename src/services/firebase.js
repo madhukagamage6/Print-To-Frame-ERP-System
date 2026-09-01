@@ -67,6 +67,9 @@ export const googleSignIn = async () => {
       throw new Error('Failed to get access token from Firebase Auth');
     }
     cachedAccessToken = credential.accessToken;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('ptf_google_access_token', credential.accessToken);
+    }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error) {
     console.error('Sign in error:', error);
@@ -77,12 +80,23 @@ export const googleSignIn = async () => {
 };
 
 export const getAccessToken = async () => {
-  return cachedAccessToken;
+  if (cachedAccessToken) return cachedAccessToken;
+  if (typeof window !== 'undefined') {
+    const stored = sessionStorage.getItem('ptf_google_access_token');
+    if (stored) {
+      cachedAccessToken = stored;
+      return stored;
+    }
+  }
+  return null;
 };
 
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('ptf_google_access_token');
+  }
 };
 
 export const OperationType = {
