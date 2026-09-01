@@ -1,9 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { Bell, CheckCircle2, AlertCircle, Info, Trash2, MessageSquare, ExternalLink, Filter } from 'lucide-react';
+import { 
+  Bell, CheckCircle2, AlertCircle, Info, Trash2, MessageSquare, 
+  ExternalLink, Filter, Clock, Sparkles, User, ArrowUpRight 
+} from 'lucide-react';
 import { useMessaging } from '../../context/MessagingContext';
+import { PageHeader, FilterBar, StatusBadge, UserAvatar } from '../common/ui';
 
 export default function NotificationsView({ notifications = [], setNotifications, setActiveTab }) {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'SYSTEM' | 'MESSAGES'
+  const [searchQuery, setSearchQuery] = useState('');
   const { messages, openMiniChat } = useMessaging();
 
   const handleClearAll = () => {
@@ -27,152 +32,170 @@ export default function NotificationsView({ notifications = [], setNotifications
   }, [messages]);
 
   const combinedNotifications = useMemo(() => {
-    if (filterType === 'SYSTEM') return notifications;
-    if (filterType === 'MESSAGES') return messageItems;
-    
-    // Combined and sorted by date
-    return [...notifications, ...messageItems].sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [notifications, messageItems, filterType]);
+    let list = [];
+    if (filterType === 'SYSTEM') list = notifications;
+    else if (filterType === 'MESSAGES') list = messageItems;
+    else list = [...notifications, ...messageItems].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter(item => 
+      item.title?.toLowerCase().includes(q) ||
+      item.message?.toLowerCase().includes(q) ||
+      item.type?.toLowerCase().includes(q)
+    );
+  }, [notifications, messageItems, filterType, searchQuery]);
 
   return (
-    <div className="p-4 sm:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-on-surface tracking-tight flex items-center">
-            <Bell className="mr-3 text-primary" size={28} />
-            Notifications
-          </h1>
-          <p className="text-xs sm:text-sm font-medium text-on-surface-variant mt-1">
-            Real-time feed of system status changes, alerts, and direct team messages.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {notifications.length > 0 && filterType !== 'MESSAGES' && (
+    <div className="space-y-6 pb-12">
+      {/* Standardized Header */}
+      <PageHeader
+        title="Notifications"
+        subtitle="Real-time feed of system status updates, production pipeline alerts, and direct team messages."
+        metrics={[
+          { label: "Total Alerts", value: notifications.length + messageItems.length, color: "cyan" },
+          { label: "Team Messages", value: messageItems.length, color: "purple" },
+          { label: "System Alerts", value: notifications.length, color: "emerald" },
+          { label: "Active Feed", value: combinedNotifications.length, color: "amber" }
+        ]}
+        actions={
+          notifications.length > 0 && filterType !== 'MESSAGES' && (
             <button
               onClick={handleClearAll}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-surface-container border border-outline-variant text-on-surface-variant rounded-xl hover:bg-surface-container-low hover:text-error transition-colors text-xs font-bold shadow-sm"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant text-on-surface hover:text-rose-400 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0 cursor-pointer"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} />
               <span>Clear System Alerts</span>
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-outline-variant/40 pb-3 overflow-x-auto">
-        <button
-          onClick={() => setFilterType('ALL')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            filterType === 'ALL'
-              ? 'bg-primary text-on-primary shadow-sm'
-              : 'bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant'
-          }`}
-        >
-          All Activity ({notifications.length + messageItems.length})
-        </button>
-        <button
-          onClick={() => setFilterType('MESSAGES')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            filterType === 'MESSAGES'
-              ? 'bg-primary text-on-primary shadow-sm'
-              : 'bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant'
-          }`}
-        >
-          <MessageSquare size={13} />
-          <span>Team Messages ({messageItems.length})</span>
-        </button>
-        <button
-          onClick={() => setFilterType('SYSTEM')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            filterType === 'SYSTEM'
-              ? 'bg-primary text-on-primary shadow-sm'
-              : 'bg-surface-container text-on-surface-variant hover:text-on-surface border border-outline-variant'
-          }`}
-        >
-          <Info size={13} />
-          <span>System Alerts ({notifications.length})</span>
-        </button>
-      </div>
+      {/* Standardized Filter & Search Bar */}
+      <FilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        placeholder="Search alerts by sender, message content, or alert type..."
+        activeFilter={filterType}
+        onFilterChange={setFilterType}
+        filterOptions={[
+          { id: 'ALL', label: 'All Activity', count: notifications.length + messageItems.length },
+          { id: 'MESSAGES', label: 'Team Messages', count: messageItems.length },
+          { id: 'SYSTEM', label: 'System Alerts', count: notifications.length }
+        ]}
+        totalCount={notifications.length + messageItems.length}
+        filteredCount={combinedNotifications.length}
+      />
 
       {/* Notification Feed List */}
-      <div className="bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] overflow-hidden">
-        {combinedNotifications.length === 0 ? (
-          <div className="p-12 text-center flex flex-col items-center">
-            <div className="w-14 h-14 bg-surface-container-high rounded-full flex items-center justify-center mb-3">
-              <Bell className="text-on-surface-variant" size={22} />
-            </div>
-            <h3 className="text-base font-bold text-on-surface">No Notifications</h3>
-            <p className="text-xs text-on-surface-variant mt-1 max-w-sm">
-              You're all caught up! New alerts and team messages will appear here in real time.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-outline-variant/40">
-            {combinedNotifications.map((notif) => {
-              const isMessage = notif.type === 'message';
-              return (
-                <div key={notif.id} className="p-4 hover:bg-surface-container-low transition-colors flex items-start space-x-3.5 group">
-                  <div className={`mt-0.5 flex-shrink-0 ${
-                    notif.type === 'error' ? 'text-error' :
-                    notif.type === 'success' ? 'text-green-500' :
-                    isMessage ? 'text-primary' :
-                    'text-cyan-400'
-                  }`}>
-                    {notif.type === 'error' ? <AlertCircle size={18} /> :
-                     notif.type === 'success' ? <CheckCircle2 size={18} /> :
-                     isMessage ? <MessageSquare size={18} /> :
-                     <Info size={18} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <p className="font-bold text-on-surface text-xs sm:text-sm">{notif.title}</p>
-                      <span className="text-[10px] font-mono text-on-surface-variant whitespace-nowrap ml-3">
-                        {new Date(notif.date).toLocaleDateString([], { month: 'short', day: 'numeric' })} {' '}
-                        {new Date(notif.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    {notif.message && (
-                      <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">{notif.message}</p>
-                    )}
+      <div className="bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col">
+        <div className="p-3.5 px-4 bg-surface-container-low/80 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+          <span className="flex items-center gap-2">
+            <Bell size={14} className="text-primary" />
+            Activity Stream ({combinedNotifications.length})
+          </span>
+          <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
+            real-time feed
+          </span>
+        </div>
 
-                    {isMessage && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            if (openMiniChat) {
-                              openMiniChat({
-                                identifier: notif.rawMessage.fromId,
-                                name: notif.rawMessage.senderName || notif.rawMessage.fromId
-                              });
-                            } else if (setActiveTab) {
-                              setActiveTab('messages');
-                            }
-                          }}
-                          className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1"
-                        >
-                          <ExternalLink size={10} />
-                          <span>Open Quick Chat</span>
-                        </button>
+        <div className="divide-y divide-outline-variant/30">
+          {combinedNotifications.length === 0 ? (
+            <div className="p-16 text-center text-on-surface-variant text-xs">
+              <Bell size={40} className="mx-auto mb-3 opacity-25" />
+              <p className="font-bold text-on-surface text-sm">No notifications found</p>
+              <p className="text-[11px] text-on-surface-variant mt-1">You are all caught up! New alerts and messages will appear here in real time.</p>
+            </div>
+          ) : (
+            combinedNotifications.map((item) => {
+              const isMessage = item.type === 'message';
+              const isSystem = item.type === 'system';
+              const isOrder = item.type === 'order' || item.type === 'lead';
+
+              return (
+                <div 
+                  key={item.id}
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-surface-container-high/40 transition-colors group"
+                >
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    {/* Dynamic Avatar / Icon */}
+                    {isMessage ? (
+                      <UserAvatar 
+                        name={item.rawMessage?.senderName || 'Teammate'}
+                        role="internal"
+                        size="md"
+                      />
+                    ) : (
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                        item.type === 'error' 
+                          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                          : isOrder 
+                          ? 'bg-primary/15 text-primary border-primary/30'
+                          : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      }`}>
+                        {item.type === 'error' ? <AlertCircle size={18} /> : isOrder ? <Sparkles size={18} /> : <Info size={18} />}
                       </div>
                     )}
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-xs sm:text-sm text-on-surface">{item.title}</span>
+                        <span className={`text-[9px] font-bold px-2 py-0.2 rounded border ${
+                          isMessage 
+                            ? 'bg-purple-500/15 text-purple-400 border-purple-500/30' 
+                            : 'bg-primary/15 text-primary border-primary/30'
+                        }`}>
+                          {isMessage ? 'Direct Chat' : item.type?.toUpperCase() || 'SYSTEM'}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                        {item.message}
+                      </p>
+
+                      <div className="flex items-center gap-2 text-[10px] text-on-surface-variant font-mono mt-1.5">
+                        <Clock size={10} className="text-primary" />
+                        <span>{new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(item.date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
                   </div>
-                  
-                  {!isMessage && (
-                    <button 
-                      onClick={() => handleDelete(notif.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-on-surface-variant hover:text-error transition-all rounded-lg hover:bg-error/10"
-                      title="Dismiss"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                    {isMessage && (
+                      <button
+                        onClick={() => {
+                          if (openMiniChat) {
+                            openMiniChat({
+                              identifier: item.rawMessage?.fromId,
+                              name: item.rawMessage?.senderName || item.rawMessage?.fromId,
+                            });
+                          } else if (setActiveTab) {
+                            setActiveTab('messages');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-xl border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <MessageSquare size={13} />
+                        <span>Reply Chat</span>
+                      </button>
+                    )}
+
+                    {!isMessage && (
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-2 text-on-surface-variant hover:text-rose-400 hover:bg-rose-500/10 rounded-xl border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer"
+                        title="Dismiss Alert"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
     </div>
   );

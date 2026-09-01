@@ -1,32 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  TrendingUp, 
-  DollarSign, 
-  Users, 
-  Activity, 
-  Shield, 
-  Check, 
-  X, 
-  ChartPie, 
-  Download, 
-  BriefcaseBusiness, 
-  Building, 
-  FileText 
+  TrendingUp, DollarSign, Users, Activity, Shield, Check, X, 
+  ChartPie, Download, BriefcaseBusiness, Building, FileText,
+  Database, HardDrive, ShieldCheck, Clock, ArrowUpRight, Layers
 } from 'lucide-react';
-import Card from '../common/Card';
 import PermissionsManager from './PermissionsManager';
+import { PageHeader, FilterBar, StatusBadge } from '../common/ui';
+import { subscribeToCollection, COLLECTIONS } from '../../services/firestoreSync';
 
 export default function AdminPanel({ dataStore }) {
+  const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' | 'permissions' | 'database' | 'audit'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  useEffect(() => {
+    const unsub = subscribeToCollection(COLLECTIONS.AUDIT_LOG, setAuditLogs);
+    return () => unsub();
+  }, []);
+
   const leads = dataStore?.leads || [];
   const projects = dataStore?.projects || [];
   const invoices = dataStore?.invoices || [];
   const partners = dataStore?.partners || [];
   const customers = dataStore?.customers || [];
-
-  console.log("AdminPanel Data Load:", {
-    leads: leads.length,
-    invoices: invoices.length,
-  });
 
   const totalPipeline = leads.reduce((acc, lead) => acc + (Number(lead.value) || 0), 0);
   const invoicedGap = invoices
@@ -37,21 +33,7 @@ export default function AdminPanel({ dataStore }) {
     .filter((lead) => lead.stage === "Completed")
     .reduce((acc, lead) => acc + (Number(lead.totalSqFt) || 0), 0);
 
-  const StatCard = ({ title, value, icon: Icon, colorClass }) => (
-    <div className="p-6 bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] flex items-center space-x-4">
-      <div className={`p-3 rounded-xl ${colorClass} text-on-surface`}>
-        <Icon size={24} />
-      </div>
-      <div>
-        <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest leading-none mb-1">
-          {title}
-        </p>
-        <p className="text-xl font-extrabold text-on-surface leading-none">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
+  const totalRecords = leads.length + projects.length + invoices.length + partners.length + customers.length;
 
   const downloadCSV = (label, data) => {
     if (!data || data.length === 0) return;
@@ -65,171 +47,211 @@ export default function AdminPanel({ dataStore }) {
     const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(headers + "\n" + rows);
     const link = document.createElement("a");
     link.href = csvContent;
-    link.download = `PTF_${label}.csv`;
+    link.download = `PTF_${label}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-      <div className="bg-surface-container-highest text-on-surface p-6 rounded-3xl flex justify-between items-center shadow-[0_10px_40px_rgba(0,218,243,0.2)] border border-slate-800">
-        <div>
-          <h2 className="text-2xl font-black tracking-tighter">System Overview</h2>
-          <div className="flex items-center space-x-2 mt-1">
-            <span className="w-2 h-2 rounded-full bg-secondary text-on-secondary animate-pulse" />
-            <span className="text-[10px] font-semibold text-on-surface-variant">
-              Executive system analytics, database storage health, and system audit logs.
+    <div className="space-y-6 pb-12">
+      {/* Standardized Header */}
+      <PageHeader
+        title="System Overview"
+        subtitle="Executive enterprise telemetry, database record health, and dynamic RBAC security matrix."
+        metrics={[
+          { label: "Pipeline Value", value: `LKR ${(totalPipeline / 1000).toFixed(0)}k`, color: "cyan" },
+          { label: "Unpaid Receivables", value: `LKR ${(invoicedGap / 1000).toFixed(0)}k`, color: "purple" },
+          { label: "Delivered Volume", value: `${deliveredVolume.toFixed(0)} SqFt`, color: "emerald" },
+          { label: "Database Records", value: totalRecords, color: "amber" }
+        ]}
+        actions={
+          <button
+            onClick={() => downloadCSV('Full_Database_Dump', leads)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
+          >
+            <Download size={15} />
+            <span>Export Database CSV</span>
+          </button>
+        }
+      />
+
+      {/* Standardized Filter / Domain Switcher */}
+      <FilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        placeholder="Filter telemetry, permissions, database records, and audit events..."
+        activeFilter={activeTab}
+        onFilterChange={setActiveTab}
+        filterOptions={[
+          { id: 'analytics', label: 'Executive Analytics', count: 4 },
+          { id: 'permissions', label: 'RBAC Permissions Matrix', count: 8 },
+          { id: 'database', label: 'Database Storage Health', count: 5 },
+          { id: 'audit', label: 'System Audit Logs', count: auditLogs.length }
+        ]}
+        totalCount={totalRecords + auditLogs.length}
+        filteredCount={totalRecords}
+      />
+
+      {/* ── SUB-WORKSPACES ─────────────────────────────────────────────────── */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Top 4 Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { title: "Total Pipeline Value", value: `LKR ${totalPipeline.toLocaleString()}`, icon: TrendingUp, color: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30" },
+              { title: "Invoiced Receivables", value: `LKR ${invoicedGap.toLocaleString()}`, icon: DollarSign, color: "bg-purple-500/15 text-purple-400 border-purple-500/30" },
+              { title: "Completed SqFt Output", value: `${deliveredVolume.toLocaleString()} SqFt`, icon: Activity, color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+              { title: "Framing Partner Accruals", value: `LKR ${partnerOwed.toLocaleString()}`, icon: Building, color: "bg-amber-500/15 text-amber-400 border-amber-500/30" }
+            ].map((stat, idx) => {
+              const Icon = stat.icon;
+              return (
+                <div key={idx} className="p-5 bg-surface-container/60 rounded-2xl border border-outline-variant/60 shadow-sm flex items-center gap-4">
+                  <div className={`p-3 rounded-xl border ${stat.color}`}>
+                    <Icon size={22} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{stat.title}</p>
+                    <p className="text-base sm:text-lg font-black text-on-surface font-mono mt-0.5">{stat.value}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Symmetrical 2-Panel Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="p-5 bg-surface-container/60 rounded-2xl border border-outline-variant/60 shadow-sm space-y-4">
+              <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                <ChartPie size={14} className="text-primary" />
+                Revenue Pipeline vs Settled Invoices
+              </h4>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Gross Quotation Pipeline</span>
+                  <span className="font-mono font-bold text-on-surface">LKR {totalPipeline.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Unpaid Receivables</span>
+                  <span className="font-mono font-bold text-rose-400">LKR {invoicedGap.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Framing Commission Accruals</span>
+                  <span className="font-mono font-bold text-amber-400">LKR {partnerOwed.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 bg-surface-container/60 rounded-2xl border border-outline-variant/60 shadow-sm space-y-4">
+              <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                <Database size={14} className="text-primary" />
+                Live Firestore Storage Telemetry
+              </h4>
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Active Leads in CRM</span>
+                  <span className="font-mono font-bold text-primary">{leads.length} docs</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Fabrication Works & Projects</span>
+                  <span className="font-mono font-bold text-primary">{projects.length} docs</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
+                  <span className="text-on-surface-variant">Invoices & Financial Records</span>
+                  <span className="font-mono font-bold text-primary">{invoices.length} docs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 2: PERMISSIONS MANAGER ────────────────────────────────────── */}
+      {activeTab === 'permissions' && (
+        <div className="bg-surface-container/60 rounded-2xl border border-outline-variant/60 p-6 shadow-sm">
+          <PermissionsManager />
+        </div>
+      )}
+
+      {/* ── TAB 3: DATABASE TELEMETRY & CSV DUMP ───────────────────────────── */}
+      {activeTab === 'database' && (
+        <div className="bg-surface-container/60 rounded-2xl border border-outline-variant/60 overflow-hidden shadow-sm flex flex-col">
+          <div className="p-3.5 px-4 bg-surface-container-low/80 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+            <span className="flex items-center gap-2">
+              <HardDrive size={14} className="text-primary" />
+              Database Collection Collections & Data Exports
             </span>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase">Firestore Healthy</span>
           </div>
-        </div>
-        <div className="flex space-x-4 text-right">
-          <div>
-            <p className="text-[8px] font-bold text-on-surface-variant uppercase">Data Records</p>
-            <p className="text-sm font-bold">
-              {(leads.length + projects.length + invoices.length).toLocaleString()}
-            </p>
-          </div>
-          <div className="w-px h-8 bg-surface-container-high" />
-          <div>
-            <p className="text-[8px] font-bold text-on-surface-variant uppercase">Status</p>
-            <p className="text-sm font-bold text-emerald-400">READY</p>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Pipeline"
-          value={`LKR ${totalPipeline.toLocaleString()}`}
-          icon={TrendingUp}
-          colorClass="bg-primary text-on-primary"
-        />
-        <StatCard
-          title="Invoiced Gap"
-          value={`LKR ${invoicedGap.toLocaleString()}`}
-          icon={DollarSign}
-          colorClass="bg-primary/100"
-        />
-        <StatCard
-          title="Partner Owed"
-          value={`LKR ${partnerOwed.toLocaleString()}`}
-          icon={Building}
-          colorClass="bg-error text-on-error"
-        />
-        <StatCard
-          title="Delivered Volume"
-          value={`${deliveredVolume.toLocaleString()} SqFt`}
-          icon={Activity}
-          colorClass="bg-secondary text-on-secondary"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="p-8 lg:col-span-1">
-          <div className="flex justify-between items-center mb-6 px-2">
-            <h3 className="text-sm font-bold text-on-surface">Overview Status</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="text-center py-12 border-2 border-dashed border-outline-variant/50 rounded-3xl">
-              <Shield size={32} className="mx-auto text-on-surface mb-4" />
-              <p className="text-[10px] font-bold text-on-surface-variant uppercase">System Secure</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-8 lg:col-span-2">
-          <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-8">
-            System Reliability Indicators
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div>
-              <h4 className="text-[10px] font-black uppercase text-on-surface mb-6 flex items-center">
-                <ChartPie size={14} className="mr-2 text-primary" />
-                Conversion Health
-              </h4>
-              <div className="space-y-6">
-                {["Intake", "Processing", "Deal"].map((stage) => {
-                  const count = leads.filter((l) => l.stage === stage).length;
-                  const pct = leads.length > 0 ? (count / leads.length) * 100 : 0;
-                  return (
-                    <div key={stage}>
-                      <div className="flex justify-between text-[8px] font-black uppercase text-on-surface-variant mb-2">
-                        <span>{stage}</span>
-                        <span>{count}</span>
-                      </div>
-                      <div className="h-1.5 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/50">
-                        <div
-                          className="h-full bg-primary text-on-primary transition-all duration-700"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="divide-y divide-outline-variant/30 text-xs">
+            {[
+              { name: "CRM Leads & Quotations", count: leads.length, data: leads, label: "Leads" },
+              { name: "Fabrication & Assembly Projects", count: projects.length, data: projects, label: "Projects" },
+              { name: "Billing & Invoice Ledger", count: invoices.length, data: invoices, label: "Invoices" },
+              { name: "Framing Partner Studios", count: partners.length, data: partners, label: "Partners" },
+              { name: "Registered Client Accounts", count: customers.length, data: customers, label: "Customers" }
+            ].map((col, idx) => (
+              <div key={idx} className="p-4 flex justify-between items-center hover:bg-surface-container-high/40 transition-colors">
+                <div>
+                  <p className="font-bold text-on-surface text-sm">{col.name}</p>
+                  <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">{col.count} synchronized records</p>
+                </div>
+                <button
+                  onClick={() => downloadCSV(col.label, col.data)}
+                  className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-xl border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Download size={13} /> Export CSV
+                </button>
               </div>
-            </div>
-
-            <div>
-              <h4 className="text-[10px] font-black uppercase text-on-surface mb-6 flex items-center">
-                <Activity size={14} className="mr-2 text-error" />
-                Delivery Velocity
-              </h4>
-              <div className="space-y-6">
-                {["Pending", "In Progress", "Completed"].map((status) => {
-                  const count = projects.filter((p) => p.status === status).length;
-                  const pct = projects.length > 0 ? (count / projects.length) * 100 : 0;
-                  return (
-                    <div key={status}>
-                      <div className="flex justify-between text-[8px] font-black uppercase text-on-surface-variant mb-2">
-                        <span>{status}</span>
-                        <span>{count}</span>
-                      </div>
-                      <div className="h-1.5 bg-surface-container-low rounded-full overflow-hidden border border-outline-variant/50">
-                        <div
-                          className="h-full bg-error transition-all duration-700"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            ))}
           </div>
-        </Card>
-      </div>
-
-      <div className="mt-8">
-        <PermissionsManager />
-      </div>
-
-      <div className="pt-8 border-t border-outline-variant">
-        <div className="flex items-center space-x-2 mb-6">
-          <Download size={18} className="text-on-surface-variant" />
-          <h3 className="text-xs font-black uppercase text-on-surface-variant tracking-widest">
-            Auditable Snapshots
-          </h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { label: "Invoices", data: invoices, color: "hover:border-yellow-500/30", icon: FileText },
-            { label: "Leads", data: leads, color: "hover:border-indigo-400", icon: BriefcaseBusiness },
-            { label: "Partners", data: partners, color: "hover:border-error/30", icon: Building },
-            { label: "Customers", data: customers, color: "hover:border-emerald-400", icon: Users },
-          ].map((snap) => (
+      )}
+
+      {/* ── TAB 4: SYSTEM AUDIT STREAM ────────────────────────────────────── */}
+      {activeTab === 'audit' && (
+        <div className="bg-surface-container/60 rounded-2xl border border-outline-variant/60 overflow-hidden shadow-sm flex flex-col">
+          <div className="p-3.5 px-4 bg-surface-container-low/80 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+            <span className="flex items-center gap-2">
+              <Clock size={14} className="text-primary" />
+              Global System Audit Activity Trail ({auditLogs.length})
+            </span>
             <button
-              key={snap.label}
-              onClick={() => downloadCSV(snap.label, snap.data)}
-              className={`bg-surface-container border border-outline-variant p-6 rounded-3xl text-left transition-all hover:bg-surface-container-low ${snap.color} group`}
+              onClick={() => downloadCSV('Audit_Logs', auditLogs)}
+              className="text-[10px] text-primary hover:underline lowercase font-medium flex items-center gap-1"
             >
-              <snap.icon size={20} className="text-on-surface-variant mb-2" />
-              <p className="text-[10px] font-black text-on-surface uppercase tracking-tight">
-                {snap.label}
-              </p>
-              <p className="text-[8px] text-on-surface-variant italic">Download CSV</p>
+              <Download size={11} /> export audit log
             </button>
-          ))}
+          </div>
+
+          <div className="divide-y divide-outline-variant/30 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {auditLogs.length > 0 ? (
+              auditLogs
+                .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+                .map((log, idx) => (
+                  <div key={log._firestoreId || idx} className="p-3.5 px-4 flex justify-between items-start gap-4 hover:bg-surface-container-high/40 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-on-surface">{log.action || 'ACTION'}</span>
+                        <span className="text-[9px] font-bold px-2 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                          {log.module || 'System'}
+                        </span>
+                        <span className="text-[10px] text-on-surface-variant font-mono font-medium">{log.userName || log.userId}</span>
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant mt-1">{log.details || log.description}</p>
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant font-mono flex-shrink-0">
+                      {log.createdAt?.toDate ? log.createdAt.toDate().toLocaleString() : 'Recent'}
+                    </span>
+                  </div>
+                ))
+            ) : (
+              <div className="py-12 text-center text-on-surface-variant text-xs">
+                No system audit events recorded.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Send, Users, MessageSquare, Trash2, Reply, X, Check, CheckCheck, ArrowLeft } from "lucide-react";
-import { triggerBrowserNotification } from "../../App"; 
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { 
+  Send, Users, MessageSquare, Trash2, Reply, X, Check, CheckCheck, 
+  ArrowLeft, Phone, Mail, PhoneCall, Sparkles, User, ChevronRight,
+  Smile, Paperclip, MoreVertical
+} from "lucide-react";
 import { toast } from "../../utils/toast";
-import { addDocument, updateDocument, deleteDocument, setDocument, COLLECTIONS } from "../../services/firestoreSync";
+import { setDocument } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
-import { UserAvatar, PageHeader } from "../common/ui";
+import { PageHeader, FilterBar, StatusBadge, UserAvatar } from "../common/ui";
 import { useMessaging, getChannelId } from "../../context/MessagingContext";
 
-const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
+export default function Messages({ users = [], currentUser, onUnreadCountChange }) {
   const { 
     messages, 
     unreadCounts, 
@@ -21,9 +24,10 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
   const [inputText, setInputText] = useState("");
   const [typingState, setTypingState] = useState({});
   const [replyTo, setReplyTo] = useState(null);
-  
-  // Presence simulation state
-  const [presenceState, setPresenceState] = useState({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [mobileView, setMobileView] = useState("list"); // 'list' | 'chat'
+
   const chatContainerRef = useRef(null);
 
   // Sync active contact with global messaging context
@@ -37,14 +41,9 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
     return () => setActiveChatContactId(null);
   }, [activeUser, setActiveChatContactId, markChatAsRead]);
 
-  // Presence simulation & typing via a unified 'presence' document or simple timeouts
+  // Typing indicators
   useEffect(() => {
     if (!currentUser) return;
-    
-    const pState = {};
-    users.forEach(u => pState[u.identifier] = { status: 'online' });
-    setPresenceState(pState);
-    
     const typingUnsub = onSnapshot(collection(db, 'typing_indicators'), (snap) => {
       const typingData = {};
       snap.forEach(d => {
@@ -56,7 +55,7 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
       setTypingState(typingData);
     }, () => {});
     return () => typingUnsub();
-  }, [currentUser, users]);
+  }, [currentUser]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -80,325 +79,324 @@ const Messages = ({ users = [], currentUser, onUnreadCountChange }) => {
     } catch(e) {}
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
     if (!inputText.trim() || !activeUser || !currentUser) return;
 
     const myId = String(currentUser.identifier).trim().toLowerCase();
     const targetId = String(activeUser.identifier).trim().toLowerCase();
-    const activeChan = getChannelId(myId, targetId);
-    
-    const newMsg = {
-      channelId: activeChan,
-      participants: [myId, targetId],
-      fromId: myId,
-      toId: targetId,
-      senderName: currentUser.name || myId,
-      text: inputText.trim(),
-      timestamp: Date.now(),
-      readBy: [myId],
-      replyTo: replyTo ? {
-        id: replyTo._firestoreId,
-        text: replyTo.text,
-        fromId: replyTo.fromId
-      } : null
-    };
+    const textToSend = inputText.trim();
 
     setInputText("");
     setReplyTo(null);
     sendTypingIndicator(false);
-    
-    try {
-      await addDocument(COLLECTIONS.MESSAGES, newMsg);
-    } catch (err) {
-      console.error("Message send failure:", err);
-      toast.error("Failed to send message: " + (err.message || 'Check database permissions'));
-    }
-  };
 
-  const handleDeleteMessage = async (msg) => {
-    const diffMinutes = (Date.now() - (msg.timestamp || 0)) / 1000 / 60;
-    if (msg.fromId !== currentUser.identifier) {
-      toast.error("You can only delete your own messages");
-      return;
-    }
-    if (diffMinutes > 15) {
-      toast.error("Messages can only be deleted within 15 minutes of sending");
-      return;
-    }
-    
     try {
-      await deleteDocument(COLLECTIONS.MESSAGES, msg._firestoreId);
-      toast.success("Message deleted");
-    } catch (err) {
+      await sendDirectMessage({
+        toId: targetId,
+        text: textToSend,
+        replyTo: replyTo ? {
+          id: replyTo._firestoreId || replyTo.id,
+          text: replyTo.text,
+          senderName: replyTo.senderName
+        } : null
+      });
+    } catch(err) {
       console.error(err);
-      toast.error("Failed to delete message");
+      toast.error("Failed to send message: " + err.message);
     }
   };
 
-  // Active channel messages
-  const activeChan = activeUser ? getChannelId(currentUser?.identifier, activeUser?.identifier) : null;
-  const activeMessages = messages.filter(m => m.channelId === activeChan);
+  // Filtered contacts list
+  const filteredUsers = useMemo(() => {
+    return (users || []).filter(u => {
+      if (u.identifier === currentUser?.identifier) return false;
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || (
+        u.name?.toLowerCase().includes(q) ||
+        u.identifier?.toLowerCase().includes(q) ||
+        u.role?.toLowerCase().includes(q) ||
+        u.company?.toLowerCase().includes(q)
+      );
+      if (!matchesSearch) return false;
+
+      if (activeFilter === 'unread') {
+        const uId = String(u.identifier).trim().toLowerCase();
+        return (unreadCounts[uId] || 0) > 0;
+      }
+      return true;
+    });
+  }, [users, currentUser, searchQuery, activeFilter, unreadCounts]);
+
+  // Current channel messages
+  const activeChannelMessages = useMemo(() => {
+    if (!currentUser?.identifier || !activeUser?.identifier) return [];
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const targetId = String(activeUser.identifier).trim().toLowerCase();
+    const chan = getChannelId(myId, targetId);
+    return messages.filter(m => m.channelId === chan || (m.participants?.includes(myId) && m.participants?.includes(targetId)));
+  }, [messages, currentUser, activeUser]);
+
+  const totalUnreadCount = useMemo(() => {
+    return Object.values(unreadCounts || {}).reduce((s, c) => s + (Number(c) || 0), 0);
+  }, [unreadCounts]);
+
+  // Auto select first user on mount
+  useEffect(() => {
+    if (!activeUser && filteredUsers.length > 0) {
+      setActiveUser(filteredUsers[0]);
+    }
+  }, [activeUser, filteredUsers]);
 
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col pb-6">
       {/* Standardized Header */}
       <PageHeader
         title="Messages"
-        subtitle="Direct 1-on-1 team messaging, real-time collaboration, and file sharing."
+        subtitle="Direct real-time communication, presence indicators, and cross-department collaboration."
         metrics={[
-          { label: "Team Members", value: users.filter(u => u.identifier !== currentUser?.identifier).length, color: "cyan" },
-          { label: "Unread", value: Object.values(unreadCounts).reduce((a, b) => a + b, 0), color: "emerald" }
+          { label: "Teammates", value: users.filter(u => u.identifier !== currentUser?.identifier).length, color: "cyan" },
+          { label: "Unread Messages", value: totalUnreadCount, color: totalUnreadCount > 0 ? "amber" : "neutral" },
+          { label: "Active Channel", value: activeUser ? activeUser.name : "None", color: "emerald" }
         ]}
       />
 
-      <div className="flex-1 flex border border-outline-variant bg-surface-container rounded-3xl overflow-hidden shadow-[0_4px_20px_rgba(0,218,243,0.05)] min-h-0">
-        {/* Sidebar Employees List */}
-        <aside className={`w-full md:w-72 border-r border-outline-variant/50 p-4 bg-surface-container-low/50 ${activeUser ? 'hidden md:flex' : 'flex'} flex-col h-full`}>
-        <h3 className="font-bold text-on-surface text-sm mb-4 flex items-center">
-          <Users size={16} className="mr-2 text-on-surface-variant" />
-          Employees
-        </h3>
-        <ul className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
-          {users
-            .filter((u) => u.identifier !== currentUser?.identifier)
-            .map((u) => {
-              const isSelected = activeUser?.identifier === u.identifier;
-              const isOnline = presenceState[u.identifier]?.status === "online";
-              const unreadCount = unreadCounts[u.identifier] || 0;
+      {/* Standardized Filter & Search Bar */}
+      <FilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        placeholder="Search colleagues by name, email, company, or role..."
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        filterOptions={[
+          { id: 'all', label: 'All Teammates', count: users.filter(u => u.identifier !== currentUser?.identifier).length },
+          { id: 'unread', label: 'Unread Chats', count: Object.keys(unreadCounts || {}).filter(k => (unreadCounts[k] || 0) > 0).length }
+        ]}
+        totalCount={users.filter(u => u.identifier !== currentUser?.identifier).length}
+        filteredCount={filteredUsers.length}
+      />
 
-              return (
-                <li key={u.identifier}>
-                  <button
+      {/* Main Master-Detail 2-Panel Layout */}
+      <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
+        
+        {/* LEFT COLUMN: Teammates Registry (1/3 Width) */}
+        <div className={`w-full lg:w-1/3 ${mobileView === 'chat' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
+          <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
+            <span className="flex items-center gap-2">
+              <Users size={14} className="text-primary" />
+              Direct Contacts ({filteredUsers.length})
+            </span>
+            <span className="text-[10px] text-on-surface-variant/70 lowercase font-medium">
+              click to chat
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/30">
+            {filteredUsers.length === 0 ? (
+              <div className="p-12 text-center text-on-surface-variant text-sm font-medium">
+                <Users size={36} className="mx-auto mb-3 opacity-25" />
+                <p className="font-bold text-on-surface">No contacts found</p>
+                <p className="text-xs text-on-surface-variant mt-1">Try searching another name or reset filter.</p>
+              </div>
+            ) : (
+              filteredUsers.map((user) => {
+                const isSelected = activeUser?.identifier === user.identifier;
+                const userKey = String(user.identifier).trim().toLowerCase();
+                const unread = unreadCounts[userKey] || 0;
+
+                return (
+                  <div
+                    key={user.identifier}
                     onClick={() => {
-                      setActiveUser(u);
+                      setActiveUser(user);
+                      setMobileView('chat');
                     }}
-                    className={`w-full text-left p-3 rounded-2xl flex items-center justify-between transition-all ${
-                      isSelected ? "bg-primary text-on-primary shadow-[0_4px_25px_rgba(0,218,243,0.1)] " : "hover:bg-surface-container border border-transparent hover:border-outline-variant/50 text-on-surface"
+                    className={`p-4 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
+                      isSelected
+                        ? 'bg-primary/10 border-l-4 border-primary shadow-[inset_0_0_15px_rgba(0,218,243,0.08)]'
+                        : 'hover:bg-surface-container-high/40'
                     }`}
                   >
-                    <div className="flex items-center space-x-3 truncate">
-                      <UserAvatar 
-                        user={u} 
-                        size="sm" 
-                        showStatus 
-                        status={isOnline ? 'active' : null} 
+                    <div className="flex items-center gap-3 min-w-0">
+                      <UserAvatar
+                        user={user}
+                        size="md"
+                        showStatus={true}
                       />
-                      <div className="truncate text-left">
-                        <div className={`text-xs font-bold leading-tight ${isSelected ? "text-on-surface" : "text-on-surface"}`}>
-                          {u.name || u.identifier}
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={`font-bold text-xs truncate ${isSelected ? 'text-primary' : 'text-on-surface'}`}>
+                            {user.name}
+                          </p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-surface-container-high border border-outline-variant/60 text-on-surface-variant flex-shrink-0">
+                            {user.role}
+                          </span>
                         </div>
-                        <div className={`text-[9px] mt-0.5 ${isSelected ? "text-primary font-bold" : "text-on-surface-variant font-semibold"}`}>
-                          {u.role || "Employee"}
-                        </div>
+
+                        <p className="text-[10px] text-on-surface-variant truncate font-mono mt-0.5">
+                          {user.identifier}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2 shrink-0">
-                      {unreadCount > 0 && (
-                        <span className="bg-error text-on-error text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center">
-                          {unreadCount}
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {unread > 0 && (
+                        <span className="px-2 py-0.5 bg-primary text-on-primary font-mono text-[9px] font-extrabold rounded-full shadow-sm">
+                          {unread}
                         </span>
                       )}
+                      <ChevronRight size={14} className={`text-on-surface-variant/40 transition-transform group-hover:translate-x-0.5 ${isSelected ? 'text-primary' : ''}`} />
                     </div>
-                  </button>
-                </li>
-              );
-            })}
-        </ul>
-      </aside>
-
-      {/* Chat Conversation */}
-      <section className={`flex-1 ${!activeUser ? 'hidden md:flex' : 'flex'} flex-col bg-surface-container h-full justify-between`}>
-        {activeUser ? (
-          <>
-            {/* Active User Header */}
-            <div className="p-3.5 sm:p-4 border-b border-outline-variant/50 flex items-center justify-between bg-surface-container-low/20 shadow-sm z-10">
-              <div className="flex items-center space-x-2.5 sm:space-x-3">
-                <button
-                  onClick={() => setActiveUser(null)}
-                  className="md:hidden p-2 bg-surface-container-high text-primary rounded-xl hover:bg-primary/20 transition-all border border-outline-variant/60 active:scale-95 cursor-pointer"
-                  title="Back to Contact List"
-                  aria-label="Back to Contacts"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-                <UserAvatar 
-                  user={activeUser} 
-                  size="md" 
-                  showStatus 
-                  status={presenceState[activeUser.identifier]?.status === "online" ? 'active' : null} 
-                />
-                <div>
-                  <h4 className="font-extrabold text-on-surface text-xs sm:text-sm">
-                    {activeUser.name || activeUser.identifier}
-                  </h4>
-                  <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">
-                    {activeUser.role || "Employee"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    presenceState[activeUser.identifier]?.status === "online"
-                      ? "bg-secondary text-on-secondary"
-                      : "bg-slate-400"
-                  }`}
-                />
-                <span className="text-[10px] text-on-surface-variant font-semibold uppercase">
-                  {presenceState[activeUser.identifier]?.status === "online" ? "Online" : "Offline"}
-                </span>
-              </div>
-            </div>
-
-            {/* Messages Pane */}
-            <div
-              ref={chatContainerRef}
-              className="flex-1 p-6 overflow-y-auto space-y-4 bg-surface-container-lowest custom-scrollbar"
-            >
-              {activeMessages.length > 0 ? (
-                activeMessages.map((msg) => {
-                  const isMe = msg.fromId === currentUser?.identifier;
-                  const msgDate = new Date(msg.timestamp || Date.now());
-                  const isRead = (msg.readBy || []).includes(activeUser.identifier);
-
-                  return (
-                    <div key={msg._firestoreId} className={`flex flex-col group ${isMe ? "items-end" : "items-start"}`}>
-                      
-                      {/* Reply Block Preview */}
-                      {msg.replyTo && (
-                        <div className={`text-[10px] bg-surface-container border-l-2 border-primary/50 text-on-surface-variant p-2 rounded-lg mb-1 opacity-80 flex items-center space-x-2 max-w-sm ${isMe ? "mr-1" : "ml-1"}`}>
-                          <Reply size={10} />
-                          <span className="truncate">{msg.replyTo.text || "Image"}</span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2">
-                        {/* Actions (Delete/Reply) */}
-                        {isMe && (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
-                            <button onClick={() => setReplyTo(msg)} className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full" title="Reply">
-                              <Reply size={14} />
-                            </button>
-                            <button onClick={() => handleDeleteMessage(msg)} className="p-1.5 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-full" title="Delete (within 15m)">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-
-                        <div
-                          className={`flex flex-col max-w-lg p-3.5 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border ${
-                            isMe
-                              ? "bg-primary text-on-primary border-primary rounded-tr-none"
-                              : "bg-surface-container border-outline-variant/50 text-on-surface rounded-tl-none"
-                          }`}
-                        >
-                          {msg.text && (
-                            <div className="text-xs font-medium leading-relaxed break-words whitespace-pre-wrap">
-                              {msg.text}
-                            </div>
-                          )}
-
-                          <div
-                            className={`flex items-center justify-end mt-1.5 text-[9px] font-bold space-x-1 ${
-                              isMe ? "text-primary-container/80" : "text-on-surface-variant"
-                            }`}
-                          >
-                            <span>
-                              {msgDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                            
-                            {/* Read Receipts (WhatsApp Style) */}
-                            {isMe && (
-                              <span className="ml-1 flex items-center">
-                                {isRead ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} />}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions for received msgs */}
-                        {!isMe && (
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
-                            <button onClick={() => setReplyTo(msg)} className="p-1.5 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full" title="Reply">
-                              <Reply size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-on-surface-variant">
-                  <MessageSquare size={40} className="mb-3 opacity-20" />
-                  <p className="text-xs font-semibold">Start the conversation</p>
-                </div>
-              )}
-            </div>
-
-            {/* Input Bar */}
-            <div className="border-t border-outline-variant/50 bg-surface-container flex flex-col">
-              
-              {/* Reply Preview */}
-              {replyTo && (
-                <div className="bg-surface-container-low px-4 py-2 border-b border-outline-variant/50 flex justify-between items-center">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-primary flex items-center"><Reply size={10} className="mr-1"/> Replying to {replyTo.fromId === currentUser.identifier ? 'yourself' : 'message'}</span>
-                    <span className="text-xs text-on-surface-variant truncate max-w-sm">{replyTo.text || "Image"}</span>
                   </div>
-                  <button onClick={() => setReplyTo(null)} className="text-on-surface-variant hover:text-error p-1">
-                    <X size={14} />
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Active Chat Room (2/3 Width) */}
+        <div className={`flex-1 ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'} flex-col border border-outline-variant/60 bg-surface-container/40 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full`}>
+          {!activeUser ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+              <MessageSquare size={48} className="mx-auto mb-3 opacity-25 text-on-surface-variant" />
+              <h3 className="font-bold text-on-surface text-base">No Conversation Selected</h3>
+              <p className="text-xs text-on-surface-variant max-w-sm mt-1">
+                Select a teammate from the left directory to start a direct instant message channel.
+              </p>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              
+              {/* Top Chat Header Banner */}
+              <div className="p-4 sm:p-5 bg-surface-container-low/90 border-b border-outline-variant/60 flex justify-between items-center gap-4 flex-shrink-0">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <button 
+                    onClick={() => setMobileView('list')}
+                    className="lg:hidden p-1.5 bg-surface-container hover:bg-surface-container-high rounded-lg text-on-surface-variant"
+                  >
+                    <ArrowLeft size={16} />
                   </button>
+
+                  <UserAvatar
+                    user={activeUser}
+                    size="lg"
+                    showStatus={true}
+                  />
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-extrabold text-sm sm:text-base text-on-surface truncate">{activeUser.name}</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                        {activeUser.role}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant font-mono truncate mt-0.5">
+                      {activeUser.identifier} {activeUser.company ? `· ${activeUser.company}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Direct Action triggers */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {activeUser.contactNumber && (
+                    <a
+                      href={`tel:${activeUser.contactNumber.replace(/[^0-9+]/g, '')}`}
+                      className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-bold border border-emerald-500/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="Call Teammate"
+                    >
+                      <PhoneCall size={12} /> Call
+                    </a>
+                  )}
+                  <a
+                    href={`mailto:${activeUser.identifier}`}
+                    className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Mail size={12} /> Email
+                  </a>
+                </div>
+              </div>
+
+              {/* Message Bubbles Container */}
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-3"
+              >
+                {activeChannelMessages.length === 0 ? (
+                  <div className="py-16 text-center text-on-surface-variant text-xs">
+                    <MessageSquare size={36} className="mx-auto mb-2 opacity-25" />
+                    <p className="font-bold text-on-surface">Start a conversation with {activeUser.name}</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5">Direct messages are encrypted and synchronized across all devices in real time.</p>
+                  </div>
+                ) : (
+                  activeChannelMessages.map((msg, idx) => {
+                    const isMe = msg.fromId === currentUser?.identifier;
+
+                    return (
+                      <div
+                        key={msg._firestoreId || msg.id || idx}
+                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%] ${isMe ? 'ml-auto' : 'mr-auto'}`}
+                      >
+                        {msg.replyTo && (
+                          <div className="text-[10px] text-on-surface-variant bg-surface-container-low p-2 rounded-t-xl border border-outline-variant/40 mb-0.5 max-w-full truncate">
+                            Replying to <strong>{msg.replyTo.senderName}</strong>: {msg.replyTo.text}
+                          </div>
+                        )}
+
+                        <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                          isMe 
+                            ? 'bg-primary text-on-primary font-medium rounded-tr-sm shadow-[0_2px_15px_rgba(0,218,243,0.15)]'
+                            : 'bg-surface-container border border-outline-variant/60 text-on-surface rounded-tl-sm'
+                        }`}>
+                          {msg.text}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-[9px] text-on-surface-variant font-mono mt-1 px-1">
+                          <span>{new Date(Number(msg.timestamp) || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          {isMe && <CheckCheck size={11} className="text-primary" />}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Typing indicator */}
+              {typingState[activeUser.identifier] && (
+                <div className="px-5 py-1 text-[10px] text-primary font-bold italic animate-pulse">
+                  {activeUser.name} is typing...
                 </div>
               )}
 
-              <div className="p-3 flex items-center space-x-2">
-                <textarea
+              {/* Bottom Message Input Bar */}
+              <form 
+                onSubmit={handleSendMessage}
+                className="p-3.5 bg-surface-container-low/90 border-t border-outline-variant/60 flex items-center gap-2 flex-shrink-0"
+              >
+                <input
+                  type="text"
+                  placeholder={`Message ${activeUser.name}...`}
                   value={inputText}
                   onChange={(e) => {
                     setInputText(e.target.value);
-                    sendTypingIndicator(!!e.target.value);
+                    sendTypingIndicator(e.target.value.length > 0);
                   }}
-                  onBlur={() => sendTypingIndicator(false)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  rows={1}
-                  placeholder={`Message ${activeUser.name || activeUser.identifier}...`}
-                  className="flex-1 p-3 bg-surface-container-low border border-outline-variant rounded-xl text-sm font-medium focus:outline-none focus:border-primary resize-none custom-scrollbar max-h-32"
+                  className="flex-1 bg-surface-container border border-outline-variant/60 rounded-xl px-4 py-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:ring-2 focus:ring-primary/50 outline-none"
                 />
 
                 <button
-                  onClick={() => handleSendMessage()}
+                  type="submit"
                   disabled={!inputText.trim()}
-                  className="p-3 bg-primary text-on-primary hover:bg-primary/90 disabled:bg-surface-container-high disabled:text-on-surface-variant rounded-xl transition-all shadow-sm"
+                  className="p-2.5 bg-primary text-on-primary rounded-xl font-bold shadow-md hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  <Send size={18} className={inputText.trim() ? "translate-x-0.5" : ""} />
+                  <Send size={15} />
                 </button>
-              </div>
-              
-              {/* Typing indicator */}
-              <div className="h-4 px-16 pb-2 text-[9px] text-on-surface-variant italic font-semibold">
-                {typingState[activeUser.identifier] === activeChan && (
-                  <span className="animate-pulse">{activeUser.name || activeUser.identifier} is typing...</span>
-                )}
-              </div>
+              </form>
+
             </div>
-          </>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-on-surface-variant">
-            <MessageSquare size={48} className="mb-4 opacity-20 text-primary" />
-            <p className="text-sm font-bold text-on-surface">Your Messages</p>
-            <p className="text-xs mt-1 text-on-surface-variant">Select a team member from the left to start chatting.</p>
-          </div>
-        )}
-      </section>
+          )}
+        </div>
       </div>
     </div>
   );
-};
-
-export default Messages;
+}
