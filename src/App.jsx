@@ -103,8 +103,11 @@ const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badg
 
   return (
     <button
+      type="button"
       onClick={handleClick}
-      className={`w-full flex items-center rounded-xl transition-all duration-200 relative group min-h-[44px] ${
+      aria-current={isActive ? "page" : undefined}
+      aria-label={badge > 0 ? `${label}, ${badge} unread notifications` : label}
+      className={`w-full flex items-center rounded-xl transition-all duration-200 relative group min-h-[44px] focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
         collapsed ? "justify-center p-3" : "px-4 py-2.5"
       } ${
         isActive
@@ -113,9 +116,9 @@ const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badg
       }`}
     >
       <div className="flex-shrink-0 relative">
-        <Icon size={18} className={isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"} />
+        <Icon size={18} className={isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"} aria-hidden="true" />
         {/* Badge when collapsed */}
-        <div className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-on-error text-[8px] font-bold transition-opacity duration-300 ${collapsed && badge > 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        <div className={`absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-error text-on-error text-[8px] font-bold transition-opacity duration-300 ${collapsed && badge > 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`} aria-hidden="true">
           {badge > 9 ? "9+" : badge}
         </div>
       </div>
@@ -125,14 +128,14 @@ const NavLink = ({ icon: Icon, label, id, activeTab, setActiveTab, onClick, badg
         
         {/* Badge when expanded */}
         {badge > 0 && (
-          <span className="ml-2 inline-flex items-center justify-center w-4 h-4 bg-error text-on-error text-[9px] font-black rounded-full">
+          <span className="ml-2 inline-flex items-center justify-center w-4 h-4 bg-error text-on-error text-[9px] font-black rounded-full" aria-hidden="true">
             {badge > 99 ? "99+" : badge}
           </span>
         )}
       </div>
 
       {/* Tooltip when collapsed */}
-      <div className={`absolute left-full ml-3 px-2.5 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold rounded-lg shadow-xl opacity-0 pointer-events-none transition-all duration-200 whitespace-nowrap z-50 border border-outline-variant/50 ${collapsed ? "group-hover:opacity-100" : ""}`}>
+      <div className={`absolute left-full ml-3 px-2.5 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold rounded-lg shadow-xl opacity-0 pointer-events-none transition-all duration-200 whitespace-nowrap z-50 border border-outline-variant/50 ${collapsed ? "group-hover:opacity-100" : ""}`} aria-hidden="true">
         {label}
       </div>
     </button>
@@ -144,12 +147,15 @@ const NavGroup = ({ title, children, isOpen, onToggle, collapsed }) => {
   return (
     <div className={`transition-all duration-300 ${collapsed ? "py-2 border-b border-outline-variant/10" : "mb-4"}`}>
       <button
+        type="button"
         onClick={onToggle}
-        className={`w-full flex items-center justify-between text-[10px] font-bold text-on-surface-variant uppercase tracking-widest hover:text-on-surface transition-all duration-300 overflow-hidden whitespace-nowrap ${collapsed ? "h-0 opacity-0 px-0" : "px-4 py-2 opacity-100 h-auto"}`}
+        aria-expanded={isOpen}
+        aria-label={`${title} section, ${isOpen ? 'expanded' : 'collapsed'}`}
+        className={`w-full flex items-center justify-between text-[10px] font-bold text-on-surface-variant uppercase tracking-widest hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none transition-all duration-300 overflow-hidden whitespace-nowrap ${collapsed ? "h-0 opacity-0 px-0" : "px-4 py-2 opacity-100 h-auto"}`}
         tabIndex={collapsed ? -1 : 0}
       >
         <span>{title}</span>
-        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        {isOpen ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
       </button>
       <div className={`space-y-1 transition-all duration-300 ${collapsed ? "" : (isOpen ? "mt-1" : "h-0 overflow-hidden opacity-0")}`}>
         {children}
