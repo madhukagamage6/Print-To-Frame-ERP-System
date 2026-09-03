@@ -1,4 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 // Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
 // All support audio inlineData multimodal content. Ordered by performance preference.
@@ -14,12 +16,37 @@ const CANDIDATE_MODELS = [
 // So raw audio files larger than ~3.3MB will exceed the limit.
 const MAX_AUDIO_BASE64_LENGTH = 4_500_000;
 
+// Only these origins may call this endpoint from a browser. This used to be '*' with
+// no auth check at all, which let anyone on the internet spend this project's Gemini
+// quota. Add a preview/staging origin here if you deploy one.
+const ALLOWED_ORIGINS = [
+  'https://portal.print2frame.xyz',
+  'https://www.print2frame.xyz',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+function getAdminAuth() {
+  if (!getApps().length) {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!raw) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is missing on the server');
+    }
+    initializeApp({ credential: cert(JSON.parse(raw)) });
+  }
+  return getAuth();
+}
+
 export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  // CORS headers — restricted to known site origins, not '*'. Never send
+  // Access-Control-Allow-Credentials with a wildcard origin.
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', true);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -31,6 +58,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Require a signed-in ERP user — this endpoint spends metered Gemini API quota,
+    // so it must never be reachable by an anonymous caller.
+    const authHeader = req.headers.authorization || '';
+    const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!idToken) {
+      return res.status(401).json({ error: 'Missing Authorization bearer token' });
+    }
+    try {
+      await getAdminAuth().verifyIdToken(idToken);
+    } catch (authErr) {
+      console.warn('generate.js: rejected invalid/expired ID token:', authErr.message);
+      return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
     if (!apiKey) {
       return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing on the server' });

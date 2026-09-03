@@ -1,4 +1,5 @@
 import { stripEmojis } from '../utils/validation';
+import { auth } from './firebase';
 
 /**
  * ============================================================
@@ -20,9 +21,19 @@ async function callProxy(prompt, mimeType = null, audioData = null) {
     payload.audioData = audioData;
   }
   
+  // The proxy now requires a signed-in ERP user (see api/generate.js) — attach the
+  // current Firebase ID token so the server can verify the caller.
+  if (!auth.currentUser) {
+    throw new Error('You must be signed in to use AI features.');
+  }
+  const idToken = await auth.currentUser.getIdToken();
+
   const response = await fetch('/api/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify(payload),
   });
 

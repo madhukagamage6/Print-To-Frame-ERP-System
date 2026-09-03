@@ -21,6 +21,14 @@ service cloud.firestore {
       return hasRole('admin') || hasRole('Admin');
     }
 
+    // The two hardcoded owner emails the client app itself treats as a bootstrap/
+    // self-healing super-admin (see App.jsx "Self-Healing Super Admin Guard").
+    // Mirrored here so the rules stay consistent with that one intentional exception
+    // instead of trusting the client to enforce it.
+    function isBootstrapSuperAdmin(email) {
+      return email == 'madhukagamage6@gmail.com' || email == 'madhukagamage@gmail.com';
+    }
+
     // Dynamic Permission Check (supports both new granular {view, create, edit, delete, export} and legacy {read, write})
     function checkPermission(module, action) {
       return isAdmin() || (
@@ -54,15 +62,38 @@ service cloud.firestore {
     }
 
     // ── Settings (Dynamic Permissions) ────────────────────
+    // This document IS the RBAC matrix that checkPermission() reads for every other
+    // collection below — it must only ever be writable by an Admin. (Previously
+    // `if isAuthenticated()` let ANY signed-in user of ANY role grant themselves
+    // full access to everything by rewriting this document directly.)
     match /settings/permissions {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isAdmin();
     }
 
     // ── User Profiles ─────────────────────────────────────
+    // SECURITY: `role` must never be settable by the user themselves except through
+    // the two narrow, intentional self-service paths the app already relies on:
+    //   1. A brand-new Google sign-in self-provisions its own profile as 'Customer'.
+    //   2. The two hardcoded owner emails self-heal back to 'Admin' if ever changed.
+    // Anything else — including a non-admin flipping their own role to 'Admin' via
+    // the Firestore SDK directly (bypassing the UI) — is rejected.
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.token.email == userId);
+
+      allow create: if isAdmin()
+        || (isAuthenticated() && request.auth.token.email == userId && (
+             request.resource.data.role == 'Customer'
+             || (isBootstrapSuperAdmin(userId) && request.resource.data.role == 'Admin')
+           ));
+
+      allow update: if isAdmin()
+        || (isAuthenticated() && request.auth.token.email == userId && (
+             request.resource.data.role == resource.data.role
+             || (isBootstrapSuperAdmin(userId) && request.resource.data.role == 'Admin')
+           ));
+
+      allow delete: if isAdmin();
     }
 
     // ── Pending Users ─────────────────────────────────────
@@ -134,8 +165,12 @@ service cloud.firestore {
     }
 
     // ── Messages (Real-Time Internal Chat) ─────────────────
+    // `update` used to be open to any authenticated user for any message — that let
+    // anyone silently rewrite someone else's message content after the fact. Now only
+    // the original sender (or an Admin) can edit a message.
     match /messages/{messageId} {
-      allow read, create, update: if isAuthenticated();
+      allow read, create: if isAuthenticated();
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.fromId == request.auth.token.email);
       allow delete: if isAdmin() || (
         isAuthenticated() &&
         resource.data.fromId == request.auth.token.email &&

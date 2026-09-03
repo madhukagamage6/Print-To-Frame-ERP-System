@@ -17,6 +17,7 @@
     "@sentry/react": "^10.66.0",
     "docx": "^9.7.1",
     "firebase": "^10.11.0",
+    "firebase-admin": "^13.10.0",
     "glob": "^13.0.6",
     "jsdom": "^29.1.1",
     "lucide-react": "^0.469.0",
