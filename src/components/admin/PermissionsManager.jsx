@@ -94,7 +94,7 @@ function getMatchingPreset(perms = {}) {
   };
 }
 
-export default function PermissionsManager() {
+export default function PermissionsManager({ currentUser }) {
   const { permissions, updatePermissions, loading } = usePermissions();
   const [localPerms, setLocalPerms] = useState(permissions || {});
   const [saving, setSaving] = useState(false);
@@ -180,7 +180,7 @@ export default function PermissionsManager() {
     try {
       const finalPerms = { ...localPerms };
       if (permissions.Admin) finalPerms.Admin = permissions.Admin; // Super Admin is always locked to full
-      await updatePermissions(finalPerms);
+      await updatePermissions(finalPerms, currentUser);
       toast.success('Permissions updated & synced across all roles!');
     } catch (err) {
       toast.error('Failed to save permissions: ' + err.message);

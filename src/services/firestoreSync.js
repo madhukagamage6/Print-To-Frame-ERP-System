@@ -38,6 +38,8 @@ export const COLLECTIONS = {
   USERS: 'users',
   PENDING_USERS: 'pendingUsers',
   SETTINGS: 'settings',
+  REFERRAL_CLAIMS: 'referral_claims',
+  TYPING_INDICATORS: 'typing_indicators',
 };
 
 // ── Subscribe to a Collection (Real-time) ────────────────────

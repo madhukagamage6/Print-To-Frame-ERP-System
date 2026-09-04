@@ -11,6 +11,7 @@ import SortableTable from '../common/ui/SortableTable';
 import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { sanitizeTechnicalScope, stripEmojis } from '../../utils/validation';
 import { exportToCsv } from '../../utils/csvExport';
+import { logActivity } from '../../services/auditLog';
 
 const STAGES = ["Intake", "Processing", "75% Invoice Submitted", "Received", "Completed"];
 
@@ -218,11 +219,7 @@ function ConvertDealModal({ lead, onClose, onConfirm }) {
         title={`Convert to Deal: ${lead.name || 'Lead'}`}
         id={lead.id}
         badge={
-          <StatusBadge 
-            label="Deal Conversion" 
-            variant="cyan" 
-            size="sm" 
-          />
+          <StatusBadge status="Deal Conversion" size="sm" />
         }
         subtitle={
           <span>
@@ -655,6 +652,7 @@ export default function Leads({
         try {
           await deleteDocument(COLLECTIONS.LEADS, targetLead._firestoreId || targetLead.id);
           toast.success("Lead permanently deleted");
+          logActivity(currentUser?.identifier, currentUser?.name, 'LEAD_DELETED', 'Leads', `Lead ${targetLead.id} (${targetLead.name || 'unnamed'}) permanently deleted`);
         } catch (err) {
           console.error("Delete lead error:", err);
           toast.error("Failed to delete lead from database");

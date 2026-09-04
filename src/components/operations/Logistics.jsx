@@ -216,7 +216,7 @@ export default function Logistics({ jobs = [], setJobs, currentUser }) {
     e.preventDefault();
   };
 
-  const handleDrop = (e, targetJobId, targetStage) => {
+  const handleDrop = async (e, targetJobId, targetStage) => {
     e.preventDefault();
     const jobId = e.dataTransfer.getData("text/plain") || draggedJobId;
     if (!jobId || jobId === targetJobId) return;
@@ -264,11 +264,12 @@ export default function Logistics({ jobs = [], setJobs, currentUser }) {
     });
 
     try {
-      updateDocument(COLLECTIONS.LOGISTICS, updatedJob._firestoreId || updatedJob.id, updatedJob);
+      await updateDocument(COLLECTIONS.LOGISTICS, updatedJob._firestoreId || updatedJob.id, updatedJob);
     } catch(err) {
       console.error(err);
+      toast.error("Failed to sync job stage change to database");
     }
-    
+
     setDraggedJobId(null);
   };
 

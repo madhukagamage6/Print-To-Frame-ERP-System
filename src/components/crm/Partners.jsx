@@ -21,6 +21,7 @@ import {
 } from '../../services/firestoreSync';
 import { formatPhone, validatePhone, validateEmail } from '../../utils/validation';
 import { exportToCsv } from '../../utils/csvExport';
+import { usePermissions } from '../../context/PermissionsContext';
 
 export default function Partners({ 
   partners = [], 
@@ -34,8 +35,8 @@ export default function Partners({
   dataStore, 
   currentUser 
 }) {
+  const { canAccess } = usePermissions();
   const isPartnerUser = currentUser?.role === 'Partner';
-  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Administrator' || currentUser?.role === 'Manager';
 
   // Navigation & Filter States
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'active' | 'applications' | 'claims' | 'settlements'
@@ -73,7 +74,7 @@ export default function Partners({
   const [applications, setApplications] = useState([]);
 
   useEffect(() => {
-    const unsubClaims = subscribeToCollection('referral_claims', (data) => {
+    const unsubClaims = subscribeToCollection(COLLECTIONS.REFERRAL_CLAIMS, (data) => {
       setClaims(data || []);
     });
     const unsubApps = subscribeToCollection(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', (data) => {
@@ -440,7 +441,7 @@ export default function Partners({
         createdAt: new Date().toISOString(),
       };
 
-      await addDocument('referral_claims', claimPayload);
+      await addDocument(COLLECTIONS.REFERRAL_CLAIMS, claimPayload);
       setShowClaimModal(false);
       setClaimForm({
         clientName: '',
@@ -460,7 +461,7 @@ export default function Partners({
   // Verify Claim Handler (Admin)
   const handleVerifyClaim = async (claim) => {
     try {
-      await updateDocument('referral_claims', claim._firestoreId || claim.id, {
+      await updateDocument(COLLECTIONS.REFERRAL_CLAIMS, claim._firestoreId || claim.id, {
         status: 'Verified & Linked',
         verifiedAt: new Date().toISOString(),
         verifiedBy: currentUser?.email || 'Admin',
@@ -554,13 +555,15 @@ export default function Partners({
               <Download size={15} className="text-primary" />
               <span className="hidden sm:inline">Export CSV</span>
             </button>
-            <button
-              onClick={() => isPartnerUser ? setShowClaimModal(true) : setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
-            >
-              {isPartnerUser ? <Handshake size={16} /> : <Plus size={16} />}
-              <span>{isPartnerUser ? 'Claim Offline Referral' : 'Register Partner'}</span>
-            </button>
+            {(isPartnerUser || canAccess(currentUser?.role, 'partners', 'create')) && (
+              <button
+                onClick={() => isPartnerUser ? setShowClaimModal(true) : setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0 cursor-pointer"
+              >
+                {isPartnerUser ? <Handshake size={16} /> : <Plus size={16} />}
+                <span>{isPartnerUser ? 'Claim Offline Referral' : 'Register Partner'}</span>
+              </button>
+            )}
           </div>
         }
       />
@@ -942,20 +945,22 @@ export default function Partners({
                       >
                         <QrCode size={12} /> QR Flyer
                       </button>
-                      <button
-                        onClick={() => {
-                          setEditFormData({ 
-                            ...selectedPartner, 
-                            photoURL: getPartnerAvatar(selectedPartner),
-                            commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
-                          });
-                          setShowEditModal(true);
-                        }}
-                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        <Edit3 size={12} /> Edit
-                      </button>
-                      {!isPartnerUser && (
+                      {canAccess(currentUser?.role, 'partners', 'edit') && (
+                        <button
+                          onClick={() => {
+                            setEditFormData({
+                              ...selectedPartner,
+                              photoURL: getPartnerAvatar(selectedPartner),
+                              commissionRate: Number(selectedPartner.commissionRate > 1 ? selectedPartner.commissionRate : 53.5)
+                            });
+                            setShowEditModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Edit3 size={12} /> Edit
+                        </button>
+                      )}
+                      {!isPartnerUser && canAccess(currentUser?.role, 'partners', 'delete') && (
                         <button
                           onClick={() => setDeletePartnerId(selectedPartner._firestoreId || selectedPartner.id || selectedPartner.partnerId)}
                           className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl border border-rose-500/20 transition-colors cursor-pointer"

@@ -28,8 +28,8 @@ import {
   Handshake,
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
-import { subscribeToCollection, addDocument, updateDocument, COLLECTIONS } from "./services/firestoreSync";
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction } from "firebase/firestore";
+import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
 import { UserAvatar } from "./components/common/ui";
 
@@ -83,6 +83,14 @@ export function uT(t, e = {}) {
   if (Notification.permission === "granted") {
     new Notification(t, e);
   }
+}
+
+// Self-Healing Super Admin Guard: these two emails always self-heal back to
+// role: 'Admin' / status: 'Active' on login, mirrored in firestore.rules'
+// isBootstrapSuperAdmin(). Do not remove — this is intentional, see CLAUDE.md.
+const BOOTSTRAP_ADMIN_EMAILS = ["madhukagamage6@gmail.com", "madhukagamage@gmail.com"];
+function isSuperAdminEmail(email) {
+  return BOOTSTRAP_ADMIN_EMAILS.includes(email);
 }
 
 export let triggerBrowserNotification = (t, e) => {
@@ -407,7 +415,7 @@ function App() {
             type: 'commission',
             partnerId: targetLead.partnerId || '',
           };
-          setNotificationsList(prev => [notif, ...prev]);
+          emitNotification(notif);
         }
       }
 
@@ -439,7 +447,7 @@ function App() {
         const emailKey = user.email ? user.email.trim().toLowerCase() : '';
         try {
           console.log("1. Fetching users doc for:", emailKey);
-          const userDoc = await getDoc(doc(db, "users", emailKey));
+          const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, emailKey));
           console.log("1. Result:", userDoc.exists());
           
           if (userDoc.exists()) {
@@ -447,7 +455,7 @@ function App() {
             // Auto-sync Google photoURL if user profile doesn't have a photo but Google Auth provides one
             if (!userData.photoURL && user.photoURL) {
               userData.photoURL = user.photoURL;
-              setDoc(doc(db, "users", emailKey), { photoURL: user.photoURL }, { merge: true }).catch(console.warn);
+              setDoc(doc(db, COLLECTIONS.USERS, emailKey), { photoURL: user.photoURL }, { merge: true }).catch(console.warn);
             }
             if (user.photoURL && (userData.role === 'Partner' || userData.partnerId)) {
               const pMatch = partners.find(p => p.email?.toLowerCase() === emailKey || p.partnerId === userData.partnerId);
@@ -458,23 +466,23 @@ function App() {
             }
 
             // Self-Healing Super Admin Guard: Ensure primary admin email always retains Admin role
-            const isSuperAdminEmail = emailKey === "madhukagamage6@gmail.com" || emailKey === "madhukagamage@gmail.com";
-            if (isSuperAdminEmail && userData.role !== 'Admin') {
+            const isSuperAdmin = isSuperAdminEmail(emailKey);
+            if (isSuperAdmin && userData.role !== 'Admin') {
               userData.role = 'Admin';
               userData.status = 'Active';
               userData.isApproved = true;
-              setDoc(doc(db, "users", emailKey), { role: 'Admin', status: 'Active', isApproved: true }, { merge: true }).catch(console.warn);
+              setDoc(doc(db, COLLECTIONS.USERS, emailKey), { role: 'Admin', status: 'Active', isApproved: true }, { merge: true }).catch(console.warn);
             }
 
-            if (userData.isApproved || userData.status === 'Active' || userData.status === undefined || isSuperAdminEmail) {
-              setCurrentUser({ ...userData, role: isSuperAdminEmail ? 'Admin' : userData.role, isApproved: true, status: 'Active' });
+            if (userData.isApproved || userData.status === 'Active' || userData.status === undefined || isSuperAdmin) {
+              setCurrentUser({ ...userData, role: isSuperAdmin ? 'Admin' : userData.role, isApproved: true, status: 'Active' });
             } else {
               logout();
               setLoginError("Your account has been disabled or deactivated.");
             }
           } else {
             console.log("2. Fetching pendingUsers doc for:", emailKey);
-            const pendingDoc = await getDoc(doc(db, "pendingUsers", emailKey));
+            const pendingDoc = await getDoc(doc(db, COLLECTIONS.PENDING_USERS, emailKey));
             console.log("2. Result:", pendingDoc.exists());
             
             if (pendingDoc.exists()) {
@@ -482,9 +490,12 @@ function App() {
               setLoginError("Your account is pending admin approval.");
             } else {
               console.log("3. User not found, checking admin conditions");
-              const isAdminEmail = emailKey === "madhukagamage6@gmail.com" || emailKey === "madhukagamage@gmail.com";
-              
-              if (token || isAdminEmail) {
+              const isAdminEmail = isSuperAdminEmail(emailKey);
+
+              // Only the bootstrap-admin emails skip the pendingUsers approval queue.
+              // Every other first-time sign-in — Google OAuth included — must be
+              // approved by an admin, same as the email/password path below.
+              if (isAdminEmail) {
                 console.log("4. Creating new admin user profile");
                 const newUser = {
                   identifier: emailKey,
@@ -495,7 +506,7 @@ function App() {
                   status: 'Active',
                   photoURL: user.photoURL || '',
                 };
-                await setDoc(doc(db, "users", emailKey), newUser);
+                await setDoc(doc(db, COLLECTIONS.USERS, emailKey), newUser);
                 console.log("5. Created successfully");
                 setCurrentUser(newUser);
               } else {
@@ -507,7 +518,7 @@ function App() {
                   role: "Customer",
                   status: 'Pending',
                 };
-                await setDoc(doc(db, "pendingUsers", emailKey), pendingUser);
+                await setDoc(doc(db, COLLECTIONS.PENDING_USERS, emailKey), pendingUser);
                 console.log("5. Created pending successfully");
                 logActivity(emailKey, user.displayName || emailKey, 'REGISTER', 'Auth', 'New user registered and is pending approval.');
                 logout();
@@ -540,7 +551,7 @@ function App() {
     if (currentUser?.isApproved) {
       // All approved users need the full user list to use the Messaging feature.
       // Firestore rules already allow all authenticated users to read /users/*.
-      unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      unsubUsers = onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
         const u = [];
         snapshot.forEach(doc => {
           const data = doc.data();
@@ -549,12 +560,20 @@ function App() {
             setCurrentUser(prev => {
               if (!prev) return data;
               if (
-                prev.photoURL !== data.photoURL || 
-                prev.role !== data.role || 
+                prev.photoURL !== data.photoURL ||
+                prev.role !== data.role ||
                 prev.name !== data.name ||
                 prev.selectedPreset !== data.selectedPreset
               ) {
-                return { ...prev, ...data };
+                const merged = { ...prev, ...data };
+                // Never let a stale snapshot (racing the self-heal write above)
+                // downgrade a bootstrap super-admin's role back below Admin.
+                if (isSuperAdminEmail(data.identifier)) {
+                  merged.role = 'Admin';
+                  merged.isApproved = true;
+                  merged.status = 'Active';
+                }
+                return merged;
               }
               return prev;
             });
@@ -566,7 +585,7 @@ function App() {
 
     if (currentUser?.role === 'Admin' || currentUser?.role === 'admin') {
       // Pending users are Admin-only
-      unsubPending = onSnapshot(collection(db, "pendingUsers"), (snapshot) => {
+      unsubPending = onSnapshot(collection(db, COLLECTIONS.PENDING_USERS), (snapshot) => {
         const pu = [];
         snapshot.forEach(doc => pu.push(doc.data()));
         setPendingUsers(pu);
@@ -624,7 +643,7 @@ function App() {
       const completeRegData = { ...regData };
       delete completeRegData.password; // Don't store plaintext password
       
-      await setDoc(doc(db, "pendingUsers", regData.identifier), completeRegData);
+      await setDoc(doc(db, COLLECTIONS.PENDING_USERS, regData.identifier), completeRegData);
       
       logActivity(regData.identifier, regData.name, 'REGISTER', 'Auth', 'User requested access via registration form.');
       setRegisterSuccess("Registration submitted successfully. Please wait for admin approval.");
@@ -651,29 +670,45 @@ function App() {
         approvedAt: new Date().toISOString(),
         approvedBy: currentUser?.identifier || 'Admin',
       };
-      await setDoc(doc(db, "users", regData.identifier), approvedUser);
-      await deleteDoc(doc(db, "pendingUsers", regData.identifier));
+      await batchWrite([
+        { type: 'set', collection: COLLECTIONS.USERS, docId: regData.identifier, data: approvedUser },
+        { type: 'delete', collection: COLLECTIONS.PENDING_USERS, docId: regData.identifier },
+      ]);
 
-      // Auto-Sync: If role is Partner, automatically provision in partners collection
+      // Auto-Sync: If role is Partner, automatically provision in partners collection.
+      // Runs inside a transaction so the next partner id/code is derived from a
+      // fresh Firestore read (not stale local state) and Firestore auto-retries
+      // if two approvals race and collide on the same id.
       if (finalRole === 'Partner') {
-        const nextId = partners.length > 0 ? Math.max(...partners.map(p => p.id || 0)) + 1 : 1;
-        const partnerCode = `P-${1000 + nextId}`;
-        const newPartnerRecord = {
-          id: nextId,
-          partnerId: partnerCode,
-          name: regData.name,
-          email: regData.identifier,
-          phone: regData.mobile || regData.contactNumber || '',
-          type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
-          commissionRate: 53.5,
-          totalSqFt: 0,
-          paid: 0,
-          pending: 0,
-          status: 'Active',
-          createdAt: new Date().toISOString(),
-        };
-        await addDocument(COLLECTIONS.PARTNERS, newPartnerRecord, partnerCode);
-        setPartners(prev => [...prev.filter(p => p.partnerId !== partnerCode), newPartnerRecord]);
+        const newPartnerRecord = await runTransaction(db, async (tx) => {
+          const maxIdSnap = await tx.get(
+            query(collection(db, COLLECTIONS.PARTNERS), orderBy('id', 'desc'), limit(1))
+          );
+          const currentMaxId = maxIdSnap.empty ? 0 : (maxIdSnap.docs[0].data().id || 0);
+          const nextId = currentMaxId + 1;
+          const partnerCode = `P-${1000 + nextId}`;
+          const partnerRef = doc(db, COLLECTIONS.PARTNERS, partnerCode);
+          // Reading the candidate doc puts it in the transaction's read set, so a
+          // concurrent approval landing on the same partnerCode forces a retry.
+          await tx.get(partnerRef);
+          const record = {
+            id: nextId,
+            partnerId: partnerCode,
+            name: regData.name,
+            email: regData.identifier,
+            phone: regData.mobile || regData.contactNumber || '',
+            type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
+            commissionRate: 53.5,
+            totalSqFt: 0,
+            paid: 0,
+            pending: 0,
+            status: 'Active',
+            createdAt: new Date().toISOString(),
+          };
+          tx.set(partnerRef, record);
+          return record;
+        });
+        setPartners(prev => [...prev.filter(p => p.partnerId !== newPartnerRecord.partnerId), newPartnerRecord]);
       }
 
       // Auto-Sync: If role is Business Client, automatically provision in customers collection
@@ -703,7 +738,7 @@ function App() {
 
   const rejectPending = async (identifier) => {
     try {
-      await deleteDoc(doc(db, "pendingUsers", identifier));
+      await deleteDoc(doc(db, COLLECTIONS.PENDING_USERS, identifier));
       logActivity(currentUser.identifier, currentUser.name, 'REJECT', 'Admin', `Rejected user access for ${identifier}`);
     } catch (err) {
       console.error("Error rejecting user:", err);
@@ -1187,6 +1222,7 @@ function App() {
           {activeTab === "admin" && canAccess(currentUser?.role, 'admin') && (
             <AdminPanel
               dataStore={dataStore}
+              currentUser={currentUser}
             />
           )}
 

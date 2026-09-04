@@ -1189,11 +1189,7 @@ export default function LeadCardDetails({
         title={formData.name || 'New Lead'}
         id={lead.id}
         badge={
-          <StatusBadge 
-            label={lead.stage || 'Draft'} 
-            variant="cyan" 
-            size="sm" 
-          />
+          <StatusBadge status={lead.stage || 'Draft'} size="sm" />
         }
         subtitle={
           <>
