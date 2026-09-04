@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, onSnapshot, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { logActivity } from '../services/auditLog';
 
 const PermissionsContext = createContext();
 
@@ -180,26 +181,24 @@ export const PermissionsProvider = ({ children }) => {
     return rolePerms[module][resolvedAction] === true;
   };
 
-  const updatePermissions = async (newPermissions) => {
+  const updatePermissions = async (newPermissions, actingUser) => {
     try {
       const oldPerms = permissions;
       await setDoc(doc(db, 'settings', 'permissions'), newPermissions);
-      
+
       // Log permission changes to audit log
       try {
         const changedRoles = Object.keys(newPermissions).filter(role => {
           return JSON.stringify(oldPerms[role]) !== JSON.stringify(newPermissions[role]);
         });
         if (changedRoles.length > 0) {
-          await addDoc(collection(db, 'auditLog'), {
-            userId: 'system',
-            userName: 'Admin',
-            action: 'PERMISSION_CHANGED',
-            module: 'Admin',
-            details: `Role permissions updated for: ${changedRoles.join(', ')}`,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+          await logActivity(
+            actingUser?.identifier || 'system',
+            actingUser?.name || 'Admin',
+            'PERMISSION_CHANGED',
+            'Admin',
+            `Role permissions updated for: ${changedRoles.join(', ')}`
+          );
         }
       } catch (logErr) {
         console.warn('[PermissionsContext] Could not log permission change:', logErr);

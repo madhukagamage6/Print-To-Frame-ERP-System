@@ -8,7 +8,7 @@ import PermissionsManager from './PermissionsManager';
 import { PageHeader, FilterBar, StatusBadge, TwoToneIcon } from '../common/ui';
 import { subscribeToCollection, COLLECTIONS } from '../../services/firestoreSync';
 
-export default function AdminPanel({ dataStore }) {
+export default function AdminPanel({ dataStore, currentUser }) {
   const [activeTab, setActiveTab] = useState('analytics'); // 'analytics' | 'permissions' | 'database' | 'audit'
   const [searchQuery, setSearchQuery] = useState('');
   const [auditLogs, setAuditLogs] = useState([]);
@@ -162,7 +162,7 @@ export default function AdminPanel({ dataStore }) {
       {/* ── TAB 2: PERMISSIONS MANAGER ────────────────────────────────────── */}
       {activeTab === 'permissions' && (
         <div className="bg-surface-container/60 rounded-2xl border border-outline-variant/60 p-6 shadow-sm">
-          <PermissionsManager />
+          <PermissionsManager currentUser={currentUser} />
         </div>
       )}
 

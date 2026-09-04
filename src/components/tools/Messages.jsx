@@ -5,7 +5,7 @@ import {
   Smile, Paperclip, MoreVertical, MessageCircle
 } from "lucide-react";
 import { toast } from "../../utils/toast";
-import { setDocument } from "../../services/firestoreSync";
+import { setDocument, COLLECTIONS } from "../../services/firestoreSync";
 import { db } from "../../services/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
 import { PageHeader, FilterBar, StatusBadge, UserAvatar, EmailTemplateModal } from "../common/ui";
@@ -45,7 +45,7 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
   // Typing indicators
   useEffect(() => {
     if (!currentUser) return;
-    const typingUnsub = onSnapshot(collection(db, 'typing_indicators'), (snap) => {
+    const typingUnsub = onSnapshot(collection(db, COLLECTIONS.TYPING_INDICATORS), (snap) => {
       const typingData = {};
       snap.forEach(d => {
         const data = d.data();
@@ -71,7 +71,7 @@ export default function Messages({ users = [], currentUser, onUnreadCountChange 
     const targetId = String(activeUser.identifier).trim().toLowerCase();
     const activeChan = getChannelId(myId, targetId);
     try {
-      setDocument('typing_indicators', myId, {
+      setDocument(COLLECTIONS.TYPING_INDICATORS, myId, {
         fromId: myId,
         channelId: activeChan,
         isTyping,

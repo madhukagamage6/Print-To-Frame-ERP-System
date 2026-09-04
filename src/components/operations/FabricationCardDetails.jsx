@@ -216,16 +216,6 @@ export default function FabricationCardDetails({
     printWin.document.close();
   };
 
-  const statusColorMap = {
-    "Pending": "amber",
-    "Material Cutting": "sky",
-    "Welding & Assembly": "indigo",
-    "Painting & Finishing": "purple",
-    "Ready For Inspection": "emerald",
-    "Ongoing": "cyan",
-    "Completed": "emerald"
-  };
-
   return (
     <DetailModalLayout isOpen={true} onClose={onClose} ariaLabel="Fabrication Work Order">
       
@@ -234,11 +224,7 @@ export default function FabricationCardDetails({
         title={form.title || `Fabrication: ${job.jobNo}`}
         id={job.jobNo}
         badge={
-          <StatusBadge 
-            label={job.status || "Pending"} 
-            variant={statusColorMap[job.status] || "default"} 
-            size="sm" 
-          />
+          <StatusBadge status={job.status || "Pending"} size="sm" />
         }
         subtitle={
           <>

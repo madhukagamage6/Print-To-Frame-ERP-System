@@ -16,6 +16,8 @@ import {
 } from '../common/ui';
 import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/roles';
 import { formatPhone } from '../../utils/validation';
+import { usePermissions } from '../../context/PermissionsContext';
+import { logActivity } from '../../services/auditLog';
 
 export default function AgentDatabase({ 
   users = [], 
@@ -75,7 +77,11 @@ export default function AgentDatabase({
     return () => unsub();
   }, []);
 
-  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Administrator';
+  const { canAccess } = usePermissions();
+  // Drives every user-management control on this page (enroll, edit, delete,
+  // role/status change) — was previously a hardcoded role==='Admin' check that
+  // ignored the configurable Permissions Manager (see 'agents' module).
+  const isAdmin = canAccess(currentUser?.role, 'agents', 'edit');
 
   // 1. DECOUPLE PARTNERS: Filter out users with role 'Partner' (since partners are managed in Partners tab)
   const nonPartnerUsers = useMemo(() => {
@@ -159,6 +165,7 @@ export default function AgentDatabase({
         }
         setDeleteId(null);
         toast.success("User access revoked successfully");
+        logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Admin', `Revoked access for ${deleteId}`);
       } catch (err) {
         toast.error("Error removing user: " + err.message);
       }
@@ -168,10 +175,12 @@ export default function AgentDatabase({
   const handleRoleChange = async (newRole) => {
     if (!selectedAgent) return;
     try {
+      const previousRole = selectedAgent.role;
       await updateDoc(doc(db, "users", selectedAgent.identifier), { role: newRole });
       setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, role: newRole } : u));
       setSelectedAgent(prev => ({ ...prev, role: newRole }));
       toast.success(`Role updated to ${newRole}`);
+      logActivity(currentUser?.identifier, currentUser?.name, 'ROLE_CHANGE', 'Admin', `Changed role for ${selectedAgent.identifier} from ${previousRole} to ${newRole}`);
     } catch (err) {
       toast.error("Error updating role: " + err.message);
     }
@@ -185,6 +194,7 @@ export default function AgentDatabase({
       setUsers(prev => prev.map(u => u.identifier === selectedAgent.identifier ? { ...u, status: newStatus } : u));
       setSelectedAgent(prev => ({ ...prev, status: newStatus }));
       toast.success(`User account ${newStatus === 'Active' ? 'Reactivated' : 'Deactivated'}`);
+      logActivity(currentUser?.identifier, currentUser?.name, 'STATUS_CHANGE', 'Admin', `Set ${selectedAgent.identifier}'s account status to ${newStatus}`);
     } catch (err) {
       toast.error("Failed to change account status: " + err.message);
     }

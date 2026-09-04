@@ -311,7 +311,7 @@ export default function FabricationWorks({
   const [whatsappUpdate, setWhatsappUpdate] = useState("");
   const [showUpdateModal, setShowUpdateModal] = useState(false);
 
-  const handleAddNew = (e) => {
+  const handleAddNew = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!form.scope.trim()) {
       toast.error("Please provide at least a brief scope for the fabrication job.");
@@ -358,7 +358,7 @@ export default function FabricationWorks({
     });
     
     try {
-      addDocument(COLLECTIONS.PROJECTS, newJob, jobNo);
+      await addDocument(COLLECTIONS.PROJECTS, newJob, jobNo);
       toast.success(`Job ${jobNo} queued to production floor`);
     } catch (err) {
       console.error(err);

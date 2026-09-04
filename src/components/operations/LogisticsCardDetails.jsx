@@ -151,12 +151,6 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
     printWin.document.close();
   };
 
-  const statusColorMap = {
-    "Pending": "amber",
-    "In Transit": "cyan",
-    "Completed": "emerald"
-  };
-
   return (
     <DetailModalLayout isOpen={true} onClose={onClose} ariaLabel="Logistics Dispatch Inspector">
       
@@ -165,11 +159,7 @@ export default function LogisticsCardDetails({ job, onClose, onSave }) {
         title={formData.location || `${job.type} Task`}
         id={job.id}
         badge={
-          <StatusBadge 
-            label={job.status || "Pending"} 
-            variant={statusColorMap[job.status] || "default"} 
-            size="sm" 
-          />
+          <StatusBadge status={job.status || "Pending"} size="sm" />
         }
         subtitle={
           <>

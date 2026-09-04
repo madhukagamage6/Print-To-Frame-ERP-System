@@ -141,14 +141,14 @@ service cloud.firestore {
     match /customers/{customerId} {
       allow read: if checkPermission('customers', 'view') || checkPermission('customers', 'read');
       allow create, update: if checkPermission('customers', 'create') || checkPermission('customers', 'edit') || checkPermission('customers', 'write');
-      allow delete: if isAdmin();
+      allow delete: if checkPermission('customers', 'delete') || isAdmin();
     }
 
     // ── Partners & Commission Ledgers ────────────────────
     match /partners/{partnerId} {
       allow read: if checkPermission('partners', 'view') || checkPermission('partners', 'read') || (isAuthenticated() && partnerId == request.auth.token.email);
       allow create, update: if checkPermission('partners', 'create') || checkPermission('partners', 'edit') || checkPermission('partners', 'write');
-      allow delete: if isAdmin();
+      allow delete: if checkPermission('partners', 'delete') || isAdmin();
     }
 
     // ── Fabrication / Projects ───────────────────────────

@@ -14,8 +14,10 @@ import { exportToCsv } from '../../utils/csvExport';
 import { findCustomerDuplicates } from '../../utils/stringMatch';
 import ContactSyncModal from './ContactSyncModal';
 import AddressPickerModal from '../common/AddressPickerModal';
+import { usePermissions } from '../../context/PermissionsContext';
 
 export default function Customers({ customers = [], setCustomers, dataStore, currentUser }) {
+  const { canAccess } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -94,7 +96,6 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     toast.success('Customer logo / avatar attached!');
   };
 
-  const isAdmin = currentUser?.role === 'Admin';
 
   const businessCount = customers.filter(c => c.type === 'Business').length;
   const individualCount = customers.filter(c => c.type === 'Individual' || !c.type).length;
@@ -327,21 +328,25 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
               <Users size={15} className="text-primary" />
               <span className="hidden sm:inline">Sync Contacts</span>
             </button>
-            <button
-              onClick={handleExportCsv}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant hover:border-primary/40 text-on-surface rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0"
-              title="Export filtered customer list to CSV"
-            >
-              <Download size={15} className="text-primary" />
-              <span className="hidden sm:inline">Export CSV</span>
-            </button>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0"
-            >
-              <Plus size={16} />
-              <span>Register Client</span>
-            </button>
+            {canAccess(currentUser?.role, 'customers', 'export') && (
+              <button
+                onClick={handleExportCsv}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant hover:border-primary/40 text-on-surface rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0"
+                title="Export filtered customer list to CSV"
+              >
+                <Download size={15} className="text-primary" />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            )}
+            {canAccess(currentUser?.role, 'customers', 'create') && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(0,218,243,0.25)] active:scale-95 flex-shrink-0"
+              >
+                <Plus size={16} />
+                <span>Register Client</span>
+              </button>
+            )}
           </div>
         }
       />
@@ -488,11 +493,11 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
                       <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Total Orders</p>
                       <p className="text-xl font-extrabold">{selectedCustomer.orders || 1}</p>
                     </div>
-                    {isAdmin && (
+                    {canAccess(currentUser?.role, 'customers', 'delete') && (
                       <button
                         onClick={() => setDeleteNic(selectedCustomer.nic)}
                         className="p-2.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-all border border-rose-500/20"
-                        title="Delete Profile (Admin Only)"
+                        title="Delete customer profile"
                       >
                         <Trash2 size={16} />
                       </button>
