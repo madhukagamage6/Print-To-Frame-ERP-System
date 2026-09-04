@@ -72,24 +72,31 @@ service cloud.firestore {
     }
 
     // ── User Profiles ─────────────────────────────────────
-    // SECURITY: `role` must never be settable by the user themselves except through
-    // the two narrow, intentional self-service paths the app already relies on:
-    //   1. A brand-new Google sign-in self-provisions its own profile as 'Customer'.
-    //   2. The two hardcoded owner emails self-heal back to 'Admin' if ever changed.
-    // Anything else — including a non-admin flipping their own role to 'Admin' via
-    // the Firestore SDK directly (bypassing the UI) — is rejected.
+    // SECURITY: `role`, `isApproved`, and `status` must never be settable by the user
+    // themselves except through the two narrow, intentional self-service paths the app
+    // already relies on:
+    //   1. A brand-new Google sign-in self-provisions its own profile as 'Customer',
+    //      unapproved and pending (isApproved: false, status: 'Pending').
+    //   2. The two hardcoded owner emails self-heal back to 'Admin'/Active if ever changed.
+    // Anything else — including a non-admin flipping their own role to 'Admin', or
+    // self-approving / self-reactivating after being deactivated, via the Firestore SDK
+    // directly (bypassing the UI) — is rejected.
     match /users/{userId} {
       allow read: if isAuthenticated();
 
       allow create: if isAdmin()
         || (isAuthenticated() && request.auth.token.email == userId && (
-             request.resource.data.role == 'Customer'
+             (request.resource.data.role == 'Customer'
+               && request.resource.data.isApproved == false
+               && request.resource.data.status == 'Pending')
              || (isBootstrapSuperAdmin(userId) && request.resource.data.role == 'Admin')
            ));
 
       allow update: if isAdmin()
         || (isAuthenticated() && request.auth.token.email == userId && (
-             request.resource.data.role == resource.data.role
+             (request.resource.data.role == resource.data.role
+               && request.resource.data.isApproved == resource.data.isApproved
+               && request.resource.data.status == resource.data.status)
              || (isBootstrapSuperAdmin(userId) && request.resource.data.role == 'Admin')
            ));
 
@@ -167,10 +174,15 @@ service cloud.firestore {
     // ── Messages (Real-Time Internal Chat) ─────────────────
     // `update` used to be open to any authenticated user for any message — that let
     // anyone silently rewrite someone else's message content after the fact. Now only
-    // the original sender (or an Admin) can edit a message.
+    // the original sender (or an Admin) can edit a message. A conversation participant
+    // may still update a message that isn't theirs, but ONLY to touch `readBy` — this is
+    // what markChatAsRead() needs to record read receipts on the other party's messages.
     match /messages/{messageId} {
       allow read, create: if isAuthenticated();
-      allow update: if isAdmin() || (isAuthenticated() && resource.data.fromId == request.auth.token.email);
+      allow update: if isAdmin()
+        || (isAuthenticated() && resource.data.fromId == request.auth.token.email)
+        || (isAuthenticated() && request.auth.token.email in resource.data.participants
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']));
       allow delete: if isAdmin() || (
         isAuthenticated() &&
         resource.data.fromId == request.auth.token.email &&
