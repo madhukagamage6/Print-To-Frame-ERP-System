@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
 // Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
 // All support audio inlineData multimodal content. Ordered by performance preference.
@@ -26,7 +27,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
 ];
 
-function getAdminAuth() {
+function ensureAdminApp() {
   if (!getApps().length) {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (!raw) {
@@ -34,6 +35,10 @@ function getAdminAuth() {
     }
     initializeApp({ credential: cert(JSON.parse(raw)) });
   }
+}
+
+function getAdminAuth() {
+  ensureAdminApp();
   return getAuth();
 }
 
@@ -65,11 +70,27 @@ export default async function handler(req, res) {
     if (!idToken) {
       return res.status(401).json({ error: 'Missing Authorization bearer token' });
     }
+    let decodedToken;
     try {
-      await getAdminAuth().verifyIdToken(idToken);
+      // checkRevoked=true so a session revoked server-side (e.g. a disabled Firebase
+      // Auth account) is rejected immediately instead of staying valid until it expires.
+      decodedToken = await getAdminAuth().verifyIdToken(idToken, true);
     } catch (authErr) {
-      console.warn('generate.js: rejected invalid/expired ID token:', authErr.message);
+      console.warn('generate.js: rejected invalid/expired/revoked ID token:', authErr.message);
       return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
+    }
+
+    // A valid Firebase session alone isn't enough — the caller's ERP profile must also
+    // be admin-approved and active (mirrors the client-side gate in src/App.jsx), so a
+    // user who is still pending approval or was deactivated by an admin can't use this
+    // endpoint just by holding a valid Firebase ID token.
+    ensureAdminApp();
+    const userSnap = await getFirestore().collection('users').doc(decodedToken.email).get();
+    const userData = userSnap.data();
+    const isApproved = userSnap.exists
+      && (userData.isApproved === true || userData.status === 'Active' || userData.status === undefined);
+    if (!isApproved) {
+      return res.status(403).json({ error: 'Your account is pending approval or has been deactivated.' });
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
