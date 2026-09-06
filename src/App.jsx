@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Target,
@@ -286,6 +286,9 @@ function App() {
   // Core CRM / Ops States
   const [customers, setCustomers] = useState(defaultCustomers);
   const [partners, setPartners] = useState(defaultPartners);
+  // Mirrors `partners` for the mount-once auth listener below, which must not
+  // re-subscribe whenever a partner document changes.
+  const partnersRef = useRef(partners);
   const [projects, setProjects] = useState(defaultProjects);
   const [logisticsJobs, setLogisticsJobs] = useState(defaultLogistics);
   const [leads, setLeads] = useState(defaultLeads);
@@ -437,6 +440,10 @@ function App() {
   });
 
   useEffect(() => {
+    partnersRef.current = partners;
+  }, [partners]);
+
+  useEffect(() => {
     oT(); // Request notification permissions
     // Listen to users and pendingUsers from Firestore (Moved to separate useEffect)    // Initialize Firebase Auth
     const unsubAuth = initAuth(
@@ -458,7 +465,7 @@ function App() {
               setDoc(doc(db, COLLECTIONS.USERS, emailKey), { photoURL: user.photoURL }, { merge: true }).catch(console.warn);
             }
             if (user.photoURL && (userData.role === 'Partner' || userData.partnerId)) {
-              const pMatch = partners.find(p => p.email?.toLowerCase() === emailKey || p.partnerId === userData.partnerId);
+              const pMatch = partnersRef.current.find(p => p.email?.toLowerCase() === emailKey || p.partnerId === userData.partnerId);
               if (pMatch && !pMatch.photoURL) {
                 const pDocId = pMatch._firestoreId || pMatch.id || pMatch.partnerId;
                 updateDocument(COLLECTIONS.PARTNERS, pDocId, { photoURL: user.photoURL }).catch(console.warn);
