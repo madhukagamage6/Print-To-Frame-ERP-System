@@ -30,6 +30,22 @@
   --color-outline-variant: 42 54 75;
   --color-primary: 0 218 243;
   --color-on-primary: 0 0 0;
+
+  /* Status accents. `-on` is the readable text colour for that bucket and is
+     the pair that flips between themes; the accent itself is reused at low
+     alpha for badge backgrounds and borders. */
+  --color-status-success: 16 185 129;
+  --color-status-success-on: 52 211 153;
+  --color-status-ready: 6 182 212;
+  --color-status-ready-on: 103 232 249;
+  --color-status-warning: 245 158 11;
+  --color-status-warning-on: 252 211 77;
+  --color-status-danger: 244 63 94;
+  --color-status-danger-on: 253 164 175;
+  --color-status-info: 99 102 241;
+  --color-status-info-on: 165 180 252;
+  --color-status-progress: 0 218 243;
+  --color-status-progress-on: 0 218 243;
 }
 
 [data-theme='light'] {
@@ -47,6 +63,18 @@
   --color-outline-variant: 203 213 225;
   --color-primary: 2 132 199;
   --color-on-primary: 255 255 255;
+
+  /* Darker text variants so status badges clear WCAG AA on light surfaces;
+     the 300/400-level values used in dark mode sit near 1.8:1 here. */
+  --color-status-success-on: 4 120 87;
+  --color-status-ready-on: 14 116 144;
+  --color-status-warning-on: 146 64 14;
+  --color-status-danger-on: 190 18 60;
+  --color-status-info-on: 67 56 202;
+  /* Brand primary itself only reaches 3.46:1 on a light surface, so the
+     in-progress badge needs its own darker text value. */
+  --color-status-progress: 2 132 199;
+  --color-status-progress-on: 7 89 133;
 }
 
 html, body, #root {
