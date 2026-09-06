@@ -60,7 +60,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       setNotes(latestQuote.notes || '');
       setIsEditing(false);
     }
-  }, [latestQuote]);
+  }, [latestQuote, activeQuote]);
 
   const subtotal = lineItems.reduce((s, i) => s + lineTotal(i), 0);
   const grandTotal = subtotal;
