@@ -1,9 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Sparkles, FileText, Copy, ChevronRight, Check, X, Layers, HardDrive } from 'lucide-react';
+import { Plus, Trash2, Sparkles, FileText, Copy, ChevronRight, Check, X, Layers, HardDrive, MessageCircle, Send } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { generateStructuredQuotation } from '../../services/gemini';
 import { addDocument, updateDocument, COLLECTIONS } from '../../services/firestoreSync';
 import GoogleDrivePickerModal from '../common/GoogleDrivePickerModal';
+import { ModalWrapper } from '../common/ui';
+
+// WhatsApp renders *text* as bold and _text_ as italic client-side — this
+// converts those same markers to HTML purely for the in-app chat-bubble
+// preview, so what the admin previews visually matches what WhatsApp will
+// actually show once pasted/sent, without changing the copied plain text.
+function whatsAppMarkupToHtml(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*(.+?)\*/g, '<strong>$1</strong>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br/>');
+}
 
 const STATUS_STYLES = {
   Draft: 'text-on-surface-variant bg-surface-container-high border-outline-variant',
@@ -53,6 +66,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
   const [isGenerating, setIsGenerating] = useState(false);
   const [showDriveModal, setShowDriveModal] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(false);
 
   // Sync if latestQuote changes and not dirty
   React.useEffect(() => {
@@ -249,6 +263,32 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       lineItems: lineItems.map(({ id, ...rest }) => rest),
     });
     toast.success('25% Final Settlement invoice generated & linked!');
+  };
+
+  // Plain-text quotation summary for sharing over WhatsApp/SMS — deliberately
+  // NOT AI-generated (no Gemini call): built straight from the real line
+  // items and totals already on screen, so it always matches the actual
+  // quote instead of a separately-drafted description of it.
+  const buildWhatsAppQuoteText = () => {
+    const describedItems = lineItems.filter(i => i.description);
+    const itemsText = describedItems
+      .map(i => `• ${i.description} — LKR ${lineTotal(i).toLocaleString(undefined, { minimumFractionDigits: 2 })}`)
+      .join('\n');
+
+    return [
+      `*Print To Frame — Quotation*`,
+      ``,
+      `Hi ${lead.name || 'there'}, thank you for reaching out! Here's a summary of your quotation:`,
+      lead.jobScope ? `\n*Scope:* ${lead.jobScope}` : null,
+      lead.deliveryLocation ? `*Delivery Location:* ${lead.deliveryLocation}` : null,
+      itemsText ? `\n*Itemized Breakdown:*\n${itemsText}` : null,
+      `\n*Grand Total:* LKR ${grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      `• 75% Advance on commencement: LKR ${advanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      `• 25% Final on delivery: LKR ${balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      notes ? `\n_Note: ${notes}_` : null,
+      `\nPlease let us know if you'd like to proceed — happy to answer any questions!`,
+      `— Print To Frame`,
+    ].filter(v => v !== null).join('\n');
   };
 
   const switchToQuote = (q) => {
@@ -481,6 +521,16 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
         </div>
       </div>
 
+      {/* WhatsApp/Text Quote Share — quotations only, never invoices; a
+          plain-text alternative to the PDF for sharing over chat. */}
+      <button
+        type="button"
+        onClick={() => setShowWhatsAppPreview(true)}
+        className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+      >
+        <MessageCircle size={14} /> Preview & Share Quote as Text (WhatsApp)
+      </button>
+
       {/* Notes / Special Instructions */}
       {isEditing && (
         <div>
@@ -579,6 +629,71 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
           }
         }}
       />
+
+      {/* WhatsApp Text Quote — mobile chat-bubble preview + copy/share */}
+      <ModalWrapper
+        isOpen={showWhatsAppPreview}
+        onClose={() => setShowWhatsAppPreview(false)}
+        maxWidth="max-w-sm"
+        ariaLabel="Share Quote as WhatsApp Text"
+      >
+        <div className="h-full flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/60 shrink-0">
+            <h3 className="text-sm font-bold text-on-surface flex items-center gap-2">
+              <MessageCircle size={16} className="text-emerald-400" /> Share Quote as Text
+            </h3>
+            <button onClick={() => setShowWhatsAppPreview(false)} className="text-on-surface-variant hover:text-on-surface p-1">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center p-5">
+            <div className="w-full max-w-[300px] rounded-[28px] border-4 border-neutral-800 bg-neutral-900 shadow-xl overflow-hidden">
+              <div className="bg-emerald-600 px-3 py-2.5 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-emerald-800 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                  {(lead.name || 'C')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-white text-xs font-bold leading-tight truncate">{lead.name || 'Client'}</p>
+                  <p className="text-emerald-100 text-[9px] leading-tight">online</p>
+                </div>
+              </div>
+              <div
+                className="p-3 min-h-[220px] max-h-[400px] overflow-y-auto"
+                style={{ backgroundColor: '#0b141a' }}
+              >
+                <div
+                  className="bg-[#005c4b] text-white text-[11px] leading-relaxed rounded-lg rounded-tr-none px-3 py-2 ml-auto max-w-[92%] shadow-sm whitespace-pre-wrap break-words"
+                  dangerouslySetInnerHTML={{ __html: whatsAppMarkupToHtml(buildWhatsAppQuoteText()) }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 p-5 pt-0 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(buildWhatsAppQuoteText());
+                toast.success('Quote text copied — paste it into WhatsApp or SMS!');
+              }}
+              className="py-2.5 bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Copy size={13} /> Copy Text
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const phone = (lead.phone || '').replace(/[^0-9]/g, '');
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsAppQuoteText())}`, '_blank');
+              }}
+              className="py-2.5 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Send size={13} /> Open in WhatsApp
+            </button>
+          </div>
+        </div>
+      </ModalWrapper>
     </div>
   );
 }
