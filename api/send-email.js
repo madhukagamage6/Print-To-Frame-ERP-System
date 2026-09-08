@@ -1,7 +1,5 @@
 import nodemailer from 'nodemailer';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminAuth, getAdminFirestore } from './_lib/firebaseAdmin.js';
 import { EMAIL_TEMPLATES, interpolateTemplate } from '../src/constants/emailTemplates.js';
 
 // Only these origins may call this endpoint from a browser — mirrors api/generate.js.
@@ -11,21 +9,6 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
 ];
-
-function ensureAdminApp() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!raw) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is missing on the server');
-    }
-    initializeApp({ credential: cert(JSON.parse(raw)) });
-  }
-}
-
-function getAdminAuth() {
-  ensureAdminApp();
-  return getAuth();
-}
 
 let cachedTransporter = null;
 function getTransporter() {
@@ -80,8 +63,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
     }
 
-    ensureAdminApp();
-    const userSnap = await getFirestore().collection('users').doc(decodedToken.email).get();
+    const userSnap = await getAdminFirestore().collection('users').doc(decodedToken.email).get();
     const userData = userSnap.data();
     const isApproved = userSnap.exists
       && (userData.isApproved === true || userData.status === 'Active' || userData.status === undefined);

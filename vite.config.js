@@ -3,19 +3,7 @@ import react from '@vitejs/plugin-react'
 import { GoogleGenAI } from '@google/genai'
 import nodemailer from 'nodemailer'
 import { EMAIL_TEMPLATES, interpolateTemplate } from './src/constants/emailTemplates.js'
-
-// Lazily imported inside the /api/admin-user dev route below — firebase-admin is
-// only needed there, and only in dev if you actually exercise that endpoint.
-let adminAuthModulePromise;
-function loadAdminAuth() {
-  if (!adminAuthModulePromise) {
-    adminAuthModulePromise = Promise.all([
-      import('firebase-admin/app'),
-      import('firebase-admin/auth'),
-    ]);
-  }
-  return adminAuthModulePromise;
-}
+import { getAdminAuth } from './api/_lib/firebaseAdmin.js'
 
 function apiProxyPlugin() {
   return {
@@ -27,18 +15,13 @@ function apiProxyPlugin() {
           req.on('data', chunk => { body += chunk; });
           req.on('end', async () => {
             try {
-              const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-              if (!raw) {
+              if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: 'FIREBASE_SERVICE_ACCOUNT_JSON is not configured in .env.local — this endpoint needs real Admin SDK credentials even in dev, since it creates/modifies real Firebase Auth accounts.' }));
+                res.end(JSON.stringify({ error: 'FIREBASE_SERVICE_ACCOUNT_JSON is not configured in .env — this endpoint needs real Admin SDK credentials even in dev, since it creates/modifies real Firebase Auth accounts.' }));
                 return;
               }
-              const [{ initializeApp, cert, getApps }, { getAuth }] = await loadAdminAuth();
-              if (!getApps().length) {
-                initializeApp({ credential: cert(JSON.parse(raw)) });
-              }
-              const adminAuth = getAuth();
+              const adminAuth = getAdminAuth();
 
               const { action, email, password, displayName } = body ? JSON.parse(body) : {};
               if (!email || !password || password.length < 6) {

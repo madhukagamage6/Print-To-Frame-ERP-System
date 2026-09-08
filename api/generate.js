@@ -1,7 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminAuth, getAdminFirestore } from './_lib/firebaseAdmin.js';
 
 // Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
 // All support audio inlineData multimodal content. Ordered by performance preference.
@@ -26,21 +24,6 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
 ];
-
-function ensureAdminApp() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!raw) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is missing on the server');
-    }
-    initializeApp({ credential: cert(JSON.parse(raw)) });
-  }
-}
-
-function getAdminAuth() {
-  ensureAdminApp();
-  return getAuth();
-}
 
 export default async function handler(req, res) {
   // CORS headers — restricted to known site origins, not '*'. Never send
@@ -84,8 +67,7 @@ export default async function handler(req, res) {
     // be admin-approved and active (mirrors the client-side gate in src/App.jsx), so a
     // user who is still pending approval or was deactivated by an admin can't use this
     // endpoint just by holding a valid Firebase ID token.
-    ensureAdminApp();
-    const userSnap = await getFirestore().collection('users').doc(decodedToken.email).get();
+    const userSnap = await getAdminFirestore().collection('users').doc(decodedToken.email).get();
     const userData = userSnap.data();
     const isApproved = userSnap.exists
       && (userData.isApproved === true || userData.status === 'Active' || userData.status === undefined);
