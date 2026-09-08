@@ -18,7 +18,7 @@ import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/ro
 import { formatPhone } from '../../utils/validation';
 import { usePermissions } from '../../context/PermissionsContext';
 import { logActivity } from '../../services/auditLog';
-import { createUserAccount, deleteUserAccount } from '../../services/adminUsers';
+import { createUserAccount, deleteUserAccount, resetUserPassword } from '../../services/adminUsers';
 import { sendTemplatedEmail } from '../../services/mailer';
 
 export default function AgentDatabase({ 
@@ -54,6 +54,9 @@ export default function AgentDatabase({
 
   // Direct User Creation Modal State
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showResetPasswordForm, setShowResetPasswordForm] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [createUserForm, setCreateUserForm] = useState({
     name: '',
     identifier: '',
@@ -228,6 +231,37 @@ export default function AgentDatabase({
       logActivity(currentUser?.identifier, currentUser?.name, 'STATUS_CHANGE', 'Admin', `Set ${selectedAgent.identifier}'s account status to ${newStatus}`);
     } catch (err) {
       toast.error("Failed to change account status: " + err.message);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!selectedAgent) return;
+    if (!resetPasswordValue || resetPasswordValue.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      await resetUserPassword(selectedAgent.identifier, resetPasswordValue);
+      toast.success(`Password reset for ${selectedAgent.identifier}`);
+      logActivity(currentUser?.identifier, currentUser?.name, 'PASSWORD_RESET', 'Admin', `Reset the password for ${selectedAgent.identifier}`);
+      try {
+        await sendTemplatedEmail(selectedAgent.identifier, 'password_reset', {
+          recipientName: selectedAgent.name,
+          loginEmail: selectedAgent.identifier,
+          tempPassword: resetPasswordValue,
+          senderName: currentUser?.name,
+        });
+      } catch (mailErr) {
+        toast.error(`Password was reset, but the notification email failed to send: ${mailErr.message}`);
+      }
+      setShowResetPasswordForm(false);
+      setResetPasswordValue('');
+    } catch (err) {
+      toast.error("Failed to reset password: " + err.message);
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -557,6 +591,8 @@ export default function AgentDatabase({
                       setSelectedAgent(u);
                       setEditForm({ ...u });
                       setIsEditing(false);
+                      setShowResetPasswordForm(false);
+                      setResetPasswordValue('');
                       setMobileView('detail');
                     }}
                     className={`p-4 transition-all cursor-pointer flex items-center justify-between gap-3 group ${
@@ -1010,12 +1046,39 @@ export default function AgentDatabase({
                           {selectedAgent.status === 'Deactivated' ? 'Reactivate Member Account' : 'Deactivate Member Account'}
                         </button>
                         <button
-                          onClick={() => toast.info(`Password reset link dispatched to ${selectedAgent.identifier}`)}
-                          className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer"
+                          onClick={() => setShowResetPasswordForm(prev => !prev)}
+                          className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          Send Password Reset
+                          <KeyRound size={13} /> Reset Password
                         </button>
                       </div>
+                    )}
+
+                    {isAdmin && showResetPasswordForm && (
+                      <form onSubmit={handleResetPassword} className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <input
+                          type="text"
+                          value={resetPasswordValue}
+                          onChange={(e) => setResetPasswordValue(e.target.value)}
+                          placeholder="New password (min. 6 characters)"
+                          className="flex-1 px-3.5 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs text-on-surface focus:outline-none focus:border-primary/60"
+                          autoFocus
+                        />
+                        <button
+                          type="submit"
+                          disabled={isResettingPassword}
+                          className="px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {isResettingPassword ? 'Resetting...' : 'Confirm Reset'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowResetPasswordForm(false); setResetPasswordValue(''); }}
+                          className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </form>
                     )}
                   </div>
                 )}
