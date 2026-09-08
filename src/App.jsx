@@ -28,7 +28,7 @@ import {
   Handshake,
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot, query, orderBy, limit, runTransaction } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
 import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
 import { UserAvatar } from "./components/common/ui";
@@ -294,6 +294,15 @@ function App() {
   const [leads, setLeads] = useState(defaultLeads);
   const [invoices, setInvoices] = useState(defaultInvoices);
   const [quotations, setQuotations] = useState([]);
+  // Public "Apply as a Partner" submissions (src/components/public/PartnerRegistration.jsx).
+  // Reviewed centrally in User Management (AgentDatabase.jsx) alongside self-registered
+  // pendingUsers, rather than in a separate approval surface inside the Partners tab.
+  const [partnerApplications, setPartnerApplications] = useState([]);
+  // Set by approvePending() right after a Partner/Business Client approval so the
+  // relevant module can auto-open its existing manual "Register" form pre-filled,
+  // instead of the app silently auto-generating a bare-bones record.
+  const [partnerApprovalPrefill, setPartnerApprovalPrefill] = useState(null);
+  const [clientApprovalPrefill, setClientApprovalPrefill] = useState(null);
 
   // Subscribe to Firestore collections
   useEffect(() => {
@@ -306,6 +315,7 @@ function App() {
     const unsubLeads = subscribeToCollection(COLLECTIONS.LEADS, setLeads);
     const unsubInvoices = subscribeToCollection(COLLECTIONS.INVOICES, setInvoices);
     const unsubQuotations = subscribeToCollection(COLLECTIONS.QUOTATIONS, setQuotations);
+    const unsubPartnerApplications = subscribeToCollection(COLLECTIONS.PARTNER_APPLICATIONS, setPartnerApplications);
 
     return () => {
       unsubCustomers();
@@ -315,6 +325,7 @@ function App() {
       unsubLeads();
       unsubInvoices();
       unsubQuotations();
+      unsubPartnerApplications();
     };
   }, [currentUser]);
 
@@ -669,10 +680,6 @@ function App() {
   const approvePending = async (regData, customRole) => {
     try {
       const finalRole = customRole || regData.role || 'Partner';
-      // Callers that need the newly-assigned partnerId (e.g. to put it in a
-      // welcome email) read it off this object once the Partner branch below
-      // fills it in — kept mutable rather than reassigning a const so the
-      // batchWrite above can still use the plain approvedUser shape.
       const approvedUser = {
         ...regData,
         role: finalRole,
@@ -686,60 +693,31 @@ function App() {
         { type: 'delete', collection: COLLECTIONS.PENDING_USERS, docId: regData.identifier },
       ]);
 
-      // Auto-Sync: If role is Partner, automatically provision in partners collection.
-      // Runs inside a transaction so the next partner id/code is derived from a
-      // fresh Firestore read (not stale local state) and Firestore auto-retries
-      // if two approvals race and collide on the same id.
+      // Approving a Partner or Business Client no longer auto-generates a bare-bones
+      // partners/customers record — it hands off to the SAME manual "Register
+      // Partner" / "Register Client" workflow already used for adding one directly
+      // (banking details, commission rate, business type, etc. all get filled in by
+      // an admin there, not guessed at here). Login access is already granted by the
+      // writes above; this just pre-fills the existing form and switches to the
+      // right tab so completing the profile is the very next thing the admin does.
       if (finalRole === 'Partner') {
-        const newPartnerRecord = await runTransaction(db, async (tx) => {
-          const maxIdSnap = await tx.get(
-            query(collection(db, COLLECTIONS.PARTNERS), orderBy('id', 'desc'), limit(1))
-          );
-          const currentMaxId = maxIdSnap.empty ? 0 : (maxIdSnap.docs[0].data().id || 0);
-          const nextId = currentMaxId + 1;
-          const partnerCode = `P-${1000 + nextId}`;
-          const partnerRef = doc(db, COLLECTIONS.PARTNERS, partnerCode);
-          // Reading the candidate doc puts it in the transaction's read set, so a
-          // concurrent approval landing on the same partnerCode forces a retry.
-          await tx.get(partnerRef);
-          const record = {
-            id: nextId,
-            partnerId: partnerCode,
-            name: regData.name,
-            email: regData.identifier,
-            phone: regData.mobile || regData.contactNumber || '',
-            type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
-            commissionRate: 53.5,
-            totalSqFt: 0,
-            paid: 0,
-            pending: 0,
-            status: 'Active',
-            createdAt: new Date().toISOString(),
-          };
-          tx.set(partnerRef, record);
-          return record;
+        setPartnerApprovalPrefill({
+          name: regData.name,
+          email: regData.identifier,
+          phone: regData.mobile || regData.contactNumber || '',
+          type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
         });
-        setPartners(prev => [...prev.filter(p => p.partnerId !== newPartnerRecord.partnerId), newPartnerRecord]);
-        // Attached after the users/{email} doc has already been written above —
-        // this only affects what approvePending's caller sees, not the stored
-        // user profile.
-        approvedUser.partnerId = newPartnerRecord.partnerId;
+        setActiveTab('partners');
       }
 
-      // Auto-Sync: If role is Business Client, automatically provision in customers collection
       if (finalRole === 'Business Client') {
-        const newCustomerRecord = {
-          nic: regData.identifier,
+        setClientApprovalPrefill({
           name: regData.name,
           businessName: regData.company || regData.name,
-          type: 'Business',
-          phone: regData.mobile || regData.contactNumber || '',
           email: regData.identifier,
-          status: 'Active',
-          createdAt: new Date().toISOString(),
-        };
-        await addDocument(COLLECTIONS.CUSTOMERS, newCustomerRecord, regData.identifier);
-        setCustomers(prev => [...prev.filter(c => c.nic !== regData.identifier), newCustomerRecord]);
+          phone: regData.mobile || regData.contactNumber || '',
+        });
+        setActiveTab('customers');
       }
 
       logActivity(currentUser.identifier, currentUser.name, 'APPROVE', 'Admin', `Approved user access for ${regData.identifier} as ${finalRole}`);
@@ -751,9 +729,12 @@ function App() {
     }
   };
 
-  const rejectPending = async (identifier) => {
+  // docId/collectionName let this also reject a partner_applications entry (which has
+  // its own Firestore document id, not the applicant's email) reviewed alongside
+  // pendingUsers in the same User Management screen.
+  const rejectPending = async (identifier, docId = identifier, collectionName = COLLECTIONS.PENDING_USERS) => {
     try {
-      await deleteDoc(doc(db, COLLECTIONS.PENDING_USERS, identifier));
+      await deleteDoc(doc(db, collectionName, docId));
       logActivity(currentUser.identifier, currentUser.name, 'REJECT', 'Admin', `Rejected user access for ${identifier}`);
     } catch (err) {
       console.error("Error rejecting user:", err);
@@ -1178,7 +1159,14 @@ function App() {
           )}
 
           {activeTab === "customers" && canAccess(currentUser?.role, 'customers') && (
-            <Customers customers={customers} setCustomers={setCustomers} dataStore={dataStore} currentUser={currentUser} />
+            <Customers
+              customers={customers}
+              setCustomers={setCustomers}
+              dataStore={dataStore}
+              currentUser={currentUser}
+              prefillClient={clientApprovalPrefill}
+              onClientPrefillConsumed={() => setClientApprovalPrefill(null)}
+            />
           )}
 
           {activeTab === "partners" && canAccess(currentUser?.role, 'partners') && (
@@ -1193,16 +1181,18 @@ function App() {
               setUsers={setUsers}
               dataStore={dataStore}
               currentUser={currentUser}
-              onApprovePending={approvePending}
+              prefillPartner={partnerApprovalPrefill}
+              onPrefillConsumed={() => setPartnerApprovalPrefill(null)}
             />
           )}
 
           {activeTab === "agents" && canAccess(currentUser?.role, 'agents') && (
-            <AgentDatabase 
+            <AgentDatabase
               users={users}
               setUsers={setUsers}
               pendingUsers={pendingUsers}
               setPendingUsers={setPendingUsers}
+              partnerApplications={partnerApplications}
               currentUser={currentUser}
               onApprove={approvePending}
               onReject={rejectPending}

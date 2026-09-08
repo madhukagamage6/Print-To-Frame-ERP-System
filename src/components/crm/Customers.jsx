@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Search, User, Users, Building, Phone, Mail, Clock, FileText, Trash2, 
   Sparkles, MessageSquare, Check, X, DollarSign, MapPin, Plus, 
@@ -16,7 +16,7 @@ import ContactSyncModal from './ContactSyncModal';
 import AddressPickerModal from '../common/AddressPickerModal';
 import { usePermissions } from '../../context/PermissionsContext';
 
-export default function Customers({ customers = [], setCustomers, dataStore, currentUser }) {
+export default function Customers({ customers = [], setCustomers, dataStore, currentUser, prefillClient, onClientPrefillConsumed }) {
   const { canAccess } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -68,6 +68,31 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     address: '',
     photoURL: '',
   });
+
+  // A Business Client registration request approved in User Management (App.jsx's
+  // approvePending) lands here as `prefillClient` — login access is already
+  // granted at that point, this carries the admin straight into the same
+  // Register Client form used for a manual add, pre-filled with what's known
+  // (name/email/phone/business name are prefillable; NIC isn't collected by
+  // the registration form and still needs the admin to enter it).
+  const onClientPrefillConsumedRef = useRef(onClientPrefillConsumed);
+  useEffect(() => {
+    onClientPrefillConsumedRef.current = onClientPrefillConsumed;
+  }, [onClientPrefillConsumed]);
+
+  useEffect(() => {
+    if (!prefillClient) return;
+    setNewProfile(prev => ({
+      ...prev,
+      name: prefillClient.name || prev.name,
+      email: prefillClient.email || prev.email,
+      phone: prefillClient.phone || prev.phone,
+      businessName: prefillClient.businessName || prev.businessName,
+      type: 'Business',
+    }));
+    setShowCreateModal(true);
+    onClientPrefillConsumedRef.current?.();
+  }, [prefillClient]);
 
   // AI WhatsApp draft state
   const [isDraftingMsg, setIsDraftingMsg] = useState(false);
