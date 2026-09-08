@@ -110,6 +110,15 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // ── Partner Applications (public "Register Partner" request form) ────
+    // Submitted anonymously by prospective partners, then reviewed and
+    // approved/rejected only from User Management (see AgentDatabase.jsx) —
+    // same review-queue shape as pendingUsers above.
+    match /partner_applications/{applicationId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     // ── Leads (CRM) ──────────────────────────────────────
     match /leads/{leadId} {
       allow read: if checkPermission('leads', 'view') || checkPermission('leads', 'read');

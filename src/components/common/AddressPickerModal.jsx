@@ -25,19 +25,6 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
     addressInputRef.current = addressInput;
   }, [addressInput]);
 
-  useEffect(() => {
-    if (isOpen) {
-      setAddressInput(initialAddress);
-      if (!mapInitializedRef.current) {
-        mapInitializedRef.current = true;
-        initMap();
-      }
-    } else {
-      // Modal unmounts its content, so the next open needs a fresh map.
-      mapInitializedRef.current = false;
-    }
-  }, [isOpen, initialAddress, initMap]);
-
   const reverseGeocode = useCallback(async (lat, lng) => {
     try {
       const maps = window.google?.maps;
@@ -107,6 +94,19 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
       console.warn('Map initialization error:', err);
     }
   }, [reverseGeocode]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setAddressInput(initialAddress);
+      if (!mapInitializedRef.current) {
+        mapInitializedRef.current = true;
+        initMap();
+      }
+    } else {
+      // Modal unmounts its content, so the next open needs a fresh map.
+      mapInitializedRef.current = false;
+    }
+  }, [isOpen, initialAddress, initMap]);
 
   const handleSearch = async () => {
     if (!addressInput.trim()) return;
