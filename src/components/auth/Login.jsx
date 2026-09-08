@@ -45,10 +45,16 @@ export default function Login({ onLogin, onRegister, errorMsg, successMsg }) {
       setLocalError("");
     } catch (error) {
       const errMsg = error?.message || "";
+      const rawDetail = error?.code ? `${error.code}${errMsg ? ` — ${errMsg}` : ''}` : errMsg;
       if (errMsg.includes("unauthorized-domain")) {
-        setLocalError("User credential not registered / permission denied. First please request registration to log in for the system. (Admin notice: Please add 'portal.print2frame.xyz' to the Authorized Domains list in your Firebase Console -> Authentication -> Settings)");
+        setLocalError(`User credential not registered / permission denied. First please request registration to log in for the system. (Admin notice: Please add 'portal.print2frame.xyz' to the Authorized Domains list in your Firebase Console -> Authentication -> Settings) [${rawDetail}]`);
       } else {
-        setLocalError("User credential not registered / permission denied. First please request registration to log in for the system.");
+        // This used to show a fixed "not registered" message for ANY sign-in failure —
+        // popup blocked, popup closed, network error, scope/consent issues, whatever —
+        // which hid the real cause behind identical, misleading text every time.
+        // Show the actual Firebase error so a real problem is diagnosable from the
+        // screen instead of requiring a guess-and-check round every time.
+        setLocalError(`Google sign-in failed: ${rawDetail || 'Unknown error'}`);
       }
     } finally {
       setIsLoggingIn(false);
