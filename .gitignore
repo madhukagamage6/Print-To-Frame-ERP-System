@@ -7,3 +7,10 @@ dist-electron
 *.log
 node-v22.14.0-win-x64/
 *.zip
+
+# Firebase service-account key files (downloaded from the Firebase console) —
+# these are plaintext private keys granting full Admin SDK access and must
+# never be committed. The app reads the credential from the
+# FIREBASE_SERVICE_ACCOUNT_JSON env var instead of a file on disk.
+*firebase-adminsdk*.json
+*-adminsdk-*.json

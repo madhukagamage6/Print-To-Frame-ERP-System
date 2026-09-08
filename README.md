@@ -21,7 +21,12 @@ View your app in AI Studio: https://ai.studio/apps/66900443-b6c9-4743-892c-f50b5
    [App Password](https://myaccount.google.com/apppasswords) for that mailbox — not the
    account's normal login password) in `.env.local`. In production these are set as
    Vercel environment variables instead.
-4. Run the app:
+4. For admin actions that create or reset a user's Firebase Auth password (enroll
+   member, admin password reset), also set `FIREBASE_SERVICE_ACCOUNT_JSON` — the full
+   JSON key for a Firebase service account with Auth Admin privileges, as a single-line
+   string — in `.env.local`. This is required even in dev, since these actions modify
+   real Firebase Auth accounts; there's no way to fake that locally.
+5. Run the app:
    `npm run dev`
 
 ## Testing

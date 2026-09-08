@@ -1,7 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getAdminAuth, getAdminFirestore } from './_lib/firebaseAdmin.js';
 
 // Confirmed model identifiers from @google/genai v1.52.0 SDK type definitions
 // All support audio inlineData multimodal content. Ordered by performance preference.
@@ -26,21 +24,6 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:3000',
 ];
-
-function ensureAdminApp() {
-  if (!getApps().length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!raw) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is missing on the server');
-    }
-    initializeApp({ credential: cert(JSON.parse(raw)) });
-  }
-}
-
-function getAdminAuth() {
-  ensureAdminApp();
-  return getAuth();
-}
 
 export default async function handler(req, res) {
   // CORS headers — restricted to known site origins, not '*'. Never send
@@ -70,11 +53,18 @@ export default async function handler(req, res) {
     if (!idToken) {
       return res.status(401).json({ error: 'Missing Authorization bearer token' });
     }
+    // Resolve the Admin SDK credential BEFORE the token-verification try/catch below —
+    // a missing/malformed FIREBASE_SERVICE_ACCOUNT_JSON must surface as a distinct 500
+    // (server misconfigured), not get swallowed into the same generic 401 a genuinely
+    // bad token produces. Conflating those two made a config problem look identical to
+    // "please sign in again" from the client, which is much harder to diagnose.
+    const adminAuth = getAdminAuth();
+
     let decodedToken;
     try {
       // checkRevoked=true so a session revoked server-side (e.g. a disabled Firebase
       // Auth account) is rejected immediately instead of staying valid until it expires.
-      decodedToken = await getAdminAuth().verifyIdToken(idToken, true);
+      decodedToken = await adminAuth.verifyIdToken(idToken, true);
     } catch (authErr) {
       console.warn('generate.js: rejected invalid/expired/revoked ID token:', authErr.message);
       return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
@@ -84,8 +74,7 @@ export default async function handler(req, res) {
     // be admin-approved and active (mirrors the client-side gate in src/App.jsx), so a
     // user who is still pending approval or was deactivated by an admin can't use this
     // endpoint just by holding a valid Firebase ID token.
-    ensureAdminApp();
-    const userSnap = await getFirestore().collection('users').doc(decodedToken.email).get();
+    const userSnap = await getAdminFirestore().collection('users').doc(decodedToken.email).get();
     const userData = userSnap.data();
     const isApproved = userSnap.exists
       && (userData.isApproved === true || userData.status === 'Active' || userData.status === undefined);
