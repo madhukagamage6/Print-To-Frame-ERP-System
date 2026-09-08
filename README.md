@@ -16,5 +16,10 @@ View your app in AI Studio: https://ai.studio/apps/66900443-b6c9-4743-892c-f50b5
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+3. For outbound email (enrollment invites, password resets, etc.), also set `SMTP_USER`
+   (the sending mailbox, e.g. `info@print2frame.xyz`) and `SMTP_APP_PASSWORD` (a Gmail
+   [App Password](https://myaccount.google.com/apppasswords) for that mailbox — not the
+   account's normal login password) in `.env.local`. In production these are set as
+   Vercel environment variables instead.
+4. Run the app:
    `npm run dev`
