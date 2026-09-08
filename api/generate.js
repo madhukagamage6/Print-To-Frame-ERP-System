@@ -53,11 +53,18 @@ export default async function handler(req, res) {
     if (!idToken) {
       return res.status(401).json({ error: 'Missing Authorization bearer token' });
     }
+    // Resolve the Admin SDK credential BEFORE the token-verification try/catch below —
+    // a missing/malformed FIREBASE_SERVICE_ACCOUNT_JSON must surface as a distinct 500
+    // (server misconfigured), not get swallowed into the same generic 401 a genuinely
+    // bad token produces. Conflating those two made a config problem look identical to
+    // "please sign in again" from the client, which is much harder to diagnose.
+    const adminAuth = getAdminAuth();
+
     let decodedToken;
     try {
       // checkRevoked=true so a session revoked server-side (e.g. a disabled Firebase
       // Auth account) is rejected immediately instead of staying valid until it expires.
-      decodedToken = await getAdminAuth().verifyIdToken(idToken, true);
+      decodedToken = await adminAuth.verifyIdToken(idToken, true);
     } catch (authErr) {
       console.warn('generate.js: rejected invalid/expired/revoked ID token:', authErr.message);
       return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });

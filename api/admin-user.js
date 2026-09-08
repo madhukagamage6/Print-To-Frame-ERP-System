@@ -38,9 +38,13 @@ export default async function handler(req, res) {
     if (!idToken) {
       return res.status(401).json({ error: 'Missing Authorization bearer token' });
     }
+    // Resolve the Admin SDK credential before token verification — see generate.js
+    // for why a config error must not read identically to a bad token.
+    const adminAuth = getAdminAuth();
+
     let decodedToken;
     try {
-      decodedToken = await getAdminAuth().verifyIdToken(idToken, true);
+      decodedToken = await adminAuth.verifyIdToken(idToken, true);
     } catch (authErr) {
       console.warn('admin-user.js: rejected invalid/expired/revoked ID token:', authErr.message);
       return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
@@ -66,7 +70,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const adminAuth = getAdminAuth();
     const normalizedEmail = email.trim().toLowerCase();
 
     if (action === 'create') {
