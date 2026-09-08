@@ -4,11 +4,84 @@ import { GoogleGenAI } from '@google/genai'
 import nodemailer from 'nodemailer'
 import { EMAIL_TEMPLATES, interpolateTemplate } from './src/constants/emailTemplates.js'
 
+// Lazily imported inside the /api/admin-user dev route below — firebase-admin is
+// only needed there, and only in dev if you actually exercise that endpoint.
+let adminAuthModulePromise;
+function loadAdminAuth() {
+  if (!adminAuthModulePromise) {
+    adminAuthModulePromise = Promise.all([
+      import('firebase-admin/app'),
+      import('firebase-admin/auth'),
+    ]);
+  }
+  return adminAuthModulePromise;
+}
+
 function apiProxyPlugin() {
   return {
     name: 'api-proxy-plugin',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
+        if (req.url === '/api/admin-user' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+              if (!raw) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'FIREBASE_SERVICE_ACCOUNT_JSON is not configured in .env.local — this endpoint needs real Admin SDK credentials even in dev, since it creates/modifies real Firebase Auth accounts.' }));
+                return;
+              }
+              const [{ initializeApp, cert, getApps }, { getAuth }] = await loadAdminAuth();
+              if (!getApps().length) {
+                initializeApp({ credential: cert(JSON.parse(raw)) });
+              }
+              const adminAuth = getAuth();
+
+              const { action, email, password, displayName } = body ? JSON.parse(body) : {};
+              if (!email || !password || password.length < 6) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Missing "email", or "password" is under 6 characters' }));
+                return;
+              }
+              const normalizedEmail = email.trim().toLowerCase();
+
+              // Dev convenience only: unlike production (api/admin-user.js), this
+              // skips ID-token verification and the Admin-role check. Anyone who
+              // can reach your local dev server can call this — do not expose
+              // `npm run dev` beyond localhost.
+              if (action === 'create') {
+                const userRecord = await adminAuth.createUser({ email: normalizedEmail, password, displayName: displayName || undefined });
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ created: true, uid: userRecord.uid }));
+                return;
+              }
+              if (action === 'resetPassword') {
+                const userRecord = await adminAuth.getUserByEmail(normalizedEmail);
+                await adminAuth.updateUser(userRecord.uid, { password });
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ reset: true, uid: userRecord.uid }));
+                return;
+              }
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: 'Unknown "action" — expected "create" or "resetPassword"' }));
+            } catch (err) {
+              console.error('Dev admin-user proxy error:', err.message);
+              res.statusCode = err.code === 'auth/email-already-exists' ? 409
+                : err.code === 'auth/user-not-found' ? 404
+                : 502;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
         if (req.url === '/api/send-email' && req.method === 'POST') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
