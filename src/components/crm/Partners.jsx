@@ -4,7 +4,8 @@ import {
   Trash2, Check, Clock, Link, QrCode, Copy, Plus, ChevronRight,
   ExternalLink, Layers, ArrowUpRight, ShieldCheck, FileText, CheckCircle2,
   AlertCircle, Download, CreditCard, Send, Handshake, Filter, Phone, Mail,
-  Share2, ArrowDownRight, Printer, Edit3, Upload, FileCheck, Save, Eye, PhoneCall, Camera
+  Share2, ArrowDownRight, Printer, Edit3, Upload, FileCheck, Save, Eye, PhoneCall, Camera,
+  Lock, KeyRound
 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
@@ -23,7 +24,7 @@ import { formatPhone, validatePhone, validateEmail } from '../../utils/validatio
 import { exportToCsv } from '../../utils/csvExport';
 import { usePermissions } from '../../context/PermissionsContext';
 import { sendTemplatedEmail } from '../../services/mailer';
-import { deleteUserAccount } from '../../services/adminUsers';
+import { deleteUserAccount, resetUserPassword } from '../../services/adminUsers';
 import { logActivity } from '../../services/auditLog';
 
 export default function Partners({ 
@@ -45,10 +46,13 @@ export default function Partners({
 
   // Navigation & Filter States
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'active' | 'claims' | 'settlements'
-  const [workspaceTab, setWorkspaceTab] = useState('referrals'); // 'referrals' | 'documents' | 'financial' | 'marketing'
+  const [workspaceTab, setWorkspaceTab] = useState('referrals'); // 'referrals' | 'documents' | 'financial' | 'marketing' | 'security'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+  const [showPartnerResetForm, setShowPartnerResetForm] = useState(false);
+  const [partnerResetPasswordValue, setPartnerResetPasswordValue] = useState('');
+  const [isResettingPartnerPassword, setIsResettingPartnerPassword] = useState(false);
 
   // Image Crop & Avatar Upload state
   const [rawImageForCrop, setRawImageForCrop] = useState(null);
@@ -644,6 +648,51 @@ export default function Partners({
     return !!email && users.some(u => u.identifier?.toLowerCase() === email && u.role === 'Partner');
   }, [deletePartnerId, partners, users]);
 
+  // The Security tab's reset-password form only makes sense when this
+  // partner actually has a portal login — matches the same email + role
+  // lookup used above for the delete-confirmation warning.
+  const selectedPartnerUser = useMemo(() => {
+    const email = (selectedPartner?.email || '').trim().toLowerCase();
+    if (!email) return null;
+    return users.find(u => u.identifier?.toLowerCase() === email && u.role === 'Partner') || null;
+  }, [selectedPartner, users]);
+
+  useEffect(() => {
+    setShowPartnerResetForm(false);
+    setPartnerResetPasswordValue('');
+  }, [selectedPartner?.partnerId, selectedPartner?.id]);
+
+  const handlePartnerResetPassword = async (e) => {
+    e.preventDefault();
+    if (!selectedPartnerUser) return;
+    if (!partnerResetPasswordValue || partnerResetPasswordValue.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setIsResettingPartnerPassword(true);
+    try {
+      await resetUserPassword(selectedPartnerUser.identifier, partnerResetPasswordValue);
+      toast.success(`Password reset for ${selectedPartnerUser.identifier}`);
+      logActivity(currentUser?.identifier, currentUser?.name, 'PASSWORD_RESET', 'Partners', `Reset the login password for partner ${selectedPartner?.name || selectedPartnerUser.identifier}`);
+      try {
+        await sendTemplatedEmail(selectedPartnerUser.identifier, 'password_reset', {
+          recipientName: selectedPartner?.name,
+          loginEmail: selectedPartnerUser.identifier,
+          tempPassword: partnerResetPasswordValue,
+          senderName: currentUser?.name,
+        });
+      } catch (mailErr) {
+        toast.error(`Password was reset, but the notification email failed to send: ${mailErr.message}`);
+      }
+      setShowPartnerResetForm(false);
+      setPartnerResetPasswordValue('');
+    } catch (err) {
+      toast.error("Failed to reset password: " + err.message);
+    } finally {
+      setIsResettingPartnerPassword(false);
+    }
+  };
+
   const publicQrUrl = (partner) => {
     const pid = partner?.partnerId || partner?.id || 'P-1001';
     return `https://print2frame.xyz/client-detail-submitting-form?ref=${pid}`;
@@ -1076,6 +1125,18 @@ export default function Partners({
                     >
                       <QrCode size={13} /> Marketing Kit
                     </button>
+                    {!isPartnerUser && canAccess(currentUser?.role, 'partners', 'delete') && (
+                      <button
+                        onClick={() => setWorkspaceTab('security')}
+                        className={'px-3.5 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ' + (
+                          workspaceTab === 'security'
+                            ? 'border-primary text-primary bg-surface-container/60 font-black'
+                            : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                        )}
+                      >
+                        <Lock size={13} /> Security & Access
+                      </button>
+                    )}
                   </div>
 
                   {/* Sub-Workspace Active Content */}
@@ -1319,6 +1380,65 @@ export default function Partners({
                         >
                           <Download size={14} /> Download Printable Counter Display Flyer (1200x1600)
                         </button>
+                      </div>
+                    )}
+
+                    {/* 5. Security & Access */}
+                    {workspaceTab === 'security' && !isPartnerUser && canAccess(currentUser?.role, 'partners', 'delete') && (
+                      <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/60 space-y-4">
+                        <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
+                          <Lock size={14} className="text-primary" /> Security & Account Lifecycle
+                        </h4>
+                        <div className="p-3.5 bg-surface-container-low rounded-xl border border-outline-variant/60">
+                          <span className="text-[10px] font-bold text-on-surface-variant uppercase">Portal Login</span>
+                          <p className={`font-bold text-sm mt-0.5 ${selectedPartnerUser ? 'text-emerald-400' : 'text-on-surface-variant'}`}>
+                            {selectedPartnerUser ? selectedPartnerUser.identifier : 'No portal login for this partner'}
+                          </p>
+                        </div>
+
+                        {selectedPartnerUser ? (
+                          <>
+                            <div className="pt-2 flex items-center gap-3">
+                              <button
+                                onClick={() => setShowPartnerResetForm(prev => !prev)}
+                                className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer flex items-center gap-1.5"
+                              >
+                                <KeyRound size={13} /> Reset Password
+                              </button>
+                            </div>
+
+                            {showPartnerResetForm && (
+                              <form onSubmit={handlePartnerResetPassword} className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={partnerResetPasswordValue}
+                                  onChange={(e) => setPartnerResetPasswordValue(e.target.value)}
+                                  placeholder="New password (min. 6 characters)"
+                                  className="flex-1 px-3.5 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-xs text-on-surface focus:outline-none focus:border-primary/60"
+                                  autoFocus
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={isResettingPartnerPassword}
+                                  className="px-4 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
+                                >
+                                  {isResettingPartnerPassword ? 'Resetting...' : 'Confirm Reset'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setShowPartnerResetForm(false); setPartnerResetPasswordValue(''); }}
+                                  className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant rounded-xl text-xs font-bold border border-outline-variant transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </form>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-on-surface-variant">
+                            This partner was created without a portal login (e.g. added manually before an approval flow granted one). There's no password to reset until a login exists for this email.
+                          </p>
+                        )}
                       </div>
                     )}
 
