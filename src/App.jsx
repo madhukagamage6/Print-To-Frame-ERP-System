@@ -1173,6 +1173,8 @@ function App() {
             <Customers
               customers={customers}
               setCustomers={setCustomers}
+              users={users}
+              setUsers={setUsers}
               dataStore={dataStore}
               currentUser={currentUser}
               prefillClient={clientApprovalPrefill}

@@ -23,6 +23,8 @@ import { formatPhone, validatePhone, validateEmail } from '../../utils/validatio
 import { exportToCsv } from '../../utils/csvExport';
 import { usePermissions } from '../../context/PermissionsContext';
 import { sendTemplatedEmail } from '../../services/mailer';
+import { deleteUserAccount } from '../../services/adminUsers';
+import { logActivity } from '../../services/auditLog';
 
 export default function Partners({ 
   partners = [], 
@@ -483,19 +485,42 @@ export default function Partners({
     }
   };
 
-  // Delete Partner
+  // Delete Partner — removes the partners directory record AND, if this partner
+  // has a real portal login, their users/{email} profile and Firebase Auth
+  // account too. Previously this only ever removed the directory record, so a
+  // "deleted" partner could still sign in, and re-approving the same email
+  // later failed with auth/email-already-exists since the old account never
+  // actually went away.
   const handleDeletePartner = async () => {
     if (!deletePartnerId) return;
+    const targetPartner = partners.find(p =>
+      p._firestoreId === deletePartnerId || p.id === deletePartnerId || p.partnerId === deletePartnerId
+    );
+    const email = (targetPartner?.email || '').trim().toLowerCase();
+    // Only ever the same partner's own login — never delete a users/{email} doc
+    // whose role has since changed to something else (e.g. promoted to staff).
+    const matchingUser = email ? users.find(u => u.identifier?.toLowerCase() === email && u.role === 'Partner') : null;
+
     try {
       await deleteDocument(COLLECTIONS.PARTNERS, deletePartnerId);
       if (setPartners) {
         setPartners(prev => prev.filter(p => (p._firestoreId !== deletePartnerId && p.id !== deletePartnerId && p.partnerId !== deletePartnerId)));
       }
+
+      if (matchingUser) {
+        await deleteDocument(COLLECTIONS.USERS, matchingUser.identifier);
+        if (setUsers) {
+          setUsers(prev => prev.filter(u => u.identifier !== matchingUser.identifier));
+        }
+        await deleteUserAccount(matchingUser.identifier);
+      }
+
       if (selectedPartner && (selectedPartner._firestoreId === deletePartnerId || selectedPartner.id === deletePartnerId || selectedPartner.partnerId === deletePartnerId)) {
         setSelectedPartner(null);
       }
       setDeletePartnerId(null);
-      toast.success('Partner profile removed');
+      logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Partners', `Removed partner ${targetPartner?.name || deletePartnerId}${matchingUser ? ' and revoked their login' : ''}`);
+      toast.success(matchingUser ? 'Partner removed and their login permanently revoked' : 'Partner profile removed');
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete partner: ' + err.message);
@@ -607,6 +632,17 @@ export default function Partners({
 
   const activePartnersCount = basePartnersList.filter(p => p.status === 'Active' || !p.status).length;
   const pendingClaimsCount = claims.filter(c => c.status === 'Pending Verification').length;
+
+  // Drives the delete-confirmation copy — accurate warning only when this
+  // partner actually has a login to lose.
+  const deletePartnerHasLogin = useMemo(() => {
+    if (!deletePartnerId) return false;
+    const target = partners.find(p =>
+      p._firestoreId === deletePartnerId || p.id === deletePartnerId || p.partnerId === deletePartnerId
+    );
+    const email = (target?.email || '').trim().toLowerCase();
+    return !!email && users.some(u => u.identifier?.toLowerCase() === email && u.role === 'Partner');
+  }, [deletePartnerId, partners, users]);
 
   const publicQrUrl = (partner) => {
     const pid = partner?.partnerId || partner?.id || 'P-1001';
@@ -1612,7 +1648,11 @@ export default function Partners({
         onClose={() => setDeletePartnerId(null)}
         onConfirm={handleDeletePartner}
         title="Remove Partner Studio"
-        message="Are you sure you want to remove this partner from the directory? Their past referral deals and invoices will remain intact."
+        message={
+          deletePartnerHasLogin
+            ? "Are you sure you want to remove this partner? This also permanently deletes their portal login (Firebase account included) — they will not be able to sign in afterward, and this cannot be undone. Their past referral deals and invoices will remain intact."
+            : "Are you sure you want to remove this partner from the directory? Their past referral deals and invoices will remain intact."
+        }
       />
 
       {/* ── QR FLYER MODAL ─────────────────────────────────────────── */}

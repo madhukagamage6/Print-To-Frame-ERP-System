@@ -24,10 +24,16 @@ function apiProxyPlugin() {
               const adminAuth = getAdminAuth();
 
               const { action, email, password, displayName } = body ? JSON.parse(body) : {};
-              if (!email || !password || password.length < 6) {
+              if (!email) {
                 res.statusCode = 400;
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: 'Missing "email", or "password" is under 6 characters' }));
+                res.end(JSON.stringify({ error: 'Missing "email"' }));
+                return;
+              }
+              if ((action === 'create' || action === 'resetPassword') && (!password || password.length < 6)) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Password must be at least 6 characters' }));
                 return;
               }
               const normalizedEmail = email.trim().toLowerCase();
@@ -51,9 +57,27 @@ function apiProxyPlugin() {
                 res.end(JSON.stringify({ reset: true, uid: userRecord.uid }));
                 return;
               }
+              if (action === 'delete') {
+                try {
+                  const userRecord = await adminAuth.getUserByEmail(normalizedEmail);
+                  await adminAuth.deleteUser(userRecord.uid);
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ deleted: true, hadAccount: true }));
+                } catch (lookupErr) {
+                  if (lookupErr.code === 'auth/user-not-found') {
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify({ deleted: true, hadAccount: false }));
+                    return;
+                  }
+                  throw lookupErr;
+                }
+                return;
+              }
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ error: 'Unknown "action" — expected "create" or "resetPassword"' }));
+              res.end(JSON.stringify({ error: 'Unknown "action" — expected "create", "resetPassword", or "delete"' }));
             } catch (err) {
               console.error('Dev admin-user proxy error:', err.message);
               res.statusCode = err.code === 'auth/email-already-exists' ? 409

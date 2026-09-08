@@ -16,8 +16,10 @@ import ContactSyncModal from './ContactSyncModal';
 import AddressPickerModal from '../common/AddressPickerModal';
 import { usePermissions } from '../../context/PermissionsContext';
 import { sendTemplatedEmail } from '../../services/mailer';
+import { deleteUserAccount } from '../../services/adminUsers';
+import { logActivity } from '../../services/auditLog';
 
-export default function Customers({ customers = [], setCustomers, dataStore, currentUser, prefillClient, onClientPrefillConsumed }) {
+export default function Customers({ customers = [], setCustomers, users = [], setUsers, dataStore, currentUser, prefillClient, onClientPrefillConsumed }) {
   const { canAccess } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -138,6 +140,15 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
 
   const businessCount = customers.filter(c => c.type === 'Business').length;
   const individualCount = customers.filter(c => c.type === 'Individual' || !c.type).length;
+
+  // Drives the delete-confirmation copy — accurate warning only when this
+  // customer actually has a Business Client login to lose.
+  const deleteCustomerHasLogin = useMemo(() => {
+    if (!deleteNic) return false;
+    const target = customers.find(c => c.nic === deleteNic);
+    const email = (target?.email || '').trim().toLowerCase();
+    return !!email && users.some(u => u.identifier?.toLowerCase() === email && u.role === 'Business Client');
+  }, [deleteNic, customers, users]);
 
   const filteredCustomers = customers.filter(c => {
     const query = searchQuery.toLowerCase();
@@ -344,19 +355,35 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     }
   };
 
+  // Most customers (Individual type) never have a portal login at all, but a
+  // Business Client does — deleting only ever removed the customers record,
+  // leaving their users/{email} profile and Firebase Auth account untouched,
+  // so a "deleted" Business Client could still sign in.
   const handleDeleteProfile = async () => {
     if (deleteNic) {
+      const targetCustomer = customers.find(c => c.nic === deleteNic);
+      const email = (targetCustomer?.email || '').trim().toLowerCase();
+      const matchingUser = email ? users.find(u => u.identifier?.toLowerCase() === email && u.role === 'Business Client') : null;
+
       setCustomers(prev => prev.filter(c => c.nic !== deleteNic));
       if (selectedCustomer?.nic === deleteNic) {
         setSelectedCustomer(null);
       }
-      
+
       const targetNic = deleteNic;
       setDeleteNic(null);
 
       try {
         await deleteDocument(COLLECTIONS.CUSTOMERS, targetNic);
-        toast.success("Customer profile deleted");
+        if (matchingUser) {
+          await deleteDocument(COLLECTIONS.USERS, matchingUser.identifier);
+          if (setUsers) {
+            setUsers(prev => prev.filter(u => u.identifier !== matchingUser.identifier));
+          }
+          await deleteUserAccount(matchingUser.identifier);
+        }
+        toast.success(matchingUser ? "Customer removed and their login permanently revoked" : "Customer profile deleted");
+        logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Customers', `Removed customer ${targetCustomer?.name || targetNic}${matchingUser ? ' and revoked their login' : ''}`);
       } catch (err) {
         console.error(err);
         toast.error("Failed to delete customer profile from DB");
@@ -1024,7 +1051,11 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
         onClose={() => setDeleteNic(null)}
         onConfirm={handleDeleteProfile}
         title="Delete Customer Profile?"
-        message="Are you sure you want to permanently delete this customer? All historical links and records will be removed from the view."
+        message={
+          deleteCustomerHasLogin
+            ? "Are you sure you want to permanently delete this customer? This also permanently deletes their portal login (Firebase account included) — they will not be able to sign in afterward, and this cannot be undone."
+            : "Are you sure you want to permanently delete this customer? All historical links and records will be removed from the view."
+        }
       />
 
       {/* Image Crop & Adjuster Modal */}
