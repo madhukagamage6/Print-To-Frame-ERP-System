@@ -297,9 +297,12 @@ export default function Deals({
 
             if (deal.agentId && partners.length && setPartners) {
               const sqFt = Number(deal.totalSqFt) || 0;
-              const commissionAmount = sqFt * 53.5; // LKR 53.50 per sqft commission
-              
               const agent = partners.find(p => p.partnerId === deal.agentId);
+              // Always the partner's CURRENT live rate, not a hardcoded default —
+              // a rate change takes effect immediately for any deal completed after it.
+              const commRate = Number(agent?.commissionRate) > 0 ? Number(agent.commissionRate) : 53.5;
+              const commissionAmount = sqFt * commRate;
+
               if (agent) {
                 setPartners(prevPartners => prevPartners.map(p => 
                   p.partnerId === deal.agentId 
