@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Sparkles, FileText, Copy, ChevronRight, Check, X, Layers, HardDrive, MessageCircle, Send } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { generateStructuredQuotation } from '../../services/gemini';
-import { addDocument, updateDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { addDocument, updateDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import GoogleDrivePickerModal from '../common/GoogleDrivePickerModal';
 import { ModalWrapper } from '../common/ui';
 
@@ -201,7 +201,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     }
   };
 
-  const handleConvertToAdvanceInvoice = () => {
+  const handleConvertToAdvanceInvoice = async () => {
     if (status !== 'Accepted') {
       toast.error('Mark quotation as Accepted before converting to invoice.');
       return;
@@ -210,7 +210,13 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       toast.error('Invoice save handler unavailable.');
       return;
     }
-    const invId = `INV-${String(Date.now()).slice(-6)}`;
+    let invId;
+    try {
+      invId = await generateInvoiceId('Advance');
+    } catch (err) {
+      toast.error('Failed to generate an invoice number: ' + err.message);
+      return;
+    }
     const invoiceDate = new Date().toISOString().split('T')[0];
     onSaveInvoice({
       id: invId,
@@ -233,7 +239,7 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     toast.success('75% Advance invoice generated & linked!');
   };
 
-  const handleConvertToFinalInvoice = () => {
+  const handleConvertToFinalInvoice = async () => {
     if (status !== 'Accepted') {
       toast.error('Mark quotation as Accepted before generating final invoice.');
       return;
@@ -242,7 +248,13 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       toast.error('Invoice save handler unavailable.');
       return;
     }
-    const invId = `FIN-${String(Date.now()).slice(-6)}`;
+    let invId;
+    try {
+      invId = await generateInvoiceId('Final');
+    } catch (err) {
+      toast.error('Failed to generate an invoice number: ' + err.message);
+      return;
+    }
     const invoiceDate = new Date().toISOString().split('T')[0];
     onSaveInvoice({
       id: invId,

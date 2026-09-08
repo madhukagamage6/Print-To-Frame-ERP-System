@@ -724,7 +724,14 @@ export default function LeadCardDetails({
       ? `<strong>${formData.company}</strong><br/><span style="color:#64748b;">Attn: ${formData.name}</span>`
       : `<strong>${formData.name}</strong>`;
     
-    const invoiceNo = isFinal ? `FIN-${Math.floor(1000 + Math.random() * 9000)}` : `INV-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Print the REAL persisted invoice number whenever one exists, so the
+    // number on the PDF always matches the one saved in Firestore and shown
+    // in the Invoices module — never mint an independent one here. Only
+    // before the invoice has actually been converted/saved (via the
+    // Line-Item Quote panel) does this fall back to an explicit draft
+    // placeholder, which is never mistaken for a real invoice number.
+    const realInvoice = isFinal ? finalInvoice : advanceInvoice;
+    const invoiceNo = realInvoice?.id || realInvoice?._firestoreId || `DRAFT-${isFinal ? 'FINAL' : 'ADVANCE'}`;
     const totalVal = Number(formData.value || lead.value || 0);
     const advanceAmount = totalVal * 0.75;
     const balanceAmount = totalVal * 0.25;

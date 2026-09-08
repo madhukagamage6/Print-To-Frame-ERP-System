@@ -19,6 +19,7 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 
@@ -230,4 +231,29 @@ export function generateSequentialId(prefix, existingDocs, idField = 'id') {
   const nextNum = maxNum + 1;
   const padLength = prefix === 'INV' ? 4 : 3;
   return `${prefix}-${String(nextNum).padStart(padLength, '0')}`;
+}
+
+// ── Generate Invoice ID (atomic, collision-safe) ─────────────
+/**
+ * Atomically generates the next sequential invoice number for the given
+ * type, via a Firestore transaction against a per-type counter document
+ * (counters/INV-ADV, counters/INV-FIN). Unlike generateSequentialId above
+ * (which reads a client-side array and computes max+1), a transaction
+ * guarantees two concurrent callers — e.g. two admins converting an
+ * invoice at the same moment — can never be handed the same number:
+ * Firestore retries one of them automatically on contention.
+ * @param {'Advance'|'Final'} type
+ * @returns {Promise<string>} e.g. "INV-ADV-0001" / "INV-FIN-0001"
+ */
+export async function generateInvoiceId(type) {
+  const prefix = type === 'Final' ? 'INV-FIN' : 'INV-ADV';
+  const counterRef = doc(db, 'counters', prefix);
+  const nextNum = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(counterRef);
+    const current = snap.exists() ? Number(snap.data().value) || 0 : 0;
+    const next = current + 1;
+    transaction.set(counterRef, { value: next }, { merge: true });
+    return next;
+  });
+  return `${prefix}-${String(nextNum).padStart(4, '0')}`;
 }
