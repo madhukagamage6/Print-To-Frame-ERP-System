@@ -157,6 +157,18 @@ export default function LeadCardDetails({
     setIsDirty(JSON.stringify(formData) !== initialDataStr);
   }, [formData, initialDataStr]);
 
+  // Advance and Final are tracked as two independent invoice documents, each
+  // with its own live Firestore status — never a single cached boolean on the
+  // lead, which is exactly what let marking one accidentally mark both.
+  const advanceInvoice = useMemo(
+    () => invoices.find(inv => inv.leadId === lead.id && inv.type !== 'Final'),
+    [invoices, lead.id]
+  );
+  const finalInvoice = useMemo(
+    () => invoices.find(inv => inv.leadId === lead.id && inv.type === 'Final'),
+    [invoices, lead.id]
+  );
+
   // UI state
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const [quoteError, setQuoteError] = useState('');
@@ -1052,7 +1064,7 @@ export default function LeadCardDetails({
       advancePaid: 0,
       balanceDue: totalVal * 0.25,
       type: 'Advance',
-      status: formData.invoicePaid ? 'Paid' : 'Unpaid',
+      status: 'Unpaid',
       aiDraft: formData.invoiceDraft || formData.jobScope || 'Custom steel framing advance invoice',
       lineItems: activeQuote?.lineItems || [
         { description: formData.jobScope || "Custom steel framing advance deposit", qty: 1, unit: "job", unitPrice: totalVal * 0.75, taxPct: 0, discountPct: 0 }
@@ -1981,27 +1993,56 @@ export default function LeadCardDetails({
                       <Check size={12} />
                       <span>Save to DB</span>
                     </button>
-                    {formData.invoicePaid ? (
+                    {advanceInvoice?.status === 'Paid' ? (
                       <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2">
                         <Check size={13} />
                         <span>Payment Received</span>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         type="button"
+                        disabled={!advanceInvoice}
                         onClick={() => {
-                           const updatedData = { ...formData, invoicePaid: true };
-                           setFormData(updatedData);
-                           handleSaveLead(updatedData);
-                           if (onMarkInvoicePaid) {
-                             onMarkInvoicePaid(lead.id);
-                           }
+                          if (advanceInvoice && onMarkInvoicePaid) {
+                            onMarkInvoicePaid(lead.id, advanceInvoice._firestoreId || advanceInvoice.id);
+                          }
                         }}
-                        className="py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2"
+                        className="py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Check size={12} />
-                        <span>Mark Paid</span>
+                        <span>{advanceInvoice ? 'Mark Paid' : 'Save invoice to DB first'}</span>
                       </button>
+                    )}
+                  </div>
+
+                  {/* Final (25%) settlement is generated later in the pipeline
+                      (at delivery/deal-completion, not here) — shown as an
+                      independent status, never tied to the Advance control above. */}
+                  <div className="pt-3 mt-1 border-t border-outline-variant/30 space-y-2">
+                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">
+                      Final Settlement (25%)
+                    </label>
+                    {finalInvoice ? (
+                      finalInvoice.status === 'Paid' ? (
+                        <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1">
+                          <Check size={13} />
+                          <span>Payment Received</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onMarkInvoicePaid && onMarkInvoicePaid(lead.id, finalInvoice._firestoreId || finalInvoice.id)}
+                          className="w-full py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1"
+                        >
+                          <Check size={12} />
+                          <span>Mark Paid</span>
+                        </button>
+                      )
+                    ) : (
+                      <div className="py-2 bg-surface-container-high/50 text-on-surface-variant border border-outline-variant/40 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5">
+                        <Clock size={12} />
+                        <span>Not yet generated (created at delivery/completion)</span>
+                      </div>
                     )}
                   </div>
                 </div>

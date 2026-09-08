@@ -378,58 +378,75 @@ function App() {
     }
   };
 
-  const handleMarkLeadInvoicePaid = async (leadId) => {
-    if (!leadId) return;
+  // Marks exactly ONE invoice paid (Advance and Final are independent — paying
+  // one must never affect the other's status or re-fire the commission
+  // notification). invoiceId is that invoice's _firestoreId (or id fallback).
+  const handleMarkInvoicePaid = async (leadId, invoiceId) => {
+    if (!leadId || !invoiceId) return;
     try {
-      // 1. Find and update any related invoice(s)
-      const relatedInvoices = invoices.filter(inv => inv.leadId === leadId);
-      setInvoices(prev => prev.map(inv => 
-        inv.leadId === leadId ? { ...inv, status: 'Paid' } : inv
+      const targetInvoice = invoices.find(inv =>
+        inv.leadId === leadId && (inv._firestoreId || inv.id) === invoiceId
+      );
+      if (!targetInvoice) return;
+      // Idempotency guard — re-invoking on an already-paid invoice (e.g. a
+      // stale button re-render or a double-click) must be a no-op, not a
+      // duplicate write or a duplicate commission notification below.
+      if (targetInvoice.status === 'Paid') return;
+
+      // 1. Update only this invoice
+      const invDocId = targetInvoice._firestoreId || targetInvoice.id;
+      setInvoices(prev => prev.map(inv =>
+        (inv._firestoreId || inv.id) === invDocId ? { ...inv, status: 'Paid' } : inv
       ));
+      await updateDocument(COLLECTIONS.INVOICES, invDocId, { status: 'Paid' });
 
-      for (const inv of relatedInvoices) {
-        if (inv.status !== 'Paid') {
-          const invDocId = inv._firestoreId || inv.id;
-          await updateDocument(COLLECTIONS.INVOICES, invDocId, { status: 'Paid' });
-        }
-      }
+      // 2. Full settlement requires BOTH an Advance and a Final invoice to
+      // exist and both to be paid — not just "every invoice that happens to
+      // exist so far," since the Final invoice is usually created later (at
+      // deal completion) and its absence must never look like "fully paid."
+      const siblingInvoices = invoices.filter(inv => inv.leadId === leadId);
+      const advanceInvoice = siblingInvoices.find(inv => inv.type !== 'Final');
+      const finalInvoice = siblingInvoices.find(inv => inv.type === 'Final');
+      const paidNow = (inv) => !inv ? false : ((inv._firestoreId || inv.id) === invDocId ? true : inv.status === 'Paid');
+      const isFullyPaid = Boolean(advanceInvoice) && Boolean(finalInvoice) && paidNow(advanceInvoice) && paidNow(finalInvoice);
+      const isAdvance = targetInvoice.type !== 'Final';
 
-      // 2. Update the lead in Firestore and locally
+      // 3. Update the lead
       const targetLead = leads.find(l => l.id === leadId || l._firestoreId === leadId);
       if (targetLead) {
         const leadDocId = targetLead._firestoreId || targetLead.id;
-        const newStage = targetLead.stage === '75% Invoice Submitted' ? 'Received' : targetLead.stage;
-        
-        // Check if full 100% payment is complete
+        const newStage = (isAdvance && targetLead.stage === '75% Invoice Submitted') ? 'Received' : targetLead.stage;
         const isPartnerReferral = Boolean(targetLead.partnerId || targetLead.partnerName || targetLead.source === 'Referral');
-        const sqFt = Number(targetLead.totalSqFt || targetLead.sqFt || (targetLead.pricingMetadata?.costSalesAmount ? (targetLead.pricingMetadata.costSalesAmount / 53.5) : 0));
-        // Commission is always calculated from the partner's CURRENT live rate,
-        // never the lead's referral-time snapshot or the quote-time
-        // pricingMetadata.costSalesAmount (baked from a fixed internal cost
-        // rate) — either would pay out a stale rate if the partner's rate
-        // changed since the lead was referred/quoted.
-        const referredPartner = isPartnerReferral
-          ? partners.find(p =>
-              (targetLead.partnerId && (p.partnerId === targetLead.partnerId || p.id === targetLead.partnerId)) ||
-              (targetLead.partnerName && p.name === targetLead.partnerName)
-            )
-          : null;
-        let commRate = Number(referredPartner?.commissionRate) > 0 ? Number(referredPartner.commissionRate) : 53.5;
-        if (commRate > 0 && commRate <= 1) commRate = 53.5;
-        const dealVal = Number(targetLead.value || 0);
-        const commAmount = sqFt > 0 ? sqFt * commRate : (dealVal / 850) * commRate;
+        const alreadyEligible = targetLead.referralStatus === 'Eligible for Payout';
 
         const updatedLeadPayload = {
-          invoicePaid: true,
           stage: newStage,
-          ...(isPartnerReferral ? { referralStatus: 'Eligible for Payout' } : {})
+          ...(isFullyPaid ? { invoicePaid: true } : {}),
+          ...(isFullyPaid && isPartnerReferral && !alreadyEligible ? { referralStatus: 'Eligible for Payout' } : {}),
         };
 
         setLeads(prev => prev.map(lead => (lead.id === leadId || lead._firestoreId === leadId) ? { ...lead, ...updatedLeadPayload } : lead));
         await updateDocument(COLLECTIONS.LEADS, leadDocId, updatedLeadPayload);
 
-        // 3. Emit notification for partner commission eligibility
-        if (isPartnerReferral) {
+        // 4. Commission-eligibility notification — fires exactly once, only
+        // once the deal is genuinely fully settled, guarded by alreadyEligible
+        // so re-marking (or a race between two writes) can't double-fire it.
+        if (isFullyPaid && isPartnerReferral && !alreadyEligible) {
+          const sqFt = Number(targetLead.totalSqFt || targetLead.sqFt || (targetLead.pricingMetadata?.costSalesAmount ? (targetLead.pricingMetadata.costSalesAmount / 53.5) : 0));
+          // Commission is always calculated from the partner's CURRENT live
+          // rate, never the lead's referral-time snapshot or the quote-time
+          // pricingMetadata.costSalesAmount (baked from a fixed internal cost
+          // rate) — either would pay out a stale rate if the partner's rate
+          // changed since the lead was referred/quoted.
+          const referredPartner = partners.find(p =>
+            (targetLead.partnerId && (p.partnerId === targetLead.partnerId || p.id === targetLead.partnerId)) ||
+            (targetLead.partnerName && p.name === targetLead.partnerName)
+          );
+          let commRate = Number(referredPartner?.commissionRate) > 0 ? Number(referredPartner.commissionRate) : 53.5;
+          if (commRate > 0 && commRate <= 1) commRate = 53.5;
+          const dealVal = Number(targetLead.value || 0);
+          const commAmount = sqFt > 0 ? sqFt * commRate : (dealVal / 850) * commRate;
+
           const notif = {
             id: `notif_comm_${Date.now()}`,
             title: 'Commission Eligible: Full Payment Cleared',
@@ -442,7 +459,11 @@ function App() {
         }
       }
 
-      toast.success("Payment recorded and synchronized across Leads & Invoices!");
+      toast.success(
+        isFullyPaid
+          ? `${targetInvoice.type || 'Invoice'} payment recorded — deal fully settled!`
+          : `${targetInvoice.type || 'Invoice'} payment recorded and synchronized.`
+      );
     } catch (err) {
       console.error("Error syncing paid status to lead/invoices:", err);
       toast.error("Failed to update payment status: " + err.message);
@@ -1146,7 +1167,7 @@ function App() {
               partners={partners}
               quotations={quotations}
               setQuotations={setQuotations}
-              onMarkInvoicePaid={handleMarkLeadInvoicePaid}
+              onMarkInvoicePaid={handleMarkInvoicePaid}
             />
           )}
 
@@ -1165,7 +1186,7 @@ function App() {
               setCustomers={setCustomers}
               quotations={quotations}
               onSaveInvoice={handleSaveInvoice}
-              onMarkInvoicePaid={handleMarkLeadInvoicePaid}
+              onMarkInvoicePaid={handleMarkInvoicePaid}
             />
           )}
 
@@ -1173,7 +1194,7 @@ function App() {
             <Invoices 
               invoices={invoices} 
               setInvoices={setInvoices} 
-              onMarkPaid={handleMarkLeadInvoicePaid}
+              onMarkPaid={handleMarkInvoicePaid}
               currentUser={currentUser}
             />
           )}
