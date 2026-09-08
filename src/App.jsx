@@ -384,9 +384,12 @@ function App() {
   const handleMarkInvoicePaid = async (leadId, invoiceId) => {
     if (!leadId || !invoiceId) return;
     try {
-      const targetInvoice = invoices.find(inv =>
-        inv.leadId === leadId && (inv._firestoreId || inv.id) === invoiceId
-      );
+      // Matched by invoiceId alone — a Lead converted to a Deal gets a new
+      // id, but an invoice created before conversion still carries the
+      // ORIGINAL lead's id, so requiring inv.leadId === leadId here would
+      // silently fail to find it even though invoiceId already uniquely
+      // identifies the document.
+      const targetInvoice = invoices.find(inv => (inv._firestoreId || inv.id) === invoiceId);
       if (!targetInvoice) return;
       // Idempotency guard — re-invoking on an already-paid invoice (e.g. a
       // stale button re-render or a double-click) must be a no-op, not a
@@ -400,11 +403,18 @@ function App() {
       ));
       await updateDocument(COLLECTIONS.INVOICES, invDocId, { status: 'Paid' });
 
+      const targetLead = leads.find(l => l.id === leadId || l._firestoreId === leadId);
+
       // 2. Full settlement requires BOTH an Advance and a Final invoice to
       // exist and both to be paid — not just "every invoice that happens to
       // exist so far," since the Final invoice is usually created later (at
       // deal completion) and its absence must never look like "fully paid."
-      const siblingInvoices = invoices.filter(inv => inv.leadId === leadId);
+      // The Advance invoice may carry the original lead's id while the Final
+      // one carries the post-conversion deal id (or vice versa) — match
+      // siblings against either, same convention used for quotations/
+      // logistics jobs tied to a converted deal.
+      const relatedIds = new Set([leadId, targetLead?.originalLeadId].filter(Boolean));
+      const siblingInvoices = invoices.filter(inv => relatedIds.has(inv.leadId));
       const advanceInvoice = siblingInvoices.find(inv => inv.type !== 'Final');
       const finalInvoice = siblingInvoices.find(inv => inv.type === 'Final');
       const paidNow = (inv) => !inv ? false : ((inv._firestoreId || inv.id) === invDocId ? true : inv.status === 'Paid');
@@ -412,7 +422,6 @@ function App() {
       const isAdvance = targetInvoice.type !== 'Final';
 
       // 3. Update the lead
-      const targetLead = leads.find(l => l.id === leadId || l._firestoreId === leadId);
       if (targetLead) {
         const leadDocId = targetLead._firestoreId || targetLead.id;
         const newStage = (isAdvance && targetLead.stage === '75% Invoice Submitted') ? 'Received' : targetLead.stage;

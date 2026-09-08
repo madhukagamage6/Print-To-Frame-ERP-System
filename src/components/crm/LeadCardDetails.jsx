@@ -155,13 +155,16 @@ export default function LeadCardDetails({
   // Advance and Final are tracked as two independent invoice documents, each
   // with its own live Firestore status — never a single cached boolean on the
   // lead, which is exactly what let marking one accidentally mark both.
+  // A Lead converted to a Deal gets a brand new id, but an invoice created
+  // before conversion still carries the ORIGINAL lead's id — match either,
+  // same convention used for this card's own logistics-job lookup below.
   const advanceInvoice = useMemo(
-    () => invoices.find(inv => inv.leadId === lead.id && inv.type !== 'Final'),
-    [invoices, lead.id]
+    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type !== 'Final'),
+    [invoices, lead.id, lead.originalLeadId]
   );
   const finalInvoice = useMemo(
-    () => invoices.find(inv => inv.leadId === lead.id && inv.type === 'Final'),
-    [invoices, lead.id]
+    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type === 'Final'),
+    [invoices, lead.id, lead.originalLeadId]
   );
 
   // UI state
@@ -732,7 +735,7 @@ export default function LeadCardDetails({
       day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
+    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId || q.leadId === lead.originalLeadId);
     const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
     const html = `
