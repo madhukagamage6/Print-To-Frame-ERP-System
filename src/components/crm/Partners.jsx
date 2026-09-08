@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Search, User, Building, MapPin, Globe, DollarSign, Sparkles, X, 
   Trash2, Check, Clock, Link, QrCode, Copy, Plus, ChevronRight,
@@ -106,7 +106,7 @@ export default function Partners({
   });
 
   // Dynamic Avatar Resolution (Google Photo, Custom Upload, or Users DB Bridge)
-  const getPartnerAvatar = (partner) => {
+  const getPartnerAvatar = useCallback((partner) => {
     if (!partner) return null;
     if (partner.photoURL && partner.photoURL.length > 5) return partner.photoURL;
     if (partner.avatar && partner.avatar.length > 5) return partner.avatar;
@@ -132,7 +132,7 @@ export default function Partners({
     }
 
     return null;
-  };
+  }, [users, currentUser]);
 
   // Partner Identity Resolution for logged-in Partner role
   const currentPartner = useMemo(() => {
@@ -160,7 +160,7 @@ export default function Partners({
       branchName: '',
       photoURL: currentUser?.photoURL || '',
     };
-  }, [isPartnerUser, partners, currentUser, users]);
+  }, [isPartnerUser, partners, currentUser, getPartnerAvatar]);
 
   // Auto-select partner on mount if partner role or single partner
   useEffect(() => {
@@ -171,10 +171,10 @@ export default function Partners({
       setSelectedPartner(partners[0]);
       setEditFormData({ ...partners[0] });
     }
-  }, [isPartnerUser, currentPartner, partners]);
+  }, [isPartnerUser, currentPartner, partners, selectedPartner]);
 
   // Helper to calculate partner referral stats with SqFt rate (53.5 LKR/SqFt)
-  const getPartnerReferrals = (partner) => {
+  const getPartnerReferrals = useCallback((partner) => {
     if (!partner) return [];
     const pid = String(partner.partnerId || partner.id || '').toLowerCase();
     const pname = String(partner.name || '').toLowerCase();
@@ -237,12 +237,12 @@ export default function Partners({
         commState
       };
     });
-  };
+  }, [leads, invoices]);
 
   // Selected Partner's Referrals
   const selectedPartnerLeads = useMemo(() => {
     return getPartnerReferrals(selectedPartner);
-  }, [selectedPartner, leads, invoices]);
+  }, [selectedPartner, getPartnerReferrals]);
 
   // Image Upload & Crop Handlers for Partner Avatar
   const handlePartnerPhotoSelect = (e) => {

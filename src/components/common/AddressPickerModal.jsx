@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Search, X, Check, Globe } from 'lucide-react';
 import { loadGoogleMapsScript, geocodeAddress } from '../../services/googleMapsService';
 import { ModalWrapper } from './ui';
@@ -15,15 +15,56 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
+  // Guards against re-instantiating the Google map over the same node.
+  const mapInitializedRef = useRef(false);
+  // Read inside reverseGeocode without making it depend on addressInput,
+  // which would otherwise re-create initMap on every keystroke.
+  const addressInputRef = useRef(addressInput);
+
+  useEffect(() => {
+    addressInputRef.current = addressInput;
+  }, [addressInput]);
 
   useEffect(() => {
     if (isOpen) {
       setAddressInput(initialAddress);
-      initMap();
+      if (!mapInitializedRef.current) {
+        mapInitializedRef.current = true;
+        initMap();
+      }
+    } else {
+      // Modal unmounts its content, so the next open needs a fresh map.
+      mapInitializedRef.current = false;
     }
-  }, [isOpen, initialAddress]);
+  }, [isOpen, initialAddress, initMap]);
 
-  const initMap = async () => {
+  const reverseGeocode = useCallback(async (lat, lng) => {
+    try {
+      const maps = window.google?.maps;
+      if (maps && maps.Geocoder) {
+        const geocoder = new maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const addr = results[0].formatted_address;
+            setAddressInput(addr);
+            setSelectedLocation({ address: addr, lat, lng });
+          } else {
+            const addr = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+            setAddressInput(addr);
+            setSelectedLocation({ address: addr, lat, lng });
+          }
+        });
+      } else {
+        const addr = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+        setAddressInput(addr);
+        setSelectedLocation({ address: addr, lat, lng });
+      }
+    } catch {
+      setSelectedLocation({ address: addressInputRef.current, lat, lng });
+    }
+  }, []);
+
+  const initMap = useCallback(async () => {
     try {
       const maps = await loadGoogleMapsScript();
       if (!maps || !mapRef.current) return;
@@ -65,33 +106,7 @@ export default function AddressPickerModal({ isOpen, onClose, onSelect, initialA
     } catch (err) {
       console.warn('Map initialization error:', err);
     }
-  };
-
-  const reverseGeocode = async (lat, lng) => {
-    try {
-      const maps = window.google?.maps;
-      if (maps && maps.Geocoder) {
-        const geocoder = new maps.Geocoder();
-        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-          if (status === 'OK' && results[0]) {
-            const addr = results[0].formatted_address;
-            setAddressInput(addr);
-            setSelectedLocation({ address: addr, lat, lng });
-          } else {
-            const addr = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-            setAddressInput(addr);
-            setSelectedLocation({ address: addr, lat, lng });
-          }
-        });
-      } else {
-        const addr = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
-        setAddressInput(addr);
-        setSelectedLocation({ address: addr, lat, lng });
-      }
-    } catch {
-      setSelectedLocation({ address: addressInput, lat, lng });
-    }
-  };
+  }, [reverseGeocode]);
 
   const handleSearch = async () => {
     if (!addressInput.trim()) return;

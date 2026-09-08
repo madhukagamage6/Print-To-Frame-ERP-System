@@ -1405,7 +1405,7 @@ export default function LeadCardDetails({
           </div>
 
           {/* 2. Automated Pricing Engine */}
-          <div className="p-5 bg-violet-50/10 dark:bg-violet-950/20 rounded-2xl border border-violet-500/30 space-y-4 shadow-sm">
+          <div className="p-5 bg-violet-500/10 rounded-2xl border border-violet-500/30 space-y-4 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-violet-600 text-white rounded-xl shadow-md">

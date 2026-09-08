@@ -16,5 +16,16 @@ View your app in AI Studio: https://ai.studio/apps/66900443-b6c9-4743-892c-f50b5
 1. Install dependencies:
    `npm install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+3. For outbound email (enrollment invites, password resets, etc.), also set `SMTP_USER`
+   (the sending mailbox, e.g. `info@print2frame.xyz`) and `SMTP_APP_PASSWORD` (a Gmail
+   [App Password](https://myaccount.google.com/apppasswords) for that mailbox — not the
+   account's normal login password) in `.env.local`. In production these are set as
+   Vercel environment variables instead.
+4. Run the app:
    `npm run dev`
+
+## Testing
+
+- `npm test` — Vitest unit tests for pure logic (email templates, RBAC permission shape). No setup needed.
+- `npm run test:rules` — integration tests against a real local Firebase Emulator, proving `firestore.rules` actually enforces what it claims to (e.g. that a non-admin can't grant themselves Admin via a direct Firestore write). Requires Java (for the emulator) but no real Firebase project or credentials — `firebase-tools` and the emulator config are already checked in.
+- `npm run test:all` — both, in sequence.

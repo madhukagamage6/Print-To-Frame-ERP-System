@@ -1,6 +1,8 @@
 export { default as PageHeader } from './PageHeader';
 export { default as FilterBar } from './FilterBar';
 export { default as StatusBadge } from './StatusBadge';
+export { default as SortableTable } from './SortableTable';
+export { default as ActivityTimeline } from './ActivityTimeline';
 export { default as KanbanColumn } from './KanbanColumn';
 export { default as KanbanCard } from './KanbanCard';
 export { default as UserAvatar } from './UserAvatar';

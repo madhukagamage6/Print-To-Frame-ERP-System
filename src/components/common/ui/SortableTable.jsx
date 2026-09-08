@@ -126,32 +126,31 @@ export default function SortableTable({
                       key={col.key}
                       scope="col"
                       aria-sort={col.sortable !== false ? ariaSortValue : undefined}
-                      onClick={() => col.sortable !== false && handleSort(col.key)}
-                      onKeyDown={(e) => {
-                        if (col.sortable !== false && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          handleSort(col.key);
-                        }
-                      }}
-                      tabIndex={col.sortable !== false ? 0 : undefined}
-                      role={col.sortable !== false ? "columnheader button" : "columnheader"}
-                      aria-label={col.sortable !== false ? `Sort by ${col.label}, currently ${ariaSortValue}` : col.label}
-                      className={`p-3 font-extrabold ${col.className || ''} ${
-                        col.sortable !== false ? 'cursor-pointer select-none hover:text-on-surface transition-colors focus-visible:ring-2 focus-visible:ring-primary rounded' : ''
-                      }`}
+                      className={`p-3 font-extrabold ${col.className || ''}`}
                     >
-                      <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
-                        <span>{col.label}</span>
-                        {col.sortable !== false && (
-                          <span className="opacity-60">
-                            {sortKey === col.key ? (
+                      {col.sortable !== false ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSort(col.key)}
+                          className={`flex items-center gap-1.5 w-full uppercase tracking-wider font-extrabold cursor-pointer select-none hover:text-on-surface transition-colors focus-visible:ring-2 focus-visible:ring-primary rounded ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}
+                        >
+                          <span>{col.label}</span>
+                          <span className="opacity-60" aria-hidden="true">
+                            {isSorted ? (
                               sortDirection === 'asc' ? <ChevronUp size={12} className="text-primary" /> : <ChevronDown size={12} className="text-primary" />
                             ) : (
                               <ChevronsUpDown size={11} />
                             )}
                           </span>
-                        )}
-                      </div>
+                          <span className="sr-only">
+                            {isSorted ? `, sorted ${ariaSortValue}` : ', not sorted'}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
+                          <span>{col.label}</span>
+                        </div>
+                      )}
                     </th>
                   );
                 })}
