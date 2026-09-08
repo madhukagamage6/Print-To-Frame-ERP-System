@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     if (!email || !EMAIL_RE.test(email)) {
       return res.status(400).json({ error: 'Missing or invalid "email"' });
     }
-    if (!password || password.length < 6) {
+    if ((action === 'create' || action === 'resetPassword') && (!password || password.length < 6)) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
@@ -107,7 +107,26 @@ export default async function handler(req, res) {
       return res.status(200).json({ reset: true, uid: userRecord.uid });
     }
 
-    return res.status(400).json({ error: 'Unknown "action" — expected "create" or "resetPassword"' });
+    if (action === 'delete') {
+      // Deleting an "account" here always means the Firebase Auth account only —
+      // callers are responsible for deleting the corresponding users/{email} (and
+      // partners/customers, etc.) Firestore documents themselves. Not every caller
+      // of this action has a real Auth account behind it (e.g. a partner added
+      // manually with no login ever granted), so a missing account is treated as
+      // an already-satisfied delete, not an error.
+      try {
+        const userRecord = await adminAuth.getUserByEmail(normalizedEmail);
+        await adminAuth.deleteUser(userRecord.uid);
+        return res.status(200).json({ deleted: true, hadAccount: true });
+      } catch (lookupErr) {
+        if (lookupErr.code === 'auth/user-not-found') {
+          return res.status(200).json({ deleted: true, hadAccount: false });
+        }
+        throw lookupErr;
+      }
+    }
+
+    return res.status(400).json({ error: 'Unknown "action" — expected "create", "resetPassword", or "delete"' });
   } catch (err) {
     console.error('admin-user.js error:', err.message);
     return res.status(502).json({ error: err.message });

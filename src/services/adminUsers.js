@@ -49,3 +49,14 @@ export async function createUserAccount(email, password, displayName) {
 export async function resetUserPassword(email, password) {
   return callAdminUserApi({ action: 'resetPassword', email, password });
 }
+
+/**
+ * Permanently deletes the Firebase Auth account for this email, if one
+ * exists — a no-op (not an error) if it doesn't. Only removes the Auth
+ * account itself; callers are responsible for deleting the corresponding
+ * Firestore documents (users/{email}, partners/{id}, customers/{nic}, etc.)
+ * themselves, since only they know which collections are involved.
+ */
+export async function deleteUserAccount(email) {
+  return callAdminUserApi({ action: 'delete', email });
+}

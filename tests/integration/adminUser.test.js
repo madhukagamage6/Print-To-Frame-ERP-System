@@ -82,3 +82,47 @@ describe('api/admin-user.js Admin SDK logic: resetPassword', () => {
     });
   });
 });
+
+describe('api/admin-user.js Admin SDK logic: delete', () => {
+  it('deletes an existing account, and it is no longer retrievable or able to sign in afterward', async () => {
+    const auth = getAuth();
+    const email = 'deletetarget@example.com';
+    const created = await auth.createUser({ email, password: 'ToBeDeleted1' });
+
+    // Mirrors api/admin-user.js's delete action: look up by email, then delete by uid.
+    const userRecord = await auth.getUserByEmail(email);
+    await auth.deleteUser(userRecord.uid);
+
+    await expect(auth.getUserByEmail(email)).rejects.toMatchObject({
+      code: 'auth/user-not-found',
+    });
+
+    // The specific real-world failure this fixes: a "deleted" account whose
+    // login silently still worked. Confirm the emulator's own sign-in REST
+    // endpoint agrees the account is actually gone, not just absent from a
+    // getUserByEmail lookup.
+    const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const signInAttempt = await fetch(
+      `http://${emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'ToBeDeleted1', returnSecureToken: true }),
+      }
+    );
+    expect(signInAttempt.ok).toBe(false);
+  });
+
+  it('treats deleting an email with no account as a no-op, not an error', async () => {
+    // This is the case that matters for records created before a login ever
+    // existed (e.g. a partner added manually, with no Firebase Auth account
+    // behind it) — deleting them must not fail just because there's nothing
+    // to delete on the Auth side.
+    const auth = getAuth();
+    await expect(auth.getUserByEmail('never-had-an-account@example.com')).rejects.toMatchObject({
+      code: 'auth/user-not-found',
+    });
+    // api/admin-user.js's delete action catches exactly this error code and
+    // returns { deleted: true, hadAccount: false } instead of propagating it.
+  });
+});

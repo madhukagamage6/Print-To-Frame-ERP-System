@@ -18,7 +18,7 @@ import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/ro
 import { formatPhone } from '../../utils/validation';
 import { usePermissions } from '../../context/PermissionsContext';
 import { logActivity } from '../../services/auditLog';
-import { createUserAccount } from '../../services/adminUsers';
+import { createUserAccount, deleteUserAccount } from '../../services/adminUsers';
 import { sendTemplatedEmail } from '../../services/mailer';
 
 export default function AgentDatabase({ 
@@ -181,17 +181,22 @@ export default function AgentDatabase({
     }
   };
 
+  // Deleting a user previously only removed their Firestore profile — the
+  // Firebase Auth account (and therefore their ability to sign in) was left
+  // completely untouched, and re-enrolling the same email later would fail
+  // with auth/email-already-exists since the "deleted" account still existed.
   const handleDeleteAgent = async () => {
     if (deleteId) {
       try {
         await deleteDoc(doc(db, "users", deleteId));
         setUsers(prev => prev.filter(u => u.identifier !== deleteId));
+        await deleteUserAccount(deleteId);
         if (selectedAgent?.identifier === deleteId) {
           setSelectedAgent(null);
         }
         setDeleteId(null);
-        toast.success("User access revoked successfully");
-        logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Admin', `Revoked access for ${deleteId}`);
+        toast.success("User access revoked and login permanently deleted");
+        logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Admin', `Revoked access and deleted login for ${deleteId}`);
       } catch (err) {
         toast.error("Error removing user: " + err.message);
       }
@@ -355,21 +360,15 @@ export default function AgentDatabase({
       // stored users/{email} document — onApprove spreads regData as-is.
       const { _source, _appDocId, ...regData } = targetUser;
       if (onApprove) {
-        await onApprove(regData, finalRole);
+        // The welcome/activation email fires from Partners.jsx/Customers.jsx once
+        // the admin completes the handed-off Register Partner/Client form, not
+        // here — the real partnerId/customerId isn't known yet at this point, and
+        // an email referencing a placeholder id is worse than a slightly later one.
+        await onApprove(regData, finalRole, { tempPassword: fromApplication ? reviewPassword : undefined });
       }
 
       if (fromApplication && _appDocId) {
         await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, _appDocId, { status: 'Approved' });
-        try {
-          await sendTemplatedEmail(targetUser.identifier, 'partner_approval', {
-            recipientName: targetUser.name,
-            loginEmail: targetUser.identifier,
-            tempPassword: reviewPassword,
-            senderName: currentUser?.name,
-          });
-        } catch (mailErr) {
-          toast.error(`${targetUser.name} was approved and can log in, but the invite email failed to send: ${mailErr.message}`);
-        }
       }
 
       setReviewingApplicant(null);
@@ -394,6 +393,14 @@ export default function AgentDatabase({
       if (onReject) await onReject(user.identifier);
     }
     if (reviewingApplicant?.identifier === user.identifier) setReviewingApplicant(null);
+    try {
+      await sendTemplatedEmail(user.identifier, 'registration_declined', {
+        recipientName: user.name,
+        senderName: currentUser?.name,
+      });
+    } catch (mailErr) {
+      console.error('Failed to send decline notification:', mailErr);
+    }
     toast.info("Registration request dismissed");
   };
 
@@ -1280,7 +1287,7 @@ export default function AgentDatabase({
         onClose={() => setDeleteId(null)}
         onConfirm={handleDeleteAgent}
         title="Revoke Member Access"
-        message="Are you sure you want to revoke this user account? Their past audit events will be preserved."
+        message="Are you sure you want to revoke this user? This permanently deletes their portal login (Firebase account included) — they will not be able to sign in afterward, and this cannot be undone. Their past audit events will be preserved."
       />
     </div>
   );

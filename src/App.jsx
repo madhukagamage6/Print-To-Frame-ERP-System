@@ -677,7 +677,13 @@ function App() {
     }
   };
 
-  const approvePending = async (regData, customRole) => {
+  // `tempPassword` is only present when the caller just created the Firebase Auth
+  // account itself (a partner_application, which has no self-registration
+  // password to fall back on) — it flows through to the prefilled Register
+  // Partner/Client form so the completion email can relay it. Self-registered
+  // approvals pass nothing here, since the person already knows their own
+  // password from signing up.
+  const approvePending = async (regData, customRole, { tempPassword } = {}) => {
     try {
       const finalRole = customRole || regData.role || 'Partner';
       const approvedUser = {
@@ -700,12 +706,16 @@ function App() {
       // an admin there, not guessed at here). Login access is already granted by the
       // writes above; this just pre-fills the existing form and switches to the
       // right tab so completing the profile is the very next thing the admin does.
+      // The real partnerId/customerId isn't known until that form is submitted, so
+      // the welcome email fires from there too — not here, where it would otherwise
+      // have to reference a placeholder id.
       if (finalRole === 'Partner') {
         setPartnerApprovalPrefill({
           name: regData.name,
           email: regData.identifier,
           phone: regData.mobile || regData.contactNumber || '',
           type: regData.specialty ? 'Custom Workshop / Artisan' : 'Agency',
+          tempPassword,
         });
         setActiveTab('partners');
       }
@@ -716,6 +726,7 @@ function App() {
           businessName: regData.company || regData.name,
           email: regData.identifier,
           phone: regData.mobile || regData.contactNumber || '',
+          tempPassword,
         });
         setActiveTab('customers');
       }
@@ -1162,6 +1173,8 @@ function App() {
             <Customers
               customers={customers}
               setCustomers={setCustomers}
+              users={users}
+              setUsers={setUsers}
               dataStore={dataStore}
               currentUser={currentUser}
               prefillClient={clientApprovalPrefill}

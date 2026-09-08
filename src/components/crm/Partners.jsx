@@ -22,6 +22,9 @@ import {
 import { formatPhone, validatePhone, validateEmail } from '../../utils/validation';
 import { exportToCsv } from '../../utils/csvExport';
 import { usePermissions } from '../../context/PermissionsContext';
+import { sendTemplatedEmail } from '../../services/mailer';
+import { deleteUserAccount } from '../../services/adminUsers';
+import { logActivity } from '../../services/auditLog';
 
 export default function Partners({ 
   partners = [], 
@@ -121,6 +124,13 @@ export default function Partners({
     onPrefillConsumedRef.current = onPrefillConsumed;
   }, [onPrefillConsumed]);
 
+  // Carries prefillPartner's tempPassword (present only for a partner_application
+  // approval, which had no self-registration password to fall back on) through to
+  // handleCreatePartner's success — that's the earliest point the real partnerId
+  // and commissionRate exist, so that's where the welcome/activation email fires,
+  // not at the approval step itself.
+  const [pendingApprovalEmail, setPendingApprovalEmail] = useState(null);
+
   useEffect(() => {
     if (!prefillPartner) return;
     setNewPartner(prev => ({
@@ -131,10 +141,20 @@ export default function Partners({
       phone: prefillPartner.phone || prev.phone,
       type: prefillPartner.type || prev.type,
     }));
+    setPendingApprovalEmail({ tempPassword: prefillPartner.tempPassword || null });
     setShowCreateModal(true);
     setActiveFilter('all');
     onPrefillConsumedRef.current?.();
   }, [prefillPartner]);
+
+  // Cancelling out of the form (X, backdrop/Escape, or the footer Cancel button)
+  // must also drop any pending approval-email context — otherwise a later,
+  // unrelated manual "Register Partner" click could inherit a stale
+  // "this came from an approval" flag from a cancelled one.
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setPendingApprovalEmail(null);
+  };
 
   // Dynamic Avatar Resolution (Google Photo, Custom Upload, or Users DB Bridge)
   const getPartnerAvatar = useCallback((partner) => {
@@ -406,6 +426,33 @@ export default function Partners({
           onClick: () => setQrPartner({ ...partnerPayload, id: partnerId }),
         },
       });
+
+      // This creation completed a User Management approval — send the welcome
+      // email now, since this is the first point the real partnerId and
+      // commissionRate exist. A password-application approval relays the
+      // password it just created; a self-registered approval already has one,
+      // so it gets a lighter activation confirmation instead. A plain manual
+      // add (no approval behind it) sends nothing — there's no login involved.
+      if (pendingApprovalEmail) {
+        const { tempPassword } = pendingApprovalEmail;
+        setPendingApprovalEmail(null);
+        try {
+          await sendTemplatedEmail(
+            partnerPayload.email,
+            tempPassword ? 'partner_approval' : 'partner_activation_confirmed',
+            {
+              recipientName: partnerPayload.name,
+              partnerId,
+              commissionRate: partnerPayload.commissionRate,
+              loginEmail: partnerPayload.email,
+              tempPassword: tempPassword || undefined,
+              senderName: currentUser?.name,
+            }
+          );
+        } catch (mailErr) {
+          toast.error(`${partnerPayload.name} is active, but the welcome email failed to send: ${mailErr.message}`);
+        }
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to create partner: ' + err.message);
@@ -438,19 +485,42 @@ export default function Partners({
     }
   };
 
-  // Delete Partner
+  // Delete Partner — removes the partners directory record AND, if this partner
+  // has a real portal login, their users/{email} profile and Firebase Auth
+  // account too. Previously this only ever removed the directory record, so a
+  // "deleted" partner could still sign in, and re-approving the same email
+  // later failed with auth/email-already-exists since the old account never
+  // actually went away.
   const handleDeletePartner = async () => {
     if (!deletePartnerId) return;
+    const targetPartner = partners.find(p =>
+      p._firestoreId === deletePartnerId || p.id === deletePartnerId || p.partnerId === deletePartnerId
+    );
+    const email = (targetPartner?.email || '').trim().toLowerCase();
+    // Only ever the same partner's own login — never delete a users/{email} doc
+    // whose role has since changed to something else (e.g. promoted to staff).
+    const matchingUser = email ? users.find(u => u.identifier?.toLowerCase() === email && u.role === 'Partner') : null;
+
     try {
       await deleteDocument(COLLECTIONS.PARTNERS, deletePartnerId);
       if (setPartners) {
         setPartners(prev => prev.filter(p => (p._firestoreId !== deletePartnerId && p.id !== deletePartnerId && p.partnerId !== deletePartnerId)));
       }
+
+      if (matchingUser) {
+        await deleteDocument(COLLECTIONS.USERS, matchingUser.identifier);
+        if (setUsers) {
+          setUsers(prev => prev.filter(u => u.identifier !== matchingUser.identifier));
+        }
+        await deleteUserAccount(matchingUser.identifier);
+      }
+
       if (selectedPartner && (selectedPartner._firestoreId === deletePartnerId || selectedPartner.id === deletePartnerId || selectedPartner.partnerId === deletePartnerId)) {
         setSelectedPartner(null);
       }
       setDeletePartnerId(null);
-      toast.success('Partner profile removed');
+      logActivity(currentUser?.identifier, currentUser?.name, 'DELETE', 'Partners', `Removed partner ${targetPartner?.name || deletePartnerId}${matchingUser ? ' and revoked their login' : ''}`);
+      toast.success(matchingUser ? 'Partner removed and their login permanently revoked' : 'Partner profile removed');
     } catch (err) {
       console.error(err);
       toast.error('Failed to delete partner: ' + err.message);
@@ -562,6 +632,17 @@ export default function Partners({
 
   const activePartnersCount = basePartnersList.filter(p => p.status === 'Active' || !p.status).length;
   const pendingClaimsCount = claims.filter(c => c.status === 'Pending Verification').length;
+
+  // Drives the delete-confirmation copy — accurate warning only when this
+  // partner actually has a login to lose.
+  const deletePartnerHasLogin = useMemo(() => {
+    if (!deletePartnerId) return false;
+    const target = partners.find(p =>
+      p._firestoreId === deletePartnerId || p.id === deletePartnerId || p.partnerId === deletePartnerId
+    );
+    const email = (target?.email || '').trim().toLowerCase();
+    return !!email && users.some(u => u.identifier?.toLowerCase() === email && u.role === 'Partner');
+  }, [deletePartnerId, partners, users]);
 
   const publicQrUrl = (partner) => {
     const pid = partner?.partnerId || partner?.id || 'P-1001';
@@ -1252,7 +1333,7 @@ export default function Partners({
       {/* ── CREATE PARTNER MODAL ─────────────────────────────────────────── */}
       <ModalWrapper
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={closeCreateModal}
         maxWidth="max-w-xl"
         height="h-auto"
         ariaLabel="Register Partner"
@@ -1262,7 +1343,7 @@ export default function Partners({
             <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
               <Handshake size={18} className="text-primary" /> Register New Framing Partner Studio
             </h3>
-            <button onClick={() => setShowCreateModal(false)} className="text-on-surface-variant hover:text-on-surface p-1">
+            <button onClick={closeCreateModal} className="text-on-surface-variant hover:text-on-surface p-1">
               <X size={18} />
             </button>
           </div>
@@ -1342,7 +1423,7 @@ export default function Partners({
             <div className="pt-3 flex justify-end gap-2 border-t border-outline-variant/60">
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={closeCreateModal}
                 className="px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold rounded-xl"
               >
                 Cancel
@@ -1567,7 +1648,11 @@ export default function Partners({
         onClose={() => setDeletePartnerId(null)}
         onConfirm={handleDeletePartner}
         title="Remove Partner Studio"
-        message="Are you sure you want to remove this partner from the directory? Their past referral deals and invoices will remain intact."
+        message={
+          deletePartnerHasLogin
+            ? "Are you sure you want to remove this partner? This also permanently deletes their portal login (Firebase account included) — they will not be able to sign in afterward, and this cannot be undone. Their past referral deals and invoices will remain intact."
+            : "Are you sure you want to remove this partner from the directory? Their past referral deals and invoices will remain intact."
+        }
       />
 
       {/* ── QR FLYER MODAL ─────────────────────────────────────────── */}
