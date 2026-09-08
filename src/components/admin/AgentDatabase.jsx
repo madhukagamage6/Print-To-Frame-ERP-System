@@ -18,6 +18,8 @@ import { SYSTEM_ROLES, ROLE_METADATA, getRoleCategory } from '../../constants/ro
 import { formatPhone } from '../../utils/validation';
 import { usePermissions } from '../../context/PermissionsContext';
 import { logActivity } from '../../services/auditLog';
+import { createUserAccount } from '../../services/adminUsers';
+import { sendTemplatedEmail } from '../../services/mailer';
 
 export default function AgentDatabase({ 
   users = [], 
@@ -227,9 +229,22 @@ export default function AgentDatabase({
       toast.error("Please fill in required fields");
       return;
     }
+    if (!createUserForm.password || createUserForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
 
     try {
       const emailKey = createUserForm.identifier.trim().toLowerCase();
+
+      // Create the real Firebase Auth account FIRST — this is what was missing
+      // entirely before. Without it, the Firestore profile below is the only
+      // thing that exists, and email/password login is impossible no matter
+      // what else is fixed. If this fails (e.g. the email is already taken),
+      // stop here rather than writing a Firestore profile with no matching
+      // Auth account.
+      await createUserAccount(emailKey, createUserForm.password, createUserForm.name);
+
       const newUser = {
         name: createUserForm.name,
         identifier: emailKey,
@@ -245,6 +260,7 @@ export default function AgentDatabase({
       await setDoc(doc(db, "users", emailKey), newUser);
       setUsers(prev => [...prev.filter(u => u.identifier !== emailKey), newUser]);
       setShowCreateUserModal(false);
+      const enrolledPassword = createUserForm.password;
       setCreateUserForm({
         name: '',
         identifier: '',
@@ -254,7 +270,25 @@ export default function AgentDatabase({
         company: '',
         specialty: '',
       });
-      toast.success(`User ${newUser.name} enrolled as ${newUser.role} successfully!`);
+      logActivity(currentUser?.identifier, currentUser?.name, 'ENROLL', 'Admin', `Enrolled ${newUser.name} (${emailKey}) as ${newUser.role}`);
+
+      // Fire the invite email automatically — this is the other half of the
+      // original bug (a toast claiming an email was sent when nothing was
+      // ever dispatched). A failure here doesn't roll back the account: the
+      // user was genuinely created and can already log in, so tell the admin
+      // exactly what happened instead of hiding a partial failure.
+      try {
+        await sendTemplatedEmail(emailKey, 'employee_invite', {
+          recipientName: newUser.name,
+          assignedRole: newUser.role,
+          loginEmail: emailKey,
+          tempPassword: enrolledPassword,
+          senderName: currentUser?.name,
+        });
+        toast.success(`User ${newUser.name} enrolled as ${newUser.role} and invited by email.`);
+      } catch (mailErr) {
+        toast.error(`User ${newUser.name} was enrolled, but the invite email failed to send: ${mailErr.message}`);
+      }
     } catch (err) {
       toast.error("Failed to create user: " + err.message);
     }
@@ -969,6 +1003,22 @@ export default function AgentDatabase({
                   onChange={(e) => setCreateUserForm(p => ({ ...p, contactNumber: formatPhone(e.target.value) }))}
                   className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono"
                 />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Initial Password *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="Minimum 6 characters"
+                  value={createUserForm.password}
+                  onChange={(e) => setCreateUserForm(p => ({ ...p, password: e.target.value }))}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono"
+                />
+                <p className="mt-1 text-[10px] text-on-surface-variant">
+                  Sent to the new member automatically by email along with their login details.
+                </p>
               </div>
             </div>
 
