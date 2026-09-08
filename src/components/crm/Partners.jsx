@@ -10,7 +10,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../services/firebase';
 import { toast } from '../../utils/toast';
 import DeleteModal from '../common/DeleteModal';
-import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal } from '../common/ui';
+import { PageHeader, FilterBar, StatusBadge, ModalWrapper, UserAvatar, ImageCropModal, EmailTemplateModal } from '../common/ui';
 import PartnerQRModal from './PartnerQRModal';
 import { 
   subscribeToCollection, 
@@ -60,6 +60,13 @@ export default function Partners({
   const [uploadingDocKey, setUploadingDocKey] = useState(null);
   const [qrPartner, setQrPartner] = useState(null);
   const [deletePartnerId, setDeletePartnerId] = useState(null);
+  // Same Email Template Dispatcher used in User Management (AgentDatabase.jsx),
+  // wired to the selected partner instead of a staff/client user record.
+  const [emailModalConfig, setEmailModalConfig] = useState({
+    isOpen: false,
+    recipient: null,
+    initialTemplateId: null,
+  });
 
   // Missing Referral Claims
   const [claims, setClaims] = useState([]);
@@ -909,6 +916,16 @@ export default function Partners({
                       >
                         <QrCode size={12} /> QR Flyer
                       </button>
+                      <button
+                        onClick={() => setEmailModalConfig({
+                          isOpen: true,
+                          recipient: selectedPartner,
+                          initialTemplateId: 'commission_disbursement',
+                        })}
+                        className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-xl text-xs font-bold border border-outline-variant flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Mail size={12} /> Email
+                      </button>
                       {canAccess(currentUser?.role, 'partners', 'edit') && (
                         <button
                           onClick={() => {
@@ -1559,6 +1576,17 @@ export default function Partners({
           partner={qrPartner}
           isOpen={!!qrPartner}
           onClose={() => setQrPartner(null)}
+        />
+      )}
+
+      {/* ── EMAIL TEMPLATE MODAL ─────────────────────────────────────────── */}
+      {emailModalConfig.isOpen && (
+        <EmailTemplateModal
+          isOpen={emailModalConfig.isOpen}
+          onClose={() => setEmailModalConfig({ isOpen: false, recipient: null, initialTemplateId: null })}
+          recipient={emailModalConfig.recipient}
+          initialTemplateId={emailModalConfig.initialTemplateId}
+          currentUser={currentUser}
         />
       )}
     </div>
