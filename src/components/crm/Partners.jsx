@@ -22,6 +22,9 @@ import {
 import { formatPhone, validatePhone, validateEmail } from '../../utils/validation';
 import { exportToCsv } from '../../utils/csvExport';
 import { usePermissions } from '../../context/PermissionsContext';
+import { logActivity } from '../../services/auditLog';
+import { createUserAccount } from '../../services/adminUsers';
+import { sendTemplatedEmail } from '../../services/mailer';
 
 export default function Partners({ 
   partners = [], 
@@ -32,8 +35,9 @@ export default function Partners({
   projects = [],
   users = [],
   setUsers,
-  dataStore, 
-  currentUser 
+  dataStore,
+  currentUser,
+  onApprovePending,
 }) {
   const { canAccess } = usePermissions();
   const isPartnerUser = currentUser?.role === 'Partner';
@@ -72,6 +76,13 @@ export default function Partners({
 
   // Ingestion applications from portal
   const [applications, setApplications] = useState([]);
+  // Approving an application now needs an initial password (see handleApproveApplication)
+  // since it creates a real Firebase Auth account through the same approvePending()
+  // pipeline self-registered partners already use — no separate, disconnected
+  // partner-record-only path anymore.
+  const [approvingApp, setApprovingApp] = useState(null);
+  const [approvalPassword, setApprovalPassword] = useState('');
+  const [isApprovingApp, setIsApprovingApp] = useState(false);
 
   useEffect(() => {
     const unsubClaims = subscribeToCollection(COLLECTIONS.REFERRAL_CLAIMS, (data) => {
@@ -473,6 +484,72 @@ export default function Partners({
     }
   };
 
+  // Approving a Vetting Queue application now goes through the exact same
+  // approvePending() pipeline self-registered partners already use, instead of
+  // a separate inline partners-collection write — this is what merges the two
+  // previously-disconnected partner onboarding paths into one, so a studio can
+  // never end up with two duplicate, unlinked partner records depending on
+  // which path they came through. approvePending() also owns the
+  // transaction-safe partner-id/code allocation, so nothing here computes one.
+  const handleApproveApplication = async (e) => {
+    e.preventDefault();
+    if (!approvingApp) return;
+    if (!approvalPassword || approvalPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    const app = approvingApp;
+    const email = (app.email || '').trim().toLowerCase();
+    if (!email) {
+      toast.error('This application has no email on file — cannot create a login.');
+      return;
+    }
+
+    setIsApprovingApp(true);
+    try {
+      // Create the real Firebase Auth account first (this application never went
+      // through self-registration, so unlike the pendingUsers path, no Auth
+      // account exists yet for this email at all).
+      const displayName = app.contactPerson || app.studioName || app.name || email;
+      await createUserAccount(email, approvalPassword, displayName);
+
+      const regData = {
+        identifier: email,
+        name: displayName,
+        mobile: app.phone || app.contactNumber || '',
+        company: app.studioName || app.name || '',
+        specialty: app.specialty || '',
+      };
+      const approvedUser = await onApprovePending(regData, 'Partner');
+
+      await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', app._firestoreId || app.id, { status: 'Approved' });
+
+      logActivity(currentUser?.identifier, currentUser?.name, 'PARTNER_APPROVE', 'Partners', `Approved partner application for ${displayName} (${email})`);
+
+      setApprovingApp(null);
+      setApprovalPassword('');
+
+      const partnerId = approvedUser?.partnerId || '';
+      try {
+        await sendTemplatedEmail(email, 'partner_approval', {
+          recipientName: displayName,
+          partnerId,
+          loginEmail: email,
+          tempPassword: approvalPassword,
+          senderName: currentUser?.name,
+        });
+        toast.success(`Approved ${displayName} as an Official Partner and sent their login invite.`);
+      } catch (mailErr) {
+        toast.error(`${displayName} was approved and can log in, but the invite email failed to send: ${mailErr.message}`);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to approve application: ' + err.message);
+    } finally {
+      setIsApprovingApp(false);
+    }
+  };
+
   // Export CSV
   const handleExportCsv = () => {
     try {
@@ -628,26 +705,10 @@ export default function Partners({
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={async () => {
-                          const newP = {
-                            name: app.studioName || app.name,
-                            partnerId: 'P-' + String(Date.now()).slice(-4),
-                            contactPerson: app.contactPerson || '',
-                            phone: app.phone || '',
-                            email: app.email || '',
-                            commissionRate: 53.5, // 53.50 LKR/SqFt
-                            type: 'Art & Framing Studio',
-                            status: 'Active',
-                            createdAt: new Date().toISOString(),
-                          };
-                          await addDocument(COLLECTIONS.PARTNERS, newP, newP.partnerId);
-                          await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', app._firestoreId || app.id, { status: 'Approved' });
-                          if (setPartners) setPartners(prev => [...prev, newP]);
-                          toast.success(`Approved ${newP.name} as Official Partner (LKR 53.50/SqFt Comm)!`);
-                        }}
+                        onClick={() => { setApprovingApp(app); setApprovalPassword(''); }}
                         className="px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-sm hover:bg-primary/90 flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Check size={13} /> Approve (LKR 53.50/SqFt Comm)
+                        <Check size={13} /> Approve &amp; Create Login
                       </button>
                     </div>
                   </div>
@@ -1565,6 +1626,65 @@ export default function Partners({
             </div>
           </form>
         </div>
+      </ModalWrapper>
+
+      {/* ── APPROVE APPLICATION MODAL (sets the initial login password) ── */}
+      <ModalWrapper
+        isOpen={!!approvingApp}
+        onClose={() => { if (!isApprovingApp) { setApprovingApp(null); setApprovalPassword(''); } }}
+        maxWidth="max-w-md"
+        height="h-auto"
+        ariaLabel="Approve Partner Application"
+      >
+        {approvingApp && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+              <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <Check size={18} className="text-primary" /> Approve &amp; Create Login
+              </h3>
+              <button onClick={() => { if (!isApprovingApp) { setApprovingApp(null); setApprovalPassword(''); } }} className="text-on-surface-variant hover:text-on-surface p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-on-surface-variant">
+              Approving <strong className="text-on-surface">{approvingApp.studioName || approvingApp.name}</strong> ({approvingApp.email}) creates a real portal login for them and adds them to the partners directory. Set their initial password below — it's sent to them automatically by email.
+            </p>
+
+            <form onSubmit={handleApproveApplication} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">Initial Password *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="Minimum 6 characters"
+                  value={approvalPassword}
+                  onChange={(e) => setApprovalPassword(e.target.value)}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-outline-variant/60">
+                <button
+                  type="button"
+                  disabled={isApprovingApp}
+                  onClick={() => { setApprovingApp(null); setApprovalPassword(''); }}
+                  className="px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isApprovingApp}
+                  className="px-6 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md disabled:opacity-60"
+                >
+                  {isApprovingApp ? 'Approving...' : 'Approve & Send Invite'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </ModalWrapper>
 
       {/* ── IMAGE CROP MODAL (For Studio Logo / Profile Photo) ─────── */}

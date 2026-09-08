@@ -669,9 +669,13 @@ function App() {
   const approvePending = async (regData, customRole) => {
     try {
       const finalRole = customRole || regData.role || 'Partner';
-      const approvedUser = { 
-        ...regData, 
-        role: finalRole, 
+      // Callers that need the newly-assigned partnerId (e.g. to put it in a
+      // welcome email) read it off this object once the Partner branch below
+      // fills it in — kept mutable rather than reassigning a const so the
+      // batchWrite above can still use the plain approvedUser shape.
+      const approvedUser = {
+        ...regData,
+        role: finalRole,
         isApproved: true,
         status: 'Active',
         approvedAt: new Date().toISOString(),
@@ -716,6 +720,10 @@ function App() {
           return record;
         });
         setPartners(prev => [...prev.filter(p => p.partnerId !== newPartnerRecord.partnerId), newPartnerRecord]);
+        // Attached after the users/{email} doc has already been written above —
+        // this only affects what approvePending's caller sees, not the stored
+        // user profile.
+        approvedUser.partnerId = newPartnerRecord.partnerId;
       }
 
       // Auto-Sync: If role is Business Client, automatically provision in customers collection
@@ -1185,6 +1193,7 @@ function App() {
               setUsers={setUsers}
               dataStore={dataStore}
               currentUser={currentUser}
+              onApprovePending={approvePending}
             />
           )}
 
