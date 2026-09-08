@@ -15,7 +15,12 @@ npm run preview       # preview the production build on port 3000
 npm run lint          # eslint .
 ```
 
-There is no unit test runner configured. `tests/e2e.test.js` is a Puppeteer script written for a Windows/local Chrome path and a `localhost:5173` target — it is not wired into `npm test` and generally cannot be run as-is in this environment; don't treat it as a working CI gate.
+There are two test layers, both real and runnable:
+- `npm test` — Vitest unit tests (`tests/unit/`), pure logic only (email template interpolation, RBAC permission-matrix shape). No Firebase dependency, runs in ~2s.
+- `npm run test:rules` — integration tests (`tests/integration/`) run against a real local Firebase Emulator (Firestore + Auth), started and torn down automatically via `firebase emulators:exec`. These exercise `firestore.rules` itself — e.g. proving a non-admin genuinely cannot escalate their own role via a direct Firestore write, not just that the UI hides the button. Needs Java installed (the emulator JARs require it) but no real Firebase project, login, or credentials — it runs against a fake `demo-print2frame-test` project id.
+- `npm run test:all` runs both in sequence.
+
+The previous `tests/e2e.test.js` (a Puppeteer script for a Windows/local Chrome path, never wired into `npm test` and non-functional in this environment) has been removed — this is what it was replaced with.
 
 ### Branching & deployment workflow
 
@@ -24,6 +29,10 @@ This repo deploys via Vercel from two branches, and there are two skills under `
 - `staging` branch → Vercel **preview** deployment (day-to-day work happens here).
 - `main` branch → Vercel **production** deployment (`portal.print2frame.xyz`).
 - Promotion is a straight merge: `staging` → `main`, then push, then switch back to `staging`. Never commit directly to `main`.
+
+### Full-repository audits
+
+For a systematic, folder-by-folder code-review audit of the whole repo (enumerating every top-level folder and loose root file, verifying skip candidates before excluding them, and delivering one dated report per unit), use the global `repo-folder-audit` skill rather than an ad hoc review — it also knows to cross-reference client-side permission logic against `firestore.rules` before ranking a finding's severity.
 
 ## Architecture
 
