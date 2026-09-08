@@ -244,7 +244,7 @@ Print To Frame Pvt Ltd`,
   // ── PARTNER NETWORK & COMMISSIONS ─────────────────────────────────────────
   {
     id: 'commission_disbursement',
-    title: 'Framing Partner Commission Statement (LKR 53.50/SqFt)',
+    title: 'Framing Partner Commission Statement',
     category: 'Partners',
     description: 'Monthly or per-job commission breakdown statement for framing partners.',
     targetRoles: ['Partner'],
@@ -259,7 +259,7 @@ COMMISSION STATEMENT
 • Partner Name: {{recipientName}}
 • Partner ID: {{partnerId}}
 • Total Volume Delivered: {{totalSqFt}} SqFt
-• Standard Partner Rate: LKR 53.50 per SqFt
+• Your Partner Rate: LKR {{commissionRate}} per SqFt
 • Total Commission Payable: LKR {{commissionAmount}}
 • Disbursement Status: Processed / Transferred to Bank
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -295,6 +295,7 @@ PARTNER ACCOUNT CREDENTIALS
 • Partner Name: {{recipientName}}
 • Partner ID: {{partnerId}}
 • Assigned Role: Art & Framing Partner
+• Your Commission Rate: LKR {{commissionRate}} per SqFt
 • Portal URL: {{portalUrl}}
 • Username / Email: {{loginEmail}}
 • Temporary Password: {{tempPassword}}
@@ -302,7 +303,7 @@ PARTNER ACCOUNT CREDENTIALS
 
 NEXT STEPS:
 1. Log in to the Print To Frame Portal at {{portalUrl}}
-2. Access your assigned fabrication jobs, submit orders, and track commission disbursements (LKR 53.50/SqFt).
+2. Access your assigned fabrication jobs, submit orders, and track commission disbursements.
 3. For security, please update your temporary password in the "My Profile" tab upon your first login.
 
 If you have any questions or require technical assistance, feel free to reply directly to this email or reach our operations desk at {{contactPhone}}.
@@ -315,6 +316,39 @@ Warm regards,
 Print To Frame Pvt Ltd
 Kadawatha, Sri Lanka
 Web: {{portalUrl}}`,
+  },
+  {
+    id: 'partner_activation_confirmed',
+    title: 'Partner Account Fully Activated (Self-Registered)',
+    category: 'Partners',
+    description: 'Confirms a self-registered partner\'s account is fully active once their profile is completed — no password included, since they already set their own when they registered.',
+    targetRoles: ['Partner'],
+    subject: 'Your Print To Frame Partner Account is Now Fully Active [{{partnerId}}]',
+    body: `Dear {{recipientName}},
+
+Great news — your Print To Frame Partner account is now fully active and ready to use.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PARTNER ACCOUNT SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Partner Name: {{recipientName}}
+• Partner ID: {{partnerId}}
+• Your Commission Rate: LKR {{commissionRate}} per SqFt
+• Portal URL: {{portalUrl}}
+• Login Email: {{loginEmail}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Log in at {{portalUrl}} using the password you set when you registered — your referral QR code and commission tracking are ready in your Partner Portal.
+
+If you have any questions, feel free to reply directly to this email or reach our operations desk at {{contactPhone}}.
+
+We look forward to a fruitful and successful partnership!
+
+Warm regards,
+
+{{senderName}}
+Print To Frame Pvt Ltd
+Kadawatha, Sri Lanka`,
   },
 
   // ── CORPORATE CLIENTS & WORKSPACE ─────────────────────────────────────────
@@ -349,6 +383,35 @@ PORTAL CAPABILITIES:
 • View and download advance (75%) and final (25%) settlement invoices.
 
 Please log in at {{portalUrl}} to review your active dashboard.
+
+Best regards,
+
+{{senderName}}
+Corporate Accounts Desk
+Print To Frame Pvt Ltd
+Kadawatha, Sri Lanka`,
+  },
+  {
+    id: 'client_activation_confirmed',
+    title: 'Business Client Account Fully Activated (Self-Registered)',
+    category: 'Corporate B2B',
+    description: 'Confirms a self-registered business client\'s account is fully active once their profile is completed — no password included, since they already set their own when they registered.',
+    targetRoles: ['Business Client'],
+    subject: 'Your Print To Frame Corporate Portal Access is Now Fully Active — {{companyName}}',
+    body: `Dear {{recipientName}},
+
+Thank you for registering with Print To Frame. Your corporate account for {{companyName}} is now fully active.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CORPORATE ACCESS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Company / Entity: {{companyName}}
+• Primary Contact: {{recipientName}}
+• Portal URL: {{portalUrl}}
+• Login Email: {{loginEmail}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Log in at {{portalUrl}} using the password you set when you registered, to submit work orders, review quotations, and track invoices.
 
 Best regards,
 
@@ -448,6 +511,28 @@ Partner Verification Desk
 Print To Frame Pvt Ltd`,
   },
   {
+    id: 'registration_declined',
+    title: 'Registration Request Declined',
+    category: 'Verification',
+    description: 'Notifies an applicant that their registration or partner-application request was not approved. Sent automatically when a request is declined in User Management.',
+    targetRoles: ['Partner', 'Business Client', 'Customer'],
+    subject: 'Update on Your Print To Frame Registration Request',
+    body: `Dear {{recipientName}},
+
+Thank you for your interest in Print To Frame.
+
+After reviewing your registration request, we're unable to approve it at this time.
+
+If you believe this was in error, or would like more information, please reply directly to this email or contact us at {{supportEmail}}.
+
+Thank you for your understanding.
+
+Sincerely,
+
+{{senderName}}
+Print To Frame Pvt Ltd`,
+  },
+  {
     id: 'job_completion_feedback',
     title: 'Job Completion & Customer Feedback Request',
     category: 'Customer Success',
@@ -512,6 +597,8 @@ export const interpolateTemplate = (templateString, data = {}) => {
         return '60,000.00';
       case 'commissionAmount':
         return '6,420.00';
+      case 'commissionRate':
+        return '53.50';
       case 'invoiceId':
         return 'INV-' + String(Date.now()).slice(-6);
       case 'jobNo':

@@ -15,6 +15,7 @@ import { findCustomerDuplicates } from '../../utils/stringMatch';
 import ContactSyncModal from './ContactSyncModal';
 import AddressPickerModal from '../common/AddressPickerModal';
 import { usePermissions } from '../../context/PermissionsContext';
+import { sendTemplatedEmail } from '../../services/mailer';
 
 export default function Customers({ customers = [], setCustomers, dataStore, currentUser, prefillClient, onClientPrefillConsumed }) {
   const { canAccess } = usePermissions();
@@ -80,6 +81,13 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     onClientPrefillConsumedRef.current = onClientPrefillConsumed;
   }, [onClientPrefillConsumed]);
 
+  // Tracks that the record about to be created here completes a User Management
+  // approval, so handleCreateProfile knows to send the activation email once the
+  // real customer record exists. Business Client requests only ever come from
+  // self-registration (no separate public-application path the way partners
+  // have), so there's never a password to relay — just a confirmation.
+  const [pendingClientApprovalEmail, setPendingClientApprovalEmail] = useState(false);
+
   useEffect(() => {
     if (!prefillClient) return;
     setNewProfile(prev => ({
@@ -90,9 +98,15 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
       businessName: prefillClient.businessName || prev.businessName,
       type: 'Business',
     }));
+    setPendingClientApprovalEmail(true);
     setShowCreateModal(true);
     onClientPrefillConsumedRef.current?.();
   }, [prefillClient]);
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setPendingClientApprovalEmail(false);
+  };
 
   // AI WhatsApp draft state
   const [isDraftingMsg, setIsDraftingMsg] = useState(false);
@@ -189,6 +203,8 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     setCustomers(prev => [...prev, newCustomer]);
     setSelectedCustomer(newCustomer);
     setShowCreateModal(false);
+    const wasApproval = pendingClientApprovalEmail;
+    setPendingClientApprovalEmail(false);
     setNewProfile({
       nic: '',
       name: '',
@@ -205,6 +221,22 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
     } catch (err) {
       console.error(err);
       toast.error("Failed to sync customer profile to DB");
+    }
+
+    // This completed a User Management approval — the person already has a
+    // login (set during self-registration), so this is a confirmation, not a
+    // credential relay.
+    if (wasApproval && newCustomer.email) {
+      try {
+        await sendTemplatedEmail(newCustomer.email, 'client_activation_confirmed', {
+          recipientName: newCustomer.name,
+          companyName: newCustomer.businessName || newCustomer.name,
+          loginEmail: newCustomer.email,
+          senderName: currentUser?.name,
+        });
+      } catch (mailErr) {
+        toast.error(`${newCustomer.name} is active, but the confirmation email failed to send: ${mailErr.message}`);
+      }
     }
   };
 
@@ -703,7 +735,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
       {showCreateModal && (
         <ModalWrapper
           isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
+          onClose={closeCreateModal}
           maxWidth="max-w-lg"
           height="h-auto max-h-[85vh]"
           ariaLabel="Register New Client Profile"
@@ -718,7 +750,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
               </p>
             </div>
             <button
-              onClick={() => setShowCreateModal(false)}
+              onClick={closeCreateModal}
               className="p-2 bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors"
             >
               <X size={18} />
@@ -739,7 +771,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
                       key={c.nic}
                       onClick={() => {
                         setSelectedCustomer(c);
-                        setShowCreateModal(false);
+                        closeCreateModal();
                         toast.info(`Switched to existing profile: ${c.name}`);
                       }}
                       className="p-2.5 bg-surface-container-low/90 hover:bg-surface-container-high rounded-xl border border-outline-variant/50 flex items-center justify-between text-xs cursor-pointer transition-colors"
@@ -920,7 +952,7 @@ export default function Customers({ customers = [], setCustomers, dataStore, cur
 
           <div className="p-4 sm:p-5 border-t border-outline-variant bg-surface-container-low flex justify-end space-x-3 flex-shrink-0">
             <button
-              onClick={() => setShowCreateModal(false)}
+              onClick={closeCreateModal}
               className="px-5 py-2.5 bg-surface-container-high text-on-surface rounded-xl font-bold text-xs hover:bg-surface-container-highest transition-colors border border-outline-variant/60"
             >
               Cancel

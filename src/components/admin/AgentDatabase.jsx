@@ -355,21 +355,15 @@ export default function AgentDatabase({
       // stored users/{email} document — onApprove spreads regData as-is.
       const { _source, _appDocId, ...regData } = targetUser;
       if (onApprove) {
-        await onApprove(regData, finalRole);
+        // The welcome/activation email fires from Partners.jsx/Customers.jsx once
+        // the admin completes the handed-off Register Partner/Client form, not
+        // here — the real partnerId/customerId isn't known yet at this point, and
+        // an email referencing a placeholder id is worse than a slightly later one.
+        await onApprove(regData, finalRole, { tempPassword: fromApplication ? reviewPassword : undefined });
       }
 
       if (fromApplication && _appDocId) {
         await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, _appDocId, { status: 'Approved' });
-        try {
-          await sendTemplatedEmail(targetUser.identifier, 'partner_approval', {
-            recipientName: targetUser.name,
-            loginEmail: targetUser.identifier,
-            tempPassword: reviewPassword,
-            senderName: currentUser?.name,
-          });
-        } catch (mailErr) {
-          toast.error(`${targetUser.name} was approved and can log in, but the invite email failed to send: ${mailErr.message}`);
-        }
       }
 
       setReviewingApplicant(null);
@@ -394,6 +388,14 @@ export default function AgentDatabase({
       if (onReject) await onReject(user.identifier);
     }
     if (reviewingApplicant?.identifier === user.identifier) setReviewingApplicant(null);
+    try {
+      await sendTemplatedEmail(user.identifier, 'registration_declined', {
+        recipientName: user.name,
+        senderName: currentUser?.name,
+      });
+    } catch (mailErr) {
+      console.error('Failed to send decline notification:', mailErr);
+    }
     toast.info("Registration request dismissed");
   };
 

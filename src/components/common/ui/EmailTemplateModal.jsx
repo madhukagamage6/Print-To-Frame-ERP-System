@@ -56,7 +56,11 @@ export default function EmailTemplateModal({
       companyName: recipient?.company || recipient?.businessName || recipient?.name || 'Company',
       partnerId: recipient?.partnerId || (recipient?.identifier ? `P-${recipient.identifier.slice(0, 5).toUpperCase()}` : 'P-PARTNER'),
       loginEmail: recipient?.identifier || recipient?.email || '',
-      tempPassword: recipient?.tempPassword || recipient?.password || '[Generated on Enrollment]',
+      // A stored user/partner record never carries a real password (it's
+      // stripped before write, by design) — this composer can't relay one for
+      // an existing account the way the automated enroll/approve emails can
+      // for a brand-new one. Say so plainly rather than a vague placeholder.
+      tempPassword: recipient?.tempPassword || '[Not available here — passwords aren\'t stored; use Admin Password Reset to set a new one]',
       assignedRole: recipient?.role || 'Authorized Member',
       requestedRole: recipient?.role || 'Partner Access',
       contactPhone: recipient?.contactNumber || recipient?.mobile || recipient?.phone || '+94 71 141 9027',
@@ -69,7 +73,11 @@ export default function EmailTemplateModal({
       totalValue: Number(recipient?.value || 240000).toLocaleString(undefined, { minimumFractionDigits: 2 }),
       advanceAmount: Number((recipient?.value || 240000) * 0.75).toLocaleString(undefined, { minimumFractionDigits: 2 }),
       balanceAmount: Number((recipient?.value || 240000) * 0.25).toLocaleString(undefined, { minimumFractionDigits: 2 }),
-      commissionAmount: Number((recipient?.totalSqFt || 120) * 53.5).toLocaleString(undefined, { minimumFractionDigits: 2 }),
+      // Uses this specific partner's real negotiated rate when composing for
+      // one (Partners.jsx's Email button passes the actual partner record) —
+      // previously hardcoded to 53.5 regardless of who the email was for.
+      commissionRate: Number(recipient?.commissionRate || 53.5).toFixed(2),
+      commissionAmount: Number((recipient?.totalSqFt || 120) * Number(recipient?.commissionRate || 53.5)).toLocaleString(undefined, { minimumFractionDigits: 2 }),
       invoiceId: 'INV-' + String(Date.now()).slice(-6),
       jobNo: 'JOB-' + String(Date.now()).slice(-6),
       dueDate: 'Within 7 Days',
