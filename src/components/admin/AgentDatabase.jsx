@@ -299,14 +299,20 @@ export default function AgentDatabase({
     setSelectedReviewRole(user.role || 'Sales');
   };
 
-  const handleExecuteApproval = async () => {
-    if (!reviewingApplicant) return;
-    const finalRole = selectedReviewRole;
+  // Takes the user/role explicitly rather than always reading them off state —
+  // the Quick Approve button used to call setSelectedReviewRole() then invoke
+  // this in the same click handler, but a state setter doesn't take effect
+  // until the next render, so it was always approving with whatever role
+  // selectedReviewRole happened to already hold, not the one just "set".
+  const handleExecuteApproval = async (user, role) => {
+    const targetUser = user || reviewingApplicant;
+    const finalRole = role || selectedReviewRole;
+    if (!targetUser) return;
     if (onApprove) {
-      await onApprove(reviewingApplicant, finalRole);
+      await onApprove(targetUser, finalRole);
     }
     setReviewingApplicant(null);
-    toast.success(`Approved ${reviewingApplicant.name} as ${finalRole}`);
+    toast.success(`Approved ${targetUser.name} as ${finalRole}`);
   };
 
   const handleExecuteRejection = async (identifier) => {
@@ -407,14 +413,10 @@ export default function AgentDatabase({
                   >
                     <Eye size={14} />
                   </button>
-                  <button 
-                    onClick={() => {
-                      setReviewingApplicant(user);
-                      setSelectedReviewRole(user.role || 'Sales');
-                      handleExecuteApproval();
-                    }} 
+                  <button
+                    onClick={() => handleExecuteApproval(user, user.role || 'Sales')}
                     className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
-                    title="Quick Approve"
+                    title="Quick Approve (keeps their requested role as-is)"
                   >
                     <Check size={14} />
                   </button>
@@ -934,6 +936,106 @@ export default function AgentDatabase({
           )}
         </div>
       </div>
+
+      {/* ── REVIEW REGISTRATION MODAL (the "Review Full Dossier" eye icon) ── */}
+      {/* This state was already wired up (handleOpenReview/handleExecuteApproval/
+          handleExecuteRejection) but nothing ever rendered based on it — the eye
+          icon set state with no visible effect. This is what makes it do
+          something, and the reason "Quick Approve" existed at all: it was a
+          workaround for this modal never having been built. */}
+      <ModalWrapper
+        isOpen={!!reviewingApplicant}
+        onClose={() => setReviewingApplicant(null)}
+        maxWidth="max-w-lg"
+        height="h-auto"
+        ariaLabel="Review Registration Request"
+      >
+        {reviewingApplicant && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+              <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <Eye size={18} className="text-primary" /> Review Registration Request
+              </h3>
+              <button onClick={() => setReviewingApplicant(null)} className="text-on-surface-variant hover:text-on-surface p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Full Name</span>
+                <span className="text-on-surface font-bold">{reviewingApplicant.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Email / Identifier</span>
+                <span className="text-on-surface font-mono">{reviewingApplicant.identifier}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Requested Role</span>
+                <span className="text-on-surface font-bold">{reviewingApplicant.role || 'Not specified'}</span>
+              </div>
+              {reviewingApplicant.mobile && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Mobile</span>
+                  <span className="text-on-surface font-mono">{reviewingApplicant.mobile}</span>
+                </div>
+              )}
+              {reviewingApplicant.company && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Company</span>
+                  <span className="text-on-surface">{reviewingApplicant.company}</span>
+                </div>
+              )}
+              {reviewingApplicant.specialty && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Specialty</span>
+                  <span className="text-on-surface">{reviewingApplicant.specialty}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-outline-variant/60">
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">
+                Assign Role On Approval
+              </label>
+              <select
+                value={selectedReviewRole}
+                onChange={(e) => setSelectedReviewRole(e.target.value)}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-bold text-xs"
+              >
+                {SYSTEM_ROLES.map(roleName => (
+                  <option key={roleName} value={roleName}>
+                    {roleName} — {ROLE_METADATA[roleName]?.label || roleName}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-on-surface-variant">
+                Defaults to what they requested — correct it here if a self-provisioned
+                sign-in landed as the wrong role (e.g. a Partner or Business Client
+                applicant who signed in with Google before registering was auto-created
+                as a pending Customer).
+              </p>
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-outline-variant/60">
+              <button
+                type="button"
+                onClick={() => handleExecuteRejection(reviewingApplicant.identifier)}
+                className="px-4 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white text-xs font-bold rounded-xl transition-colors"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteApproval(reviewingApplicant, selectedReviewRole)}
+                className="px-6 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md"
+              >
+                Approve as {selectedReviewRole}
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalWrapper>
 
       {/* ── CREATE USER MODAL ─────────────────────────────────────────── */}
       <ModalWrapper
