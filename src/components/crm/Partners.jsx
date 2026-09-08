@@ -32,14 +32,16 @@ export default function Partners({
   projects = [],
   users = [],
   setUsers,
-  dataStore, 
-  currentUser 
+  dataStore,
+  currentUser,
+  prefillPartner,
+  onPrefillConsumed,
 }) {
   const { canAccess } = usePermissions();
   const isPartnerUser = currentUser?.role === 'Partner';
 
   // Navigation & Filter States
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'active' | 'applications' | 'claims' | 'settlements'
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'active' | 'claims' | 'settlements'
   const [workspaceTab, setWorkspaceTab] = useState('referrals'); // 'referrals' | 'documents' | 'financial' | 'marketing'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPartner, setSelectedPartner] = useState(null);
@@ -70,19 +72,12 @@ export default function Partners({
   });
   const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
 
-  // Ingestion applications from portal
-  const [applications, setApplications] = useState([]);
-
   useEffect(() => {
     const unsubClaims = subscribeToCollection(COLLECTIONS.REFERRAL_CLAIMS, (data) => {
       setClaims(data || []);
     });
-    const unsubApps = subscribeToCollection(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', (data) => {
-      setApplications(data || []);
-    });
     return () => {
       unsubClaims();
-      unsubApps();
     };
   }, []);
 
@@ -104,6 +99,35 @@ export default function Partners({
     photoURL: '',
     status: 'Active',
   });
+
+  // A Partner registration request approved in User Management (App.jsx's
+  // approvePending) lands here as `prefillPartner` — login access is already
+  // granted at that point, this just carries the admin straight into the same
+  // Register Partner form used for a manual add, with the known fields filled
+  // in, so completing their full profile (banking, commission rate, studio
+  // type) is the very next action instead of a separately-built form.
+  // onPrefillConsumed is read via a ref, not a dependency: it's a fresh inline
+  // function from the parent on every render, and this effect must only ever
+  // re-fire when the prefill payload itself changes, not on every re-render.
+  const onPrefillConsumedRef = useRef(onPrefillConsumed);
+  useEffect(() => {
+    onPrefillConsumedRef.current = onPrefillConsumed;
+  }, [onPrefillConsumed]);
+
+  useEffect(() => {
+    if (!prefillPartner) return;
+    setNewPartner(prev => ({
+      ...prev,
+      name: prefillPartner.name || prev.name,
+      email: prefillPartner.email || prev.email,
+      contactPerson: prefillPartner.name || prev.contactPerson,
+      phone: prefillPartner.phone || prev.phone,
+      type: prefillPartner.type || prev.type,
+    }));
+    setShowCreateModal(true);
+    setActiveFilter('all');
+    onPrefillConsumedRef.current?.();
+  }, [prefillPartner]);
 
   // Dynamic Avatar Resolution (Google Photo, Custom Upload, or Users DB Bridge)
   const getPartnerAvatar = useCallback((partner) => {
@@ -366,7 +390,15 @@ export default function Partners({
         photoURL: '',
         status: 'Active',
       });
-      toast.success(`Partner ${partnerPayload.name} (${partnerId}) created successfully!`);
+      // Manual prompt, not auto-opened — covers both a direct manual add and a
+      // just-approved registration request completing its profile here, since
+      // both end up going through this same form.
+      toast.success(`Partner ${partnerPayload.name} (${partnerId}) created successfully!`, {
+        action: {
+          label: 'Generate QR Code',
+          onClick: () => setQrPartner({ ...partnerPayload, id: partnerId }),
+        },
+      });
     } catch (err) {
       console.error(err);
       toast.error('Failed to create partner: ' + err.message);
@@ -522,7 +554,6 @@ export default function Partners({
   }, [basePartnersList, searchQuery, activeFilter]);
 
   const activePartnersCount = basePartnersList.filter(p => p.status === 'Active' || !p.status).length;
-  const pendingAppsCount = applications.filter(a => a.status === 'Pending Review' || !a.status).length;
   const pendingClaimsCount = claims.filter(c => c.status === 'Pending Verification').length;
 
   const publicQrUrl = (partner) => {
@@ -538,11 +569,10 @@ export default function Partners({
       {/* Standardized Header matching Leads, Customers, and User Management */}
       <PageHeader
         title="Partners"
-        subtitle="Manage framing partner studios, vetting queue, referral tracking, and monthly commission settlements."
+        subtitle="Manage framing partner studios, referral tracking, and monthly commission settlements. New registration requests are reviewed in User Management."
         metrics={[
           { label: "Total Partners", value: basePartnersList.length, color: "cyan" },
           { label: "Active Studios", value: activePartnersCount, color: "emerald" },
-          { label: "Vetting Queue", value: isPartnerUser ? 0 : pendingAppsCount, color: "amber" },
           { label: "Missing Claims", value: isPartnerUser ? 0 : pendingClaimsCount, color: "rose" }
         ]}
         actions={
@@ -576,7 +606,7 @@ export default function Partners({
         activeFilter={activeFilter}
         onFilterChange={(filterId) => {
           setActiveFilter(filterId);
-          if (filterId === 'applications' || filterId === 'claims' || filterId === 'settlements') {
+          if (filterId === 'claims' || filterId === 'settlements') {
             setSelectedPartner(null);
           }
         }}
@@ -584,7 +614,6 @@ export default function Partners({
           { id: 'all', label: 'All Partners', count: basePartnersList.length },
           { id: 'active', label: 'Active Studios', count: activePartnersCount },
           ...(!isPartnerUser ? [
-            { id: 'applications', label: 'Vetting Queue', count: pendingAppsCount },
             { id: 'claims', label: 'Referral Claims', count: pendingClaimsCount },
             { id: 'settlements', label: 'Monthly Settlements', count: basePartnersList.length }
           ] : [])
@@ -596,73 +625,8 @@ export default function Partners({
       {/* Main Master-Detail Layout */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
         
-        {/* VIEW 1: Vetting Applications Queue (Admin Only) */}
-        {!isPartnerUser && activeFilter === 'applications' ? (
-          <div className="flex-1 bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
-            <div className="p-4 border-b border-outline-variant/60 bg-surface-container-low/80 flex justify-between items-center">
-              <div>
-                <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-2">
-                  <Handshake size={14} className="text-primary" />
-                  Partner Registration Ingestion Queue ({applications.length})
-                </h3>
-                <p className="text-[11px] text-on-surface-variant mt-0.5">Review partnership registrations submitted from the public portal.</p>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/30">
-              {applications.length > 0 ? (
-                applications.map((app) => (
-                  <div key={app.id || app._firestoreId} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-surface-container-high/30 transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-on-surface">{app.studioName || app.name}</span>
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          {app.status || 'Pending Review'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-on-surface-variant flex flex-wrap items-center gap-3 mt-1">
-                        <span>Person: <strong>{app.contactPerson || 'N/A'}</strong></span>
-                        <span className="font-mono">{app.phone || app.contactNumber}</span>
-                        <span>{app.email}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={async () => {
-                          const newP = {
-                            name: app.studioName || app.name,
-                            partnerId: 'P-' + String(Date.now()).slice(-4),
-                            contactPerson: app.contactPerson || '',
-                            phone: app.phone || '',
-                            email: app.email || '',
-                            commissionRate: 53.5, // 53.50 LKR/SqFt
-                            type: 'Art & Framing Studio',
-                            status: 'Active',
-                            createdAt: new Date().toISOString(),
-                          };
-                          await addDocument(COLLECTIONS.PARTNERS, newP, newP.partnerId);
-                          await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS || 'partner_applications', app._firestoreId || app.id, { status: 'Approved' });
-                          if (setPartners) setPartners(prev => [...prev, newP]);
-                          toast.success(`Approved ${newP.name} as Official Partner (LKR 53.50/SqFt Comm)!`);
-                        }}
-                        className="px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-sm hover:bg-primary/90 flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Check size={13} /> Approve (LKR 53.50/SqFt Comm)
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-16 text-center text-on-surface-variant text-xs">
-                  <Handshake size={36} className="mx-auto mb-2 opacity-25" />
-                  <p className="font-bold text-on-surface">No pending applications in queue</p>
-                  <p className="text-[11px] text-on-surface-variant mt-0.5">New studio partner registrations will automatically appear here.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : !isPartnerUser && activeFilter === 'claims' ? (
-          /* VIEW 2: Referral Claims Desk (Admin Only) */
+        {!isPartnerUser && activeFilter === 'claims' ? (
+          /* Referral Claims Desk (Admin Only) */
           <div className="flex-1 bg-surface-container/60 border border-outline-variant/60 rounded-2xl overflow-hidden shadow-sm flex flex-col">
             <div className="p-4 border-b border-outline-variant/60 bg-surface-container-low/80 flex justify-between items-center">
               <div>

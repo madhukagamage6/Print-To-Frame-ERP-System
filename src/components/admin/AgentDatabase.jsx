@@ -24,16 +24,17 @@ import { sendTemplatedEmail } from '../../services/mailer';
 export default function AgentDatabase({ 
   users = [], 
   setUsers, 
-  pendingUsers = [], 
-  setPendingUsers, 
-  currentUser, 
-  onApprove, 
+  pendingUsers = [],
+  setPendingUsers,
+  partnerApplications = [],
+  currentUser,
+  onApprove,
   onReject,
   partners = [],
   setPartners,
   customers = [],
   setCustomers,
-  dataStore 
+  dataStore
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'employees' | 'clients'
@@ -66,6 +67,10 @@ export default function AgentDatabase({
   // Review Registration Modal State
   const [reviewingApplicant, setReviewingApplicant] = useState(null);
   const [selectedReviewRole, setSelectedReviewRole] = useState('Sales');
+  // Only used for _source === 'partner_application' items, which have no Firebase
+  // Auth account yet and need one created at approval time.
+  const [reviewPassword, setReviewPassword] = useState('');
+  const [isApprovingReview, setIsApprovingReview] = useState(false);
 
   // Email Template Modal State
   const [emailModalConfig, setEmailModalConfig] = useState({
@@ -90,9 +95,28 @@ export default function AgentDatabase({
     return users.filter(u => u.role !== 'Partner');
   }, [users]);
 
-  const pendingNonPartnerUsers = useMemo(() => {
-    return pendingUsers.filter(u => u.role !== 'Partner');
-  }, [pendingUsers]);
+  // Every registration request reviewed in one place: self-registered pendingUsers
+  // (Partner requests included — those used to be filtered out here entirely, with
+  // no review surface at all once the Partners tab's own vetting queue was removed)
+  // plus public "Apply as a Partner" submissions, normalized to the same shape.
+  // Applications carry no Firebase Auth account yet (unlike self-registration, which
+  // creates one at signup) — `_source` is how the approval/rejection handlers below
+  // know to create that account first, and which collection to update.
+  const pendingReviewItems = useMemo(() => {
+    const normalizedApplications = partnerApplications
+      .filter(app => !app.status || app.status === 'Pending Review')
+      .map(app => ({
+        identifier: (app.email || '').trim().toLowerCase(),
+        name: app.contactPerson || app.studioName || app.name || app.email,
+        role: 'Partner',
+        mobile: app.phone || app.contactNumber || '',
+        company: app.studioName || app.name || '',
+        specialty: app.specialty || '',
+        _source: 'partner_application',
+        _appDocId: app._firestoreId || app.id,
+      }));
+    return [...pendingUsers, ...normalizedApplications];
+  }, [pendingUsers, partnerApplications]);
 
   const employeeCount = useMemo(() => {
     return nonPartnerUsers.filter(u => getRoleCategory(u.role) !== 'Clients').length;
@@ -297,22 +321,79 @@ export default function AgentDatabase({
   const handleOpenReview = (user) => {
     setReviewingApplicant(user);
     setSelectedReviewRole(user.role || 'Sales');
+    setReviewPassword('');
   };
 
-  const handleExecuteApproval = async () => {
-    if (!reviewingApplicant) return;
-    const finalRole = selectedReviewRole;
-    if (onApprove) {
-      await onApprove(reviewingApplicant, finalRole);
+  // Takes the user/role explicitly rather than always reading them off state —
+  // the Quick Approve button used to call setSelectedReviewRole() then invoke
+  // this in the same click handler, but a state setter doesn't take effect
+  // until the next render, so it was always approving with whatever role
+  // selectedReviewRole happened to already hold, not the one just "set".
+  //
+  // A `partner_application` item has no Firebase Auth account yet — unlike a
+  // self-registered pendingUser, which already created one at signup — so
+  // approving it here has to create that account first, using a password the
+  // admin sets in the review modal, then send the invite email that relays it.
+  const handleExecuteApproval = async (user, role) => {
+    const targetUser = user || reviewingApplicant;
+    const finalRole = role || selectedReviewRole;
+    if (!targetUser) return;
+
+    const fromApplication = targetUser._source === 'partner_application';
+    if (fromApplication && (!reviewPassword || reviewPassword.length < 6)) {
+      toast.error('Set an initial password (at least 6 characters) to approve this application.');
+      return;
     }
-    setReviewingApplicant(null);
-    toast.success(`Approved ${reviewingApplicant.name} as ${finalRole}`);
+
+    setIsApprovingReview(true);
+    try {
+      if (fromApplication) {
+        await createUserAccount(targetUser.identifier, reviewPassword, targetUser.name);
+      }
+
+      // Strip the internal bookkeeping fields before this becomes part of the
+      // stored users/{email} document — onApprove spreads regData as-is.
+      const { _source, _appDocId, ...regData } = targetUser;
+      if (onApprove) {
+        await onApprove(regData, finalRole);
+      }
+
+      if (fromApplication && _appDocId) {
+        await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, _appDocId, { status: 'Approved' });
+        try {
+          await sendTemplatedEmail(targetUser.identifier, 'partner_approval', {
+            recipientName: targetUser.name,
+            loginEmail: targetUser.identifier,
+            tempPassword: reviewPassword,
+            senderName: currentUser?.name,
+          });
+        } catch (mailErr) {
+          toast.error(`${targetUser.name} was approved and can log in, but the invite email failed to send: ${mailErr.message}`);
+        }
+      }
+
+      setReviewingApplicant(null);
+      setReviewPassword('');
+      toast.success(`Approved ${targetUser.name} as ${finalRole}`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to approve: ' + err.message);
+    } finally {
+      setIsApprovingReview(false);
+    }
   };
 
-  const handleExecuteRejection = async (identifier) => {
-    setPendingUsers(prev => prev.filter(u => u.identifier !== identifier));
-    if (onReject) await onReject(identifier);
-    if (reviewingApplicant?.identifier === identifier) setReviewingApplicant(null);
+  const handleExecuteRejection = async (user) => {
+    const fromApplication = user._source === 'partner_application';
+    if (fromApplication) {
+      if (user._appDocId) {
+        await updateDocument(COLLECTIONS.PARTNER_APPLICATIONS, user._appDocId, { status: 'Rejected' });
+      }
+    } else {
+      setPendingUsers(prev => prev.filter(u => u.identifier !== user.identifier));
+      if (onReject) await onReject(user.identifier);
+    }
+    if (reviewingApplicant?.identifier === user.identifier) setReviewingApplicant(null);
     toast.info("Registration request dismissed");
   };
 
@@ -332,7 +413,7 @@ export default function AgentDatabase({
           { label: "Total Members", value: nonPartnerUsers.length, color: "cyan" },
           { label: "Internal Team", value: employeeCount, color: "emerald" },
           { label: "Client Accounts", value: clientCount, color: "purple" },
-          { label: "Pending Approvals", value: pendingNonPartnerUsers.length, color: pendingNonPartnerUsers.length > 0 ? "warning" : "neutral" }
+          { label: "Pending Approvals", value: pendingReviewItems.length, color: pendingReviewItems.length > 0 ? "warning" : "neutral" }
         ]}
         actions={
           isAdmin && (
@@ -364,7 +445,7 @@ export default function AgentDatabase({
       />
 
       {/* Pending Registrations Callout (Admin Only) */}
-      {isAdmin && pendingNonPartnerUsers.length > 0 && (
+      {isAdmin && pendingReviewItems.length > 0 && (
         <div className="mb-6 p-4 sm:p-5 bg-surface-container/90 border-2 border-primary/40 rounded-3xl shadow-[0_8px_30px_rgba(0,218,243,0.12)] flex-shrink-0 animate-in fade-in duration-200">
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
@@ -376,12 +457,12 @@ export default function AgentDatabase({
               </h3>
             </div>
             <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-              {pendingNonPartnerUsers.length} Requests Pending
+              {pendingReviewItems.length} Requests Pending
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pendingNonPartnerUsers.map(user => (
+            {pendingReviewItems.map(user => (
               <div 
                 key={user.identifier} 
                 className="p-4 bg-surface-container-low/90 rounded-2xl border border-outline-variant/60 hover:border-primary/50 transition-all flex items-center justify-between shadow-sm"
@@ -392,6 +473,11 @@ export default function AgentDatabase({
                     <span className="text-[9px] font-bold px-2 py-0.5 rounded-md border bg-rose-500/15 text-rose-400 border-rose-500/30">
                       {user.role || 'Member'}
                     </span>
+                    {user._source === 'partner_application' && (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                        Applied via Portal
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-on-surface-variant font-mono truncate mt-0.5">{user.identifier}</p>
                   {user.company && (
@@ -400,26 +486,24 @@ export default function AgentDatabase({
                 </div>
 
                 <div className="flex items-center space-x-1.5 flex-shrink-0">
-                  <button 
-                    onClick={() => handleOpenReview(user)} 
+                  <button
+                    onClick={() => handleOpenReview(user)}
                     className="p-2 bg-primary/15 text-primary border border-primary/30 rounded-xl hover:bg-primary/25 transition-colors cursor-pointer"
                     title="Review Full Dossier"
                   >
                     <Eye size={14} />
                   </button>
-                  <button 
-                    onClick={() => {
-                      setReviewingApplicant(user);
-                      setSelectedReviewRole(user.role || 'Sales');
-                      handleExecuteApproval();
-                    }} 
-                    className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
-                    title="Quick Approve"
-                  >
-                    <Check size={14} />
-                  </button>
-                  <button 
-                    onClick={() => handleExecuteRejection(user.identifier)} 
+                  {user._source !== 'partner_application' && (
+                    <button
+                      onClick={() => handleExecuteApproval(user, user.role || 'Sales')}
+                      className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm cursor-pointer"
+                      title="Quick Approve (keeps their requested role as-is)"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleExecuteRejection(user)}
                     className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white rounded-xl transition-colors cursor-pointer"
                     title="Decline"
                   >
@@ -934,6 +1018,132 @@ export default function AgentDatabase({
           )}
         </div>
       </div>
+
+      {/* ── REVIEW REGISTRATION MODAL (the "Review Full Dossier" eye icon) ── */}
+      {/* This state was already wired up (handleOpenReview/handleExecuteApproval/
+          handleExecuteRejection) but nothing ever rendered based on it — the eye
+          icon set state with no visible effect. This is what makes it do
+          something, and the reason "Quick Approve" existed at all: it was a
+          workaround for this modal never having been built. */}
+      <ModalWrapper
+        isOpen={!!reviewingApplicant}
+        onClose={() => setReviewingApplicant(null)}
+        maxWidth="max-w-lg"
+        height="h-auto"
+        ariaLabel="Review Registration Request"
+      >
+        {reviewingApplicant && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-outline-variant/60">
+              <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <Eye size={18} className="text-primary" /> Review Registration Request
+              </h3>
+              <button onClick={() => setReviewingApplicant(null)} className="text-on-surface-variant hover:text-on-surface p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Full Name</span>
+                <span className="text-on-surface font-bold">{reviewingApplicant.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Email / Identifier</span>
+                <span className="text-on-surface font-mono">{reviewingApplicant.identifier}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Requested Role</span>
+                <span className="text-on-surface font-bold">{reviewingApplicant.role || 'Not specified'}</span>
+              </div>
+              {reviewingApplicant.mobile && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Mobile</span>
+                  <span className="text-on-surface font-mono">{reviewingApplicant.mobile}</span>
+                </div>
+              )}
+              {reviewingApplicant.company && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Company</span>
+                  <span className="text-on-surface">{reviewingApplicant.company}</span>
+                </div>
+              )}
+              {reviewingApplicant.specialty && (
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant font-bold uppercase tracking-wider text-[10px]">Specialty</span>
+                  <span className="text-on-surface">{reviewingApplicant.specialty}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-outline-variant/60">
+              <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">
+                Assign Role On Approval
+              </label>
+              <select
+                value={selectedReviewRole}
+                onChange={(e) => setSelectedReviewRole(e.target.value)}
+                className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-bold text-xs"
+              >
+                {SYSTEM_ROLES.map(roleName => (
+                  <option key={roleName} value={roleName}>
+                    {roleName} — {ROLE_METADATA[roleName]?.label || roleName}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-on-surface-variant">
+                Defaults to what they requested — correct it here if a self-provisioned
+                sign-in landed as the wrong role (e.g. a Partner or Business Client
+                applicant who signed in with Google before registering was auto-created
+                as a pending Customer).
+              </p>
+            </div>
+
+            {reviewingApplicant._source === 'partner_application' && (
+              <div className="pt-2 border-t border-outline-variant/60">
+                <label className="block text-[10px] uppercase font-bold text-on-surface-variant mb-1">
+                  Initial Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="Minimum 6 characters"
+                  value={reviewPassword}
+                  onChange={(e) => setReviewPassword(e.target.value)}
+                  className="w-full p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-xl text-on-surface font-mono text-xs"
+                />
+                <p className="mt-1 text-[10px] text-on-surface-variant">
+                  This application came from the public portal, not self-registration —
+                  there's no Firebase Auth account for them yet. Approving creates one
+                  with this password and emails it to them automatically. Once approved,
+                  you'll land in Partners → Register Partner to complete their profile
+                  (banking details, commission rate, studio type).
+                </p>
+              </div>
+            )}
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-outline-variant/60">
+              <button
+                type="button"
+                disabled={isApprovingReview}
+                onClick={() => handleExecuteRejection(reviewingApplicant)}
+                className="px-4 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-60"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                disabled={isApprovingReview}
+                onClick={() => handleExecuteApproval(reviewingApplicant, selectedReviewRole)}
+                className="px-6 py-2 bg-primary text-on-primary text-xs font-bold rounded-xl shadow-md disabled:opacity-60"
+              >
+                {isApprovingReview ? 'Approving...' : `Approve as ${selectedReviewRole}`}
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalWrapper>
 
       {/* ── CREATE USER MODAL ─────────────────────────────────────────── */}
       <ModalWrapper
