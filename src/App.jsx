@@ -1168,6 +1168,7 @@ function App() {
               quotations={quotations}
               setQuotations={setQuotations}
               onMarkInvoicePaid={handleMarkInvoicePaid}
+              invoices={invoices}
             />
           )}
 

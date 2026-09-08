@@ -309,6 +309,7 @@ export default function Leads({
   setCustomers,
   partners = [],
   quotations = [],
+  invoices = [],
 }) {
   const [activeLead, setActiveLead] = useState(null);
   const [leadToConvert, setLeadToConvert] = useState(null);
@@ -856,6 +857,7 @@ export default function Leads({
           onSave={handleSaveLeadDetails}
           onSaveInvoice={onSaveInvoice}
           onMarkInvoicePaid={onMarkInvoicePaid}
+          invoices={invoices}
           partners={partners}
           customers={customers}
           currentUser={currentUser}
