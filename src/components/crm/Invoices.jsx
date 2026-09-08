@@ -170,7 +170,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
         setSelectedInvoice(prev => ({ ...prev, status: 'Paid', paidAt }));
       }
       if (invToUpdate && invToUpdate.leadId && onMarkPaid) {
-        onMarkPaid(invToUpdate.leadId);
+        onMarkPaid(invToUpdate.leadId, docId);
       }
     } catch (error) {
       toast.error('Error updating status: ' + error.message);

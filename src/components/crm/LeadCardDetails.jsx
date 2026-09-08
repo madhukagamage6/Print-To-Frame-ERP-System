@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { calculateCost, determineTier } from '../../services/pricingEngine';
-import { extractCallScope, generateQuotation, generateAdvanceInvoice } from '../../services/gemini';
+import { extractCallScope } from '../../services/gemini';
 import { validatePhone, validateEmail, formatPhone, sanitizeTechnicalScope, stripEmojis } from '../../utils/validation';
 import Card from '../common/Card';
 import { 
@@ -142,11 +142,6 @@ export default function LeadCardDetails({
     value: lead.value || 0,
     totalSqFt: lead.totalSqFt || 0,
     pricingMetadata: lead.pricingMetadata || null,
-    quotationDraft: lead.quotationDraft || '',
-    quotationGenerated: lead.quotationGenerated || false,
-    invoiceDraft: lead.invoiceDraft || '',
-    invoiceGenerated: lead.invoiceGenerated || false,
-    invoicePaid: lead.invoicePaid || false,
   };
   const [formData, setFormData] = useState(defaultFormData);
   const [initialDataStr] = useState(JSON.stringify(defaultFormData));
@@ -157,11 +152,22 @@ export default function LeadCardDetails({
     setIsDirty(JSON.stringify(formData) !== initialDataStr);
   }, [formData, initialDataStr]);
 
+  // Advance and Final are tracked as two independent invoice documents, each
+  // with its own live Firestore status — never a single cached boolean on the
+  // lead, which is exactly what let marking one accidentally mark both.
+  // A Lead converted to a Deal gets a brand new id, but an invoice created
+  // before conversion still carries the ORIGINAL lead's id — match either,
+  // same convention used for this card's own logistics-job lookup below.
+  const advanceInvoice = useMemo(
+    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type !== 'Final'),
+    [invoices, lead.id, lead.originalLeadId]
+  );
+  const finalInvoice = useMemo(
+    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type === 'Final'),
+    [invoices, lead.id, lead.originalLeadId]
+  );
+
   // UI state
-  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
-  const [quoteError, setQuoteError] = useState('');
-  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
-  const [invoiceError, setInvoiceError] = useState('');
   const [convertError, setConvertError] = useState('');
 
   // AI Call Recording Analyzer states
@@ -711,70 +717,6 @@ export default function LeadCardDetails({
     setAudioFile(null);
   };
 
-  // AI Quote generation incorporating cost calculator structure
-  const handleGenerateQuote = async () => {
-    if (!formData.jobScope || formData.jobScope.length < 10) {
-      setQuoteError('Please enter a descriptive Job Scope before drafting the quote.');
-      return;
-    }
-    setIsGeneratingQuote(true);
-    setQuoteError('');
-
-    try {
-      const client = {
-        name: formData.name,
-        company: formData.company,
-        email: formData.email,
-        phone: formData.phone
-      };
-
-      // Call API proxy with the structured formatting requirement
-      const draft = await generateQuotation(client, formData.jobScope, formData.deliveryLocation, formData.pricingMetadata, currentUser);
-      const updatedData = {
-        ...formData,
-        quotationDraft: draft,
-        quotationGenerated: true
-      };
-      setFormData(updatedData);
-      handleSaveLead(updatedData);
-    } catch (err) {
-      setQuoteError(err.message || 'Error drafting AI quotation.');
-    } finally {
-      setIsGeneratingQuote(false);
-    }
-  };
-
-  const handleGenerateInvoice = async () => {
-    if (!formData.quotationGenerated) {
-      setInvoiceError('Please generate the quotation first.');
-      return;
-    }
-    setIsGeneratingInvoice(true);
-    setInvoiceError('');
-
-    try {
-      const client = {
-        name: formData.name,
-        company: formData.company,
-        email: formData.email,
-        phone: formData.phone
-      };
-
-      const draft = await generateAdvanceInvoice(client, formData.jobScope, formData.value);
-      const updatedData = {
-        ...formData,
-        invoiceDraft: draft,
-        invoiceGenerated: true
-      };
-      setFormData(updatedData);
-      handleSaveLead(updatedData);
-    } catch (err) {
-      setInvoiceError(err.message || 'Error generating AI invoice.');
-    } finally {
-      setIsGeneratingInvoice(false);
-    }
-  };
-
   // Redesigned Print Invoice PDF Styling (Clean, Premium, Modern, Matching Both 75% Advance and 25% Final)
   const printInvoice = (invoiceType = 'Advance') => {
     const isFinal = invoiceType === 'Final';
@@ -793,7 +735,7 @@ export default function LeadCardDetails({
       day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
+    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId || q.leadId === lead.originalLeadId);
     const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
     const html = `
@@ -986,7 +928,7 @@ export default function LeadCardDetails({
                   <td>
                     <strong>${lineItemTitle}</strong><br/>
                     <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
-                      Scope: ${formData.invoiceDraft || formData.jobScope || 'Custom metal framing work'}
+                      Scope: ${formData.jobScope || 'Custom metal framing work'}
                     </span>
                   </td>
                   <td style="text-align: center;" class="mono-text">1</td>
@@ -1033,65 +975,6 @@ export default function LeadCardDetails({
     }
   };
 
-  const saveInvoiceToDb = () => {
-    if (!onSaveInvoice) return;
-    const invId = `INV-${String(Date.now()).slice(-6)}`;
-    const invoiceDate = new Date().toISOString().split('T')[0];
-    const totalVal = Number(formData.value || lead.value || 0);
-    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
-    onSaveInvoice({
-      id: invId,
-      leadId: lead.id,
-      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
-      customerName: formData.name || lead.name || 'Direct Customer',
-      company: formData.company || lead.company || '',
-      phone: formData.phone || '',
-      date: invoiceDate,
-      amount: totalVal * 0.75,
-      totalValue: totalVal,
-      advancePaid: 0,
-      balanceDue: totalVal * 0.25,
-      type: 'Advance',
-      status: formData.invoicePaid ? 'Paid' : 'Unpaid',
-      aiDraft: formData.invoiceDraft || formData.jobScope || 'Custom steel framing advance invoice',
-      lineItems: activeQuote?.lineItems || [
-        { description: formData.jobScope || "Custom steel framing advance deposit", qty: 1, unit: "job", unitPrice: totalVal * 0.75, taxPct: 0, discountPct: 0 }
-      ]
-    });
-    const updatedData = { ...formData, invoiceDate: invoiceDate, invoiceGenerated: true };
-    setFormData(updatedData);
-    handleSaveLead(updatedData);
-    toast.success('75% Advance invoice saved to database!');
-  };
-
-  const saveFinalInvoiceToDb = () => {
-    if (!onSaveInvoice) return;
-    const invId = `FIN-${String(Date.now()).slice(-6)}`;
-    const invoiceDate = new Date().toISOString().split('T')[0];
-    const totalVal = Number(formData.value || lead.value || 0);
-    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId);
-    onSaveInvoice({
-      id: invId,
-      leadId: lead.id,
-      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
-      customerName: formData.name || lead.name || 'Direct Customer',
-      company: formData.company || lead.company || '',
-      phone: formData.phone || '',
-      date: invoiceDate,
-      amount: totalVal * 0.25,
-      totalValue: totalVal,
-      advancePaid: totalVal * 0.75,
-      balanceDue: totalVal * 0.25,
-      type: 'Final',
-      status: 'Unpaid',
-      aiDraft: formData.jobScope || 'Custom steel framing 25% final settlement invoice',
-      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      lineItems: activeQuote?.lineItems || [
-        { description: formData.jobScope || "Custom steel framing final balance settlement", qty: 1, unit: "job", unitPrice: totalVal * 0.25, taxPct: 0, discountPct: 0 }
-      ]
-    });
-    toast.success('25% Final Settlement invoice saved to database!');
-  };
 
   const handleConvertClick = () => {
     const missing = [];
@@ -1847,165 +1730,62 @@ export default function LeadCardDetails({
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* 2. AI Text Quotation Drafts Card */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-              <Sparkles size={16} className="mr-2 text-primary" />
-              AI Text Quotation Draft
-            </h3>
-
-            <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-3">
-              <button 
-                onClick={handleGenerateQuote}
-                disabled={isGeneratingQuote || (formData.quotationGenerated && !!formData.quotationDraft)}
-                className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
-                  isGeneratingQuote 
-                    ? 'bg-indigo-400 text-on-surface cursor-wait' 
-                    : formData.quotationGenerated && formData.quotationDraft
-                      ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
-                      : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
-                }`}
-              >
-                <Sparkles size={13} />
-                <span>{isGeneratingQuote ? 'Drafting with Gemini...' : formData.quotationGenerated && formData.quotationDraft ? 'Quotation Letter Ready' : 'AI Draft Formal Quotation Letter'}</span>
-              </button>
-
-              {quoteError && (
-                <p className="text-[10px] font-bold text-error uppercase tracking-tight">{quoteError}</p>
-              )}
-
-              {formData.quotationGenerated && formData.quotationDraft && (
-                <div className="space-y-2 pt-2 border-t border-outline-variant/30">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Quotation Body Preview</label>
-                    <div className="flex items-center gap-1.5">
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(formData.quotationDraft);
-                          toast.success('Quotation draft copied to clipboard!');
-                        }}
-                        className="text-primary hover:text-primary/80 p-1 bg-primary/10 rounded-md transition-colors flex items-center text-[10px] font-bold gap-1"
-                        title="Copy to Clipboard"
-                      >
-                        <FileText size={11} /> Copy
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, quotationDraft: '', quotationGenerated: false }))} 
-                        className="text-error hover:text-error p-1 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
-                        title="Erase Draft"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </div>
-                  <textarea 
-                    name="quotationDraft"
-                    value={formData.quotationDraft}
-                    onChange={handleInputChange}
-                    rows={7}
-                    className="w-full p-3.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <span className="text-[9px] text-secondary font-bold block bg-secondary/10 border border-secondary/30 p-2 rounded-lg">
-                    ✔ Structured into cost breakdown categories matching the pricing engine.
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 3. AI Advance Invoice (75%) Card */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold text-on-surface uppercase tracking-widest flex items-center pb-2 border-b border-outline">
-              <Printer size={16} className="mr-2 text-secondary" />
-              Advance Invoice (75%)
-            </h3>
-
-            <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] space-y-3">
-              <button 
-                onClick={handleGenerateInvoice}
-                disabled={isGeneratingInvoice || (formData.invoiceGenerated && !!formData.invoiceDraft)}
-                className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center space-x-2 ${
-                  isGeneratingInvoice
-                    ? 'bg-emerald-400 text-on-surface cursor-wait'
-                    : formData.invoiceGenerated && formData.invoiceDraft
-                      ? 'bg-surface-container text-on-surface-variant border border-outline-variant cursor-not-allowed'
-                      : 'bg-secondary text-on-secondary hover:bg-secondary/80 shadow-[0_4px_20px_rgba(0,218,243,0.05)] active:scale-[0.98]'
-                }`}
-              >
-                {isGeneratingInvoice ? 'Drafting Invoice...' : formData.invoiceGenerated && formData.invoiceDraft ? 'Invoice Draft Ready' : 'AI Generate 75% Invoice'}
-              </button>
-
-              {invoiceError && (
-                <p className="text-[10px] font-bold text-error uppercase tracking-tight">{invoiceError}</p>
-              )}
-
-              {formData.invoiceGenerated && formData.invoiceDraft && (
-                <div className="space-y-3 pt-2 border-t border-outline-variant/30">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">AI Generated Invoice Details</label>
-                    <button 
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, invoiceDraft: '', invoiceGenerated: false }))} 
-                      className="text-error hover:text-error p-1 bg-error/10 hover:bg-error/20 rounded-md transition-colors flex items-center"
-                      title="Erase Draft"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                  <textarea 
-                    value={formData.invoiceDraft}
-                    onChange={(e) => setFormData(prev => ({ ...prev, invoiceDraft: e.target.value }))}
-                    rows={6}
-                    className="w-full p-3.5 bg-surface-container-highest/60 border border-outline rounded-xl text-xs text-on-surface font-mono focus:outline-none"
-                  />
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      type="button"
-                      onClick={printInvoice}
-                      className="py-2 bg-surface-container-highest/60 border border-outline text-on-surface hover:bg-surface-container-low hover:text-primary rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1"
-                    >
-                      <Printer size={12} />
-                      <span>Print PDF</span>
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={saveInvoiceToDb}
-                      className="py-2 bg-secondary/20 text-secondary hover:bg-emerald-200 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1"
-                    >
-                      <Check size={12} />
-                      <span>Save to DB</span>
-                    </button>
-                    {formData.invoicePaid ? (
-                      <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2">
-                        <Check size={13} />
-                        <span>Payment Received</span>
+              {/* Payment status — tied to the real invoice document created via
+                  the Line-Item Quote panel's Accept & Convert flow, never to a
+                  cached lead-level flag. */}
+              <div className="pt-2 border-t border-outline-variant/30 space-y-2">
+                <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider text-left">Payment Status</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {advanceInvoice ? (
+                    advanceInvoice.status === 'Paid' ? (
+                      <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] shadow-sm flex items-center justify-center gap-1">
+                        <Check size={12} />
+                        <span>Advance Paid</span>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         type="button"
-                        onClick={() => {
-                           const updatedData = { ...formData, invoicePaid: true };
-                           setFormData(updatedData);
-                           handleSaveLead(updatedData);
-                           if (onMarkInvoicePaid) {
-                             onMarkInvoicePaid(lead.id);
-                           }
-                        }}
-                        className="py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl font-bold text-xs shadow-sm flex items-center justify-center space-x-1 col-span-2"
+                        onClick={() => onMarkInvoicePaid && onMarkInvoicePaid(lead.id, advanceInvoice._firestoreId || advanceInvoice.id)}
+                        className="w-full py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
                       >
-                        <Check size={12} />
-                        <span>Mark Paid</span>
+                        <Check size={11} /> Mark Advance Paid
                       </button>
-                    )}
-                  </div>
+                    )
+                  ) : (
+                    <div className="py-2 bg-surface-container-high/50 text-on-surface-variant border border-outline-variant/40 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 text-center px-1">
+                      <Clock size={11} className="flex-shrink-0" />
+                      <span>Not yet invoiced</span>
+                    </div>
+                  )}
+                  {finalInvoice ? (
+                    finalInvoice.status === 'Paid' ? (
+                      <div className="py-2 bg-emerald-500 text-white rounded-xl font-bold text-[10px] shadow-sm flex items-center justify-center gap-1">
+                        <Check size={12} />
+                        <span>Final Paid</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onMarkInvoicePaid && onMarkInvoicePaid(lead.id, finalInvoice._firestoreId || finalInvoice.id)}
+                        className="w-full py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Check size={11} /> Mark Final Paid
+                      </button>
+                    )
+                  ) : (
+                    <div className="py-2 bg-surface-container-high/50 text-on-surface-variant border border-outline-variant/40 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 text-center px-1">
+                      <Clock size={11} className="flex-shrink-0" />
+                      <span>Not yet invoiced</span>
+                    </div>
+                  )}
                 </div>
-              )}
+                {(!advanceInvoice || !finalInvoice) && (
+                  <p className="text-[9px] text-on-surface-variant/80 leading-snug pt-0.5">
+                    Accept the quote and convert it to an invoice in the Line-Item Quote panel to enable payment tracking here.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
