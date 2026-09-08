@@ -246,17 +246,18 @@ export default function Partners({
       const dealVal = Number(lead.value || totalInvoiced || 0);
       const totalSqFt = Number(lead.totalSqFt || lead.sqFt || (lead.pricingMetadata?.costSalesAmount ? (lead.pricingMetadata.costSalesAmount / 53.5) : 0));
       
-      // Determine commission per SqFt (Default: 53.5 LKR/SqFt)
-      let commRate = Number(lead.commissionRate || partner.commissionRate || 53.5);
+      // Commission is always calculated from the partner's CURRENT live rate,
+      // never the lead's referral-time snapshot (lead.commissionRate) or the
+      // quote-time pricingMetadata.costSalesAmount (baked from pricingEngine's
+      // fixed internal cost rate) — either would pay out a stale rate if the
+      // partner's rate changed since the lead was referred/quoted.
+      let commRate = Number(partner.commissionRate) > 0 ? Number(partner.commissionRate) : 53.5;
       if (commRate > 0 && commRate <= 1) {
         commRate = 53.5;
       }
 
-      // Calculate commission: exact costSalesAmount from pricing engine or sqFt * rate
       let commAmount = 0;
-      if (lead.pricingMetadata?.costSalesAmount) {
-        commAmount = Number(lead.pricingMetadata.costSalesAmount);
-      } else if (totalSqFt > 0) {
+      if (totalSqFt > 0) {
         commAmount = totalSqFt * commRate;
       } else if (dealVal > 0) {
         commAmount = (dealVal / 850) * commRate;

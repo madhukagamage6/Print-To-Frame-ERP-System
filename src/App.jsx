@@ -403,12 +403,21 @@ function App() {
         // Check if full 100% payment is complete
         const isPartnerReferral = Boolean(targetLead.partnerId || targetLead.partnerName || targetLead.source === 'Referral');
         const sqFt = Number(targetLead.totalSqFt || targetLead.sqFt || (targetLead.pricingMetadata?.costSalesAmount ? (targetLead.pricingMetadata.costSalesAmount / 53.5) : 0));
-        let commRate = Number(targetLead.commissionRate || 53.5);
+        // Commission is always calculated from the partner's CURRENT live rate,
+        // never the lead's referral-time snapshot or the quote-time
+        // pricingMetadata.costSalesAmount (baked from a fixed internal cost
+        // rate) — either would pay out a stale rate if the partner's rate
+        // changed since the lead was referred/quoted.
+        const referredPartner = isPartnerReferral
+          ? partners.find(p =>
+              (targetLead.partnerId && (p.partnerId === targetLead.partnerId || p.id === targetLead.partnerId)) ||
+              (targetLead.partnerName && p.name === targetLead.partnerName)
+            )
+          : null;
+        let commRate = Number(referredPartner?.commissionRate) > 0 ? Number(referredPartner.commissionRate) : 53.5;
         if (commRate > 0 && commRate <= 1) commRate = 53.5;
         const dealVal = Number(targetLead.value || 0);
-        const commAmount = targetLead.pricingMetadata?.costSalesAmount 
-          ? Number(targetLead.pricingMetadata.costSalesAmount) 
-          : (sqFt > 0 ? sqFt * commRate : (dealVal / 850) * commRate);
+        const commAmount = sqFt > 0 ? sqFt * commRate : (dealVal / 850) * commRate;
 
         const updatedLeadPayload = {
           invoicePaid: true,
