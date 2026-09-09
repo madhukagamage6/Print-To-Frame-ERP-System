@@ -1,9 +1,11 @@
 /**
  * Logistics Utility Engine for Print To Frame ERP
- * 
+ *
  * Provides helpers for mobile navigation, WhatsApp dispatch generation,
  * fleet vehicle management, and invoice COD balance calculations.
  */
+
+import { matchesEntity } from './entityUtils';
 
 export const FLEET_VEHICLES = [
   { id: 'lorry_ge1234', name: 'Lorry (WP GE 1234)', type: 'Lorry', capacity: '14.5ft Bed' },
@@ -106,21 +108,26 @@ export function formatDispatchMessage({
  * @param {Array} invoices Full list of ERP invoices
  * @param {string} linkedJobNo Associated fabrication or deal jobNo (e.g. PTF-1234)
  * @param {string} customerName Customer or business name
- * @param {Object} [options] Additional context (e.g. leadId, invoiceId)
- * @returns {{ 
- *   hasUnpaid: boolean, 
- *   totalBalanceDue: number, 
- *   matchedInvoices: Array, 
- *   advanceInvoice: Object|null, 
- *   finalInvoice: Object|null, 
- *   primaryInvoice: Object|null 
+ * @param {Object} [options] Additional context — invoiceId for a direct id
+ *   match, and/or entity (or entities: an array) — the job/deal/lead record(s)
+ *   this invoice should belong to, matched via matchesEntity/getEntityIdSet
+ *   (entityUtils.js) so a Lead-to-Deal id split (originalLeadId/
+ *   convertedDealId/dealId, not just leadId) is resolved the same way it is
+ *   everywhere else in the app, instead of a narrower ad hoc leadId compare.
+ * @returns {{
+ *   hasUnpaid: boolean,
+ *   totalBalanceDue: number,
+ *   matchedInvoices: Array,
+ *   advanceInvoice: Object|null,
+ *   finalInvoice: Object|null,
+ *   primaryInvoice: Object|null
  * }}
  */
 export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', customerName = '', options = {}) {
   if (!Array.isArray(invoices) || invoices.length === 0) {
-    return { 
-      hasUnpaid: false, 
-      totalBalanceDue: 0, 
+    return {
+      hasUnpaid: false,
+      totalBalanceDue: 0,
       matchedInvoices: [],
       advanceInvoice: null,
       finalInvoice: null,
@@ -130,20 +137,23 @@ export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', custom
 
   const cleanJobNo = String(linkedJobNo || '').trim().toLowerCase();
   const cleanCustName = String(customerName || '').trim().toLowerCase();
-  const cleanLeadId = String(options.leadId || '').trim().toLowerCase();
   const cleanInvoiceId = String(options.invoiceId || '').trim().toLowerCase();
+  const entities = options.entities || (options.entity ? [options.entity] : []);
 
-  // 1. First priority: Direct match on linkedJobNo, jobNo, leadId, or invoiceId
+  // 1. First priority: Direct match on linkedJobNo, invoiceId, or the
+  // shared entity-id matcher (covers leadId/dealId/originalLeadId/
+  // convertedDealId in one place, exact Set-membership rather than
+  // substring containment — two ids that happen to be prefixes of one
+  // another, e.g. "PTF-1" and "PTF-11", must never cross-match).
   let matched = [];
-  if (cleanJobNo || cleanLeadId || cleanInvoiceId) {
+  if (cleanJobNo || cleanInvoiceId || entities.length > 0) {
     matched = invoices.filter(inv => {
       const invId = String(inv.id || inv._firestoreId || '').trim().toLowerCase();
       const invJobNo = String(inv.linkedJobNo || inv.jobNo || '').trim().toLowerCase();
-      const invLeadId = String(inv.leadId || '').trim().toLowerCase();
 
       if (cleanInvoiceId && invId === cleanInvoiceId) return true;
-      if (cleanJobNo && invJobNo && (invJobNo === cleanJobNo || invJobNo.includes(cleanJobNo) || cleanJobNo.includes(invJobNo))) return true;
-      if (cleanLeadId && invLeadId && (invLeadId === cleanLeadId || invLeadId.includes(cleanLeadId) || cleanLeadId.includes(invLeadId))) return true;
+      if (cleanJobNo && invJobNo && invJobNo === cleanJobNo) return true;
+      if (entities.some(entity => matchesEntity(inv, entity))) return true;
       return false;
     });
   }

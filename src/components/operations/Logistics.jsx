@@ -31,7 +31,7 @@ import DeleteModal from '../common/DeleteModal';
 import LogisticsCardDetails from './LogisticsCardDetails';
 import { PageHeader, FilterBar, StatusBadge, KanbanColumn, KanbanCard, ModalWrapper } from '../common/ui';
 import TwoToneIcon from '../common/ui/TwoToneIcon';
-import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateAtomicId } from '../../services/firestoreSync';
 import { stripEmojis } from '../../utils/validation';
 import { 
   getGoogleMapsUrl, 
@@ -94,7 +94,7 @@ function LogisticsColumn({
       {items.map((job) => {
         // Calculate COD for card badge
         const { hasUnpaid, totalBalanceDue, primaryInvoice } = calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer, {
-          leadId: job.leadId,
+          entity: job,
           invoiceId: job.invoiceId
         });
 
@@ -318,6 +318,7 @@ export default function Logistics({
     manifest: "",
     customer: "",
     customerPhone: "",
+    clientNIC: "",
     driver: "Sunil (Driver)",
     vehicle: "Lorry (WP GE 1234)",
     linkedJobNo: "",
@@ -443,6 +444,7 @@ export default function Logistics({
     if (!cust) return;
     setForm(prev => ({
       ...prev,
+      clientNIC: nic,
       customer: cust.type === 'Business' ? cust.businessName : cust.name,
       customerPhone: cust.phone || prev.customerPhone,
       location: cust.address || prev.location
@@ -454,7 +456,14 @@ export default function Logistics({
       toast.error("Please enter a destination or pickup address.");
       return;
     }
-    const jobId = `${activeSubTab === "pickup" ? "L-PK" : "L-DL"}-${String(Date.now()).slice(-4)}`;
+    const jobPrefix = activeSubTab === "pickup" ? "L-PK" : "L-DL";
+    let jobId;
+    try {
+      jobId = await generateAtomicId(jobPrefix);
+    } catch (err) {
+      toast.error('Could not generate a job id, please try again: ' + err.message);
+      return;
+    }
     const newJob = {
       id: jobId,
       type: activeSubTab === "pickup" ? "Pickup" : "Delivery",
@@ -483,6 +492,7 @@ export default function Logistics({
       manifest: "",
       customer: "",
       customerPhone: "",
+      clientNIC: "",
       driver: "Sunil (Driver)",
       vehicle: "Lorry (WP GE 1234)",
       linkedJobNo: "",

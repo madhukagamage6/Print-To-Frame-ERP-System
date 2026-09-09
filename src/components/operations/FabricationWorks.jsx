@@ -37,7 +37,7 @@ import DeleteModal from '../common/DeleteModal';
 import FrameBlueprintPreview from '../common/FrameBlueprintPreview';
 import FabricationCardDetails from './FabricationCardDetails';
 import { PageHeader, FilterBar, StatusBadge, KanbanColumn, KanbanCard, ModalWrapper } from '../common/ui';
-import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
+import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateInvoiceId, generateAtomicId } from '../../services/firestoreSync';
 import { stripEmojis, sanitizeTechnicalScope } from '../../utils/validation';
 import { STEEL_PROFILES, calculateCutList, mmToFtIn } from '../../utils/cutListEngine';
 
@@ -219,7 +219,7 @@ function FabricationColumn({
             <div className="flex items-center text-[10px] text-on-surface-variant">
               <Hammer size={11} className="mr-1.5 text-on-surface-variant flex-shrink-0" />
               <span className="truncate">
-                {job.materials || (job.profileKey && STEEL_PROFILES[job.profileKey]?.name) || "Standard Steel Tube (1x1)"}
+                {job.materials || (job.profileKey && STEEL_PROFILES[job.profileKey]?.label) || "Standard Steel Tube (1x1)"}
               </span>
             </div>
             {job.mountingType && (
@@ -446,16 +446,16 @@ export default function FabricationWorks({
 
     const newJob = {
       jobNo: jobNo,
-      title: form.title || `${STEEL_PROFILES[form.profileKey]?.name || 'Box Iron'} Frame (${mmToFtIn(form.frameWidth)} × ${mmToFtIn(form.frameHeight)})`,
+      title: form.title || `${STEEL_PROFILES[form.profileKey]?.label || 'Box Iron'} Frame (${mmToFtIn(form.frameWidth)} × ${mmToFtIn(form.frameHeight)})`,
       clientNIC: custNic || "Direct Customer",
       customerNic: custNic,
       customerName: custName,
-      scope: sanitizeTechnicalScope(form.scope) || `${STEEL_PROFILES[form.profileKey]?.name || '1.5" Box Iron'} Frame (${form.frameWidth}×${form.frameHeight}mm) with ${form.finishType}, ${form.mountingType}`,
+      scope: sanitizeTechnicalScope(form.scope) || `${STEEL_PROFILES[form.profileKey]?.label || '1.5" Box Iron'} Frame (${form.frameWidth}×${form.frameHeight}mm) with ${form.finishType}, ${form.mountingType}`,
       status: "Pending",
       stageEnteredAt: now,
       deadline: form.deadline || now.split("T")[0],
       address: stripEmojis(form.address) || "Pickup at Colombo Hub",
-      materials: form.materials || (STEEL_PROFILES[form.profileKey]?.name) || "1.5\" × 1.5\" Box Iron",
+      materials: form.materials || (STEEL_PROFILES[form.profileKey]?.label) || "1.5\" × 1.5\" Box Iron",
       profileKey: form.profileKey || 'box_1_5',
       mountingType: form.mountingType || 'Flush Wall Mount',
       finishType: form.finishType || 'Anti-Rust Red Oxide Primer',
@@ -515,7 +515,13 @@ export default function FabricationWorks({
 
   // Dispatch Completed Job to Logistics Delivery
   const handleDispatchToLogistics = async (job) => {
-    const deliveryId = `L-DL-${Date.now().toString().slice(-4)}`;
+    let deliveryId;
+    try {
+      deliveryId = await generateAtomicId('L-DL');
+    } catch (err) {
+      toast.error('Could not generate a delivery id, please try again: ' + err.message);
+      return;
+    }
     const cust = customers?.find(c => c.nic === (job.clientNIC || job.customerNic));
     const custName = cust?.name || cust?.businessName || job.customerName || "Direct Customer";
     
@@ -645,15 +651,29 @@ export default function FabricationWorks({
   // Confirm QA Passed & Mark as Completed
   const handlePassQA = async () => {
     if (!inspectingJob) return;
+    // The 4-point checklist must actually gate this action — previously
+    // every checkbox was recorded but never checked, so a job could be
+    // approved and invoiced with every point left unchecked (representing
+    // a failed inspection). Use "Fail & Send to Revision" for anything
+    // that didn't pass all four.
+    if (!qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension) {
+      toast.error('All 4 QA checks must pass before approving — use "Fail & Send to Revision" instead.');
+      return;
+    }
     const targetJob = inspectingJob;
     const now = new Date().toISOString();
-    
+
     let finalInvId = null;
-    if (onSaveInvoice && (Number(targetJob.value) || 0) > 0) {
+    const needsInvoice = onSaveInvoice && (Number(targetJob.value) || 0) > 0;
+    if (needsInvoice) {
       try {
         finalInvId = await generateInvoiceId('Final');
       } catch (err) {
-        console.error(err);
+        // Never mark a billable job Completed without its invoice — that
+        // would silently lose the 25% Final Settlement with no later
+        // mechanism to backfill it.
+        toast.error('Could not generate the Final invoice number, so this job was NOT marked Completed. Please try again: ' + err.message);
+        return;
       }
     }
 
@@ -680,15 +700,26 @@ export default function FabricationWorks({
     };
 
     // Auto-generate 25% Final Settlement Invoice if applicable
-    if (onSaveInvoice && finalInvId && (Number(targetJob.value) || 0) > 0) {
+    if (needsInvoice) {
       const cust = customers?.find(c => c.nic === (targetJob.clientNIC || targetJob.customerNic));
       const custName = cust?.name || cust?.businessName || targetJob.customerName || "Direct Customer";
-      
+
       onSaveInvoice({
         id: finalInvId,
         linkedJobNo: targetJob.jobNo,
         jobNo: targetJob.jobNo,
+        // Propagate every id alias the job carries, not just leadId — a
+        // fabrication job dispatched from a Lead/Deal may only carry
+        // dealId/originalLeadId/convertedDealId (manually-created shop-floor
+        // jobs carry none of these, and stay unlinked, which is expected).
+        // Stamping only leadId orphaned the invoice from lead/deal-based
+        // lookups (matchesEntity, the commission logic in App.jsx, the
+        // Payment Status panel) whenever a job's identity lived in one of
+        // the other fields.
         leadId: targetJob.leadId || '',
+        dealId: targetJob.dealId || '',
+        originalLeadId: targetJob.originalLeadId || '',
+        convertedDealId: targetJob.convertedDealId || '',
         customerName: custName,
         company: cust?.businessName || "",
         phone: targetJob.phone || cust?.phone || "",
@@ -1138,7 +1169,9 @@ export default function FabricationWorks({
               </button>
               <button
                 onClick={handlePassQA}
-                className="px-5 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs hover:bg-emerald-600 transition-all flex items-center shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95"
+                disabled={!qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension}
+                title={!qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension ? 'All 4 QA checks must pass first' : undefined}
+                className="px-5 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs hover:bg-emerald-600 transition-all flex items-center shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 disabled:active:scale-100"
               >
                 <Check size={14} className="mr-1.5" />
                 <span>Approve & Complete</span>
@@ -1368,13 +1401,13 @@ export default function FabricationWorks({
                       setForm({
                         ...form,
                         profileKey: key,
-                        materials: STEEL_PROFILES[key]?.name || form.materials
+                        materials: STEEL_PROFILES[key]?.label || form.materials
                       });
                     }}
                     className="w-full p-2.5 bg-surface-container border border-outline-variant rounded-xl text-xs font-semibold text-on-surface focus:ring-2 focus:ring-primary/50"
                   >
                     {Object.entries(STEEL_PROFILES).map(([key, p]) => (
-                      <option key={key} value={key}>{p.name}</option>
+                      <option key={key} value={key}>{p.label}</option>
                     ))}
                   </select>
                 </div>

@@ -41,6 +41,7 @@ export const COLLECTIONS = {
   SETTINGS: 'settings',
   REFERRAL_CLAIMS: 'referral_claims',
   TYPING_INDICATORS: 'typing_indicators',
+  COUNTERS: 'counters',
 };
 
 // ── Subscribe to a Collection (Real-time) ────────────────────
@@ -233,21 +234,23 @@ export function generateSequentialId(prefix, existingDocs, idField = 'id') {
   return `${prefix}-${String(nextNum).padStart(padLength, '0')}`;
 }
 
-// ── Generate Invoice ID (atomic, collision-safe) ─────────────
+// ── Generate Atomic Sequential ID (collision-safe, any prefix) ────
 /**
- * Atomically generates the next sequential invoice number for the given
- * type, via a Firestore transaction against a per-type counter document
- * (counters/INV-ADV, counters/INV-FIN). Unlike generateSequentialId above
- * (which reads a client-side array and computes max+1), a transaction
- * guarantees two concurrent callers — e.g. two admins converting an
- * invoice at the same moment — can never be handed the same number:
- * Firestore retries one of them automatically on contention.
- * @param {'Advance'|'Final'} type
- * @returns {Promise<string>} e.g. "INV-ADV-0001" / "INV-FIN-0001"
+ * Atomically generates the next sequential number for the given prefix, via
+ * a Firestore transaction against a per-prefix counter document
+ * (counters/<prefix>). Unlike generateSequentialId above (which reads a
+ * client-side array and computes max+1) or a Date.now()-suffixed id, a
+ * transaction guarantees two concurrent callers — two admins creating an
+ * invoice, or two dispatchers creating a logistics job, at the same
+ * moment — can never be handed the same number: Firestore retries one of
+ * them automatically on contention, where a truncated timestamp can
+ * silently collide and overwrite an existing document with the same id.
+ * @param {string} prefix e.g. "INV-ADV", "L-DL", "L-PK"
+ * @param {number} [padLength=4]
+ * @returns {Promise<string>} e.g. "INV-ADV-0001", "L-DL-0007"
  */
-export async function generateInvoiceId(type) {
-  const prefix = type === 'Final' ? 'INV-FIN' : 'INV-ADV';
-  const counterRef = doc(db, 'counters', prefix);
+export async function generateAtomicId(prefix, padLength = 4) {
+  const counterRef = doc(db, COLLECTIONS.COUNTERS, prefix);
   const nextNum = await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(counterRef);
     const current = snap.exists() ? Number(snap.data().value) || 0 : 0;
@@ -255,5 +258,16 @@ export async function generateInvoiceId(type) {
     transaction.set(counterRef, { value: next }, { merge: true });
     return next;
   });
-  return `${prefix}-${String(nextNum).padStart(4, '0')}`;
+  return `${prefix}-${String(nextNum).padStart(padLength, '0')}`;
+}
+
+/**
+ * Atomically generates the next sequential invoice number for the given
+ * type. See generateAtomicId above for the collision-safety rationale.
+ * @param {'Advance'|'Final'} type
+ * @returns {Promise<string>} e.g. "INV-ADV-0001" / "INV-FIN-0001"
+ */
+export async function generateInvoiceId(type) {
+  const prefix = type === 'Final' ? 'INV-FIN' : 'INV-ADV';
+  return generateAtomicId(prefix, 4);
 }

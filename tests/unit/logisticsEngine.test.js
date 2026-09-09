@@ -93,5 +93,35 @@ describe('logisticsEngine', () => {
     expect(FLEET_VEHICLES.length).toBeGreaterThanOrEqual(3);
     expect(DRIVER_DIRECTORY.length).toBeGreaterThanOrEqual(4);
   });
+
+  // Regression coverage for the code-review finding: a logistics job whose
+  // lead was converted to a Deal can carry the ORIGINAL lead's id while the
+  // invoice it should be matched against was created under the Deal's own
+  // (different) id — the old leadId-only string compare missed this entirely.
+  it('matches an invoice via entity (dealId/originalLeadId), not just leadId, across a Lead-to-Deal id split', () => {
+    const sampleInvoices = [
+      { id: 'INV-FIN-0009', leadId: 'D-654321', customerName: 'Kasun Silva', amount: 5631, type: 'Final', status: 'Unpaid' },
+    ];
+    // The job only carries the ORIGINAL lead id (as Deals.jsx's
+    // handleCreateDeliveryJob sets it via deal.originalLeadId || deal.id).
+    const job = { leadId: 'L-123456', originalLeadId: null };
+    // The invoice's real owning record (the Deal) is what actually links
+    // job <-> invoice here — simulate passing both as candidate entities.
+    const deal = { id: 'D-654321', originalLeadId: 'L-123456' };
+
+    const res = calculateCODFromInvoices(sampleInvoices, '', 'Kasun Silva', { entities: [job, deal] });
+    expect(res.hasUnpaid).toBe(true);
+    expect(res.matchedInvoices.map(i => i.id)).toEqual(['INV-FIN-0009']);
+  });
+
+  it('does not cross-match jobNos that are substrings of one another (e.g. PTF-1 vs PTF-11)', () => {
+    const sampleInvoices = [
+      { id: 'INV-ADV-0011', linkedJobNo: 'PTF-11', customerName: 'Unrelated Client', amount: 99000, type: 'Advance', status: 'Unpaid' },
+    ];
+
+    const res = calculateCODFromInvoices(sampleInvoices, 'PTF-1', 'Some Other Client');
+    expect(res.matchedInvoices.length).toBe(0);
+    expect(res.hasUnpaid).toBe(false);
+  });
 });
 

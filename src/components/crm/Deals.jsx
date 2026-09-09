@@ -256,104 +256,129 @@ export default function Deals({
   ], []);
 
   const handleMoveForward = async (dealId) => {
-    let updatedDealObj = null;
-    let nextStageStr = null;
-    const now = new Date().toISOString();
+    const dealBeingMoved = leads.find(d => d.id === dealId);
+    if (!dealBeingMoved) return;
+    const currentIndex = DEALS_STAGES.indexOf(dealBeingMoved.stage);
+    if (currentIndex + 1 >= DEALS_STAGES.length) return;
+    const nextStage = DEALS_STAGES[currentIndex + 1];
+    const willComplete = nextStage === "Completed";
 
     // Firestore's atomic ID generator is async, so it must be resolved
-    // BEFORE entering the synchronous setLeads updater below — decide here,
-    // outside the updater, whether this move will complete the deal.
-    const dealBeingMoved = leads.find(d => d.id === dealId);
-    const willComplete = dealBeingMoved
-      && DEALS_STAGES[DEALS_STAGES.indexOf(dealBeingMoved.stage) + 1] === "Completed";
+    // BEFORE entering the synchronous setLeads updater below. Completing a
+    // deal without its Final invoice would silently lose both the invoice
+    // AND the commission it triggers (they used to be gated together only
+    // by a boolean that a caught error could bypass) — so if the number
+    // can't be generated, the whole move is aborted rather than completing
+    // the deal anyway with a false "invoice generated" success message.
     let finalInvId = null;
     if (willComplete && onSaveInvoice) {
       try {
         finalInvId = await generateInvoiceId('Final');
       } catch (err) {
-        toast.error('Failed to generate an invoice number: ' + err.message);
+        toast.error('Could not generate the Final invoice number, so this deal was NOT marked Completed. Please try again: ' + err.message);
+        return;
       }
     }
 
+    const now = new Date().toISOString();
+    let updatedDealObj = null;
+    let persistedStage = null;
+    let completionAborted = false;
+
     setLeads(prev => prev.map(deal => {
-      if (deal.id === dealId) {
-        const currentIndex = DEALS_STAGES.indexOf(deal.stage);
-        if (currentIndex + 1 < DEALS_STAGES.length) {
-          const nextStage = DEALS_STAGES[currentIndex + 1];
-          nextStageStr = nextStage;
-          updatedDealObj = { ...deal, stage: nextStage, stageEnteredAt: now };
+      if (deal.id !== dealId) return deal;
+      // Re-validate against LIVE state rather than trusting the snapshot
+      // taken before the await above — if the deal's stage changed in the
+      // meantime (a concurrent edit, a rapid double-click), re-derive the
+      // real next stage instead of blindly applying the stale one.
+      const liveCurrentIndex = DEALS_STAGES.indexOf(deal.stage);
+      if (liveCurrentIndex + 1 >= DEALS_STAGES.length) return deal;
+      const liveNextStage = DEALS_STAGES[liveCurrentIndex + 1];
 
-          // Commission trigger: If next stage is Completed, calculate agent commission
-          if (nextStage === "Completed") {
-            if (onSaveInvoice && finalInvId) {
-              const invId = finalInvId;
-              const linkedQuote = (quotations || []).find(q => matchesEntity(q, deal));
-              const finalAmount = (deal.value || 0) * 0.25;
-              onSaveInvoice({
-                id: invId,
-                leadId: deal.id,
-                linkedJobNo: deal.jobNo || deal.linkedJobNo || '',
-                jobNo: deal.jobNo || deal.linkedJobNo || '',
-                quotationId: linkedQuote?._firestoreId || linkedQuote?.id || '',
-                customerName: deal.name || 'Direct Customer',
-                company: deal.company || '',
-                phone: deal.phone || '',
-                date: new Date().toISOString().split('T')[0],
-                amount: finalAmount,
-                totalValue: deal.value || 0,
-                advancePaid: (deal.value || 0) * 0.75,
-                balanceDue: finalAmount,
-                type: 'Final',
-                status: 'Unpaid',
-                aiDraft: deal.jobScope || `Final Settlement (25%) for project.`,
-                dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-                lineItems: linkedQuote?.lineItems || [
-                  { description: deal.jobScope || "Custom steel framing final balance settlement", qty: 1, unit: "job", unitPrice: finalAmount, taxPct: 0, discountPct: 0 }
-                ]
-              });
-            }
+      if (liveNextStage === "Completed" && !finalInvId && onSaveInvoice) {
+        // State changed underneath us: this move now completes the deal,
+        // but no invoice id was reserved for that case. Never complete a
+        // deal silently without its invoice — abort this update entirely.
+        completionAborted = true;
+        return deal;
+      }
 
-            if (deal.agentId && partners.length && setPartners) {
-              const sqFt = Number(deal.totalSqFt) || 0;
-              const agent = partners.find(p => p.partnerId === deal.agentId);
-              // Always the partner's CURRENT live rate, not a hardcoded default —
-              // a rate change takes effect immediately for any deal completed after it.
-              const commRate = Number(agent?.commissionRate) > 0 ? Number(agent.commissionRate) : 53.5;
-              const commissionAmount = sqFt * commRate;
+      persistedStage = liveNextStage;
+      updatedDealObj = { ...deal, stage: liveNextStage, stageEnteredAt: now };
 
-              if (agent) {
-                setPartners(prevPartners => prevPartners.map(p => 
-                  p.partnerId === deal.agentId 
-                    ? { ...p, pending: (p.pending || 0) + commissionAmount, totalSqFt: (p.totalSqFt || 0) + sqFt }
-                    : p
-                ));
-                // Update partner in Firestore
-                updateDocument(COLLECTIONS.PARTNERS, agent._firestoreId || agent.partnerId, {
-                  pending: (agent.pending || 0) + commissionAmount,
-                  totalSqFt: (agent.totalSqFt || 0) + sqFt
-                }).catch(err => console.error("Partner update error:", err));
+      if (liveNextStage === "Completed") {
+        if (onSaveInvoice && finalInvId) {
+          const linkedQuote = (quotations || []).find(q => matchesEntity(q, deal));
+          const finalAmount = (deal.value || 0) * 0.25;
+          onSaveInvoice({
+            id: finalInvId,
+            leadId: deal.id,
+            dealId: deal.id,
+            originalLeadId: deal.originalLeadId || '',
+            linkedJobNo: deal.jobNo || deal.linkedJobNo || '',
+            jobNo: deal.jobNo || deal.linkedJobNo || '',
+            quotationId: linkedQuote?._firestoreId || linkedQuote?.id || '',
+            customerName: deal.name || 'Direct Customer',
+            company: deal.company || '',
+            phone: deal.phone || '',
+            date: new Date().toISOString().split('T')[0],
+            amount: finalAmount,
+            totalValue: deal.value || 0,
+            advancePaid: (deal.value || 0) * 0.75,
+            balanceDue: finalAmount,
+            type: 'Final',
+            status: 'Unpaid',
+            aiDraft: deal.jobScope || `Final Settlement (25%) for project.`,
+            dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            lineItems: linkedQuote?.lineItems || [
+              { description: deal.jobScope || "Custom steel framing final balance settlement", qty: 1, unit: "job", unitPrice: finalAmount, taxPct: 0, discountPct: 0 }
+            ]
+          });
+        }
 
-                toast.success(`Deal Completed!`, {
-                  description: `LKR ${commissionAmount.toLocaleString()} commission assigned to Agent ${agent.name}. 25% Final Invoice generated.`
-                });
-              }
-            } else {
-              toast.success(`Deal Completed!`, {
-                description: `25% Final Settlement Invoice generated successfully.`
-              });
-            }
+        if (deal.agentId && partners.length && setPartners) {
+          const sqFt = Number(deal.totalSqFt) || 0;
+          const agent = partners.find(p => p.partnerId === deal.agentId);
+          // Always the partner's CURRENT live rate, not a hardcoded default —
+          // a rate change takes effect immediately for any deal completed after it.
+          const commRate = Number(agent?.commissionRate) > 0 ? Number(agent.commissionRate) : 53.5;
+          const commissionAmount = sqFt * commRate;
+
+          if (agent) {
+            setPartners(prevPartners => prevPartners.map(p =>
+              p.partnerId === deal.agentId
+                ? { ...p, pending: (p.pending || 0) + commissionAmount, totalSqFt: (p.totalSqFt || 0) + sqFt }
+                : p
+            ));
+            // Update partner in Firestore
+            updateDocument(COLLECTIONS.PARTNERS, agent._firestoreId || agent.partnerId, {
+              pending: (agent.pending || 0) + commissionAmount,
+              totalSqFt: (agent.totalSqFt || 0) + sqFt
+            }).catch(err => console.error("Partner update error:", err));
+
+            toast.success(`Deal Completed!`, {
+              description: `LKR ${commissionAmount.toLocaleString()} commission assigned to Agent ${agent.name}. 25% Final Invoice generated.`
+            });
           }
-          return updatedDealObj;
+        } else {
+          toast.success(`Deal Completed!`, {
+            description: `25% Final Settlement Invoice generated successfully.`
+          });
         }
       }
-      return deal;
+      return updatedDealObj;
     }));
 
-    if (updatedDealObj && nextStageStr) {
+    if (completionAborted) {
+      toast.error('This deal moved to Completed elsewhere before this action finished, without an invoice reserved for it — please retry moving it forward.');
+      return;
+    }
+
+    if (updatedDealObj && persistedStage) {
       try {
-        await updateDocument(COLLECTIONS.LEADS, updatedDealObj._firestoreId || updatedDealObj.id, { 
-          stage: nextStageStr,
-          stageEnteredAt: now 
+        await updateDocument(COLLECTIONS.LEADS, updatedDealObj._firestoreId || updatedDealObj.id, {
+          stage: persistedStage,
+          stageEnteredAt: now
         });
       } catch (err) {
         console.error("Deal move forward error:", err);

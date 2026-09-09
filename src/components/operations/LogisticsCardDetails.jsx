@@ -70,13 +70,25 @@ export default function LogisticsCardDetails({
     return projects.find(p => p.jobNo === job.linkedJobNo);
   }, [projects, job.linkedJobNo]);
 
-  // Compute COD and linked invoices
+  // Compute COD and linked invoices. Passing both the job and its linked
+  // fabrication project as entities covers whichever one actually carries
+  // the lead/deal id lineage (leadId/dealId/originalLeadId/convertedDealId) —
+  // a job dispatched from a converted deal may only have it on one of them.
   const { hasUnpaid, totalBalanceDue, matchedInvoices, advanceInvoice, finalInvoice, primaryInvoice } = useMemo(() => {
     return calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer, {
-      leadId: job.leadId || linkedProject?.leadId,
+      entities: [job, linkedProject].filter(Boolean),
       invoiceId: job.invoiceId
     });
-  }, [invoices, job.linkedJobNo, job.customer, job.leadId, job.invoiceId, linkedProject?.leadId]);
+    // job/linkedProject are listed below by their identifying fields (what
+    // matchesEntity actually reads) rather than by object reference, since
+    // both are freshly-mapped on every Firestore snapshot and would defeat
+    // this memo every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    invoices, job.linkedJobNo, job.customer, job.invoiceId,
+    job.leadId, job.dealId, job.originalLeadId, job.convertedDealId,
+    linkedProject?.leadId, linkedProject?.dealId, linkedProject?.originalLeadId, linkedProject?.convertedDealId,
+  ]);
 
   const [formData, setFormData] = useState({
     subType: job.subType || '',
