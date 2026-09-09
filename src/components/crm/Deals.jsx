@@ -292,6 +292,8 @@ export default function Deals({
               onSaveInvoice({
                 id: invId,
                 leadId: deal.id,
+                linkedJobNo: deal.jobNo || deal.linkedJobNo || '',
+                jobNo: deal.jobNo || deal.linkedJobNo || '',
                 quotationId: linkedQuote?._firestoreId || linkedQuote?.id || '',
                 customerName: deal.name || 'Direct Customer',
                 company: deal.company || '',

@@ -1269,7 +1269,15 @@ function App() {
           )}
 
           {activeTab === "logistics" && canAccess(currentUser?.role, 'logistics') && (
-            <Logistics jobs={logisticsJobs} setJobs={setLogisticsJobs} currentUser={currentUser} />
+            <Logistics 
+              jobs={logisticsJobs} 
+              setJobs={setLogisticsJobs} 
+              currentUser={currentUser}
+              customers={customers}
+              projects={projects}
+              invoices={invoices}
+              partners={partners}
+            />
           )}
 
           {activeTab === "calculator" && canAccess(currentUser?.role, 'calculator') && <CostCalculator />}
