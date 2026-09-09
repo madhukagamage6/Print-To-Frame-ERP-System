@@ -10,3 +10,10 @@ Whenever the user asks to "save this as an artifact" or generate a document/repo
 1. When code modifications and testing are completed, push changes ONLY to the `staging` branch.
 2. Notify the user immediately once pushed to `staging` so they can inspect and preview the changes on the preview/staging deployment, request adjustments, or confirm.
 3. NEVER merge `staging` into `main` or deploy to the live production site without the user's explicit confirmation and approval.
+
+## Implementation Plans & User Approval Gates
+1. Whenever the user requests an implementation plan, architectural design, audit report, or detailed feedback:
+   - Provide the complete analysis and detailed plan/report.
+   - Set `RequestFeedback: true` on the artifact if applicable.
+   - NEVER auto-accept or self-approve the plan.
+   - DO NOT begin writing code, modifying files, or executing the plan until the user reviews, comments, and explicitly gives approval to proceed.
