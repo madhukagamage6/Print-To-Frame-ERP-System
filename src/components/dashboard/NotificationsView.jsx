@@ -5,14 +5,22 @@ import {
 } from 'lucide-react';
 import { useMessaging } from '../../context/MessagingContext';
 import { PageHeader, FilterBar, StatusBadge, UserAvatar, TwoToneIcon } from '../common/ui';
+import { formatDateTime } from '../../utils/dateUtils';
 
 export default function NotificationsView({ notifications = [], setNotifications, users = [], setActiveTab }) {
   const [filterType, setFilterType] = useState('ALL'); // 'ALL' | 'SYSTEM' | 'MESSAGES'
   const [searchQuery, setSearchQuery] = useState('');
-  const { messages, openMiniChat, resolveUserProfile } = useMessaging();
+  const { messages, openMiniChat, resolveUserProfile, markAllAsRead } = useMessaging();
 
-  const handleClearAll = () => {
-    setNotifications([]);
+  const handleClearAll = async () => {
+    if (filterType === 'SYSTEM') {
+      setNotifications([]);
+    } else if (filterType === 'MESSAGES') {
+      if (markAllAsRead) await markAllAsRead();
+    } else {
+      setNotifications([]);
+      if (markAllAsRead) await markAllAsRead();
+    }
   };
 
   const handleDelete = (id) => {
@@ -66,13 +74,15 @@ export default function NotificationsView({ notifications = [], setNotifications
           { label: "Active Feed", value: combinedNotifications.length, color: "amber" }
         ]}
         actions={
-          notifications.length > 0 && filterType !== 'MESSAGES' && (
+          ((notifications.length > 0 && filterType !== 'MESSAGES') || (filterType === 'MESSAGES' && messageItems.length > 0) || (filterType === 'ALL' && (notifications.length > 0 || messageItems.length > 0))) && (
             <button
               onClick={handleClearAll}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant text-on-surface hover:text-rose-400 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-surface-container border border-outline-variant text-on-surface hover:text-status-danger-on hover:border-status-danger-border rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 flex-shrink-0 cursor-pointer"
             >
               <Trash2 size={14} />
-              <span>Clear System Alerts</span>
+              <span>
+                {filterType === 'MESSAGES' ? 'Mark Messages Read' : filterType === 'SYSTEM' ? 'Clear System Alerts' : 'Clear & Mark Read'}
+              </span>
             </button>
           )
         }
@@ -146,7 +156,7 @@ export default function NotificationsView({ notifications = [], setNotifications
                         <span className="font-bold text-xs sm:text-sm text-on-surface">{item.title}</span>
                         <span className={`text-[9px] font-bold px-2 py-0.2 rounded border ${
                           isMessage 
-                            ? 'bg-purple-500/15 text-purple-400 border-purple-500/30' 
+                            ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30' 
                             : 'bg-primary/15 text-primary border-primary/30'
                         }`}>
                           {isMessage ? 'Direct Chat' : item.type?.toUpperCase() || 'SYSTEM'}
@@ -159,7 +169,7 @@ export default function NotificationsView({ notifications = [], setNotifications
 
                       <div className="flex items-center gap-2 text-[10px] text-on-surface-variant font-mono mt-1.5">
                         <Clock size={10} className="text-primary" />
-                        <span>{new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(item.date).toLocaleDateString()}</span>
+                        <span>{formatDateTime(item.date)}</span>
                       </div>
                     </div>
                   </div>
@@ -188,7 +198,7 @@ export default function NotificationsView({ notifications = [], setNotifications
                     {!isMessage && (
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="p-2 text-on-surface-variant hover:text-rose-400 hover:bg-rose-500/10 rounded-xl border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer"
+                        className="p-2 text-on-surface-variant hover:text-status-danger-on hover:bg-status-danger-bg rounded-xl border border-transparent hover:border-status-danger-border transition-colors cursor-pointer"
                         title="Dismiss Alert"
                       >
                         <Trash2 size={14} />

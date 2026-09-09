@@ -10,6 +10,7 @@ import { PageHeader, FilterBar, KanbanColumn, KanbanCard, StatusBadge } from '..
 import SortableTable from '../common/ui/SortableTable';
 import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import { exportToCsv } from '../../utils/csvExport';
+import { matchesEntity } from '../../utils/entityUtils';
 
 const DEALS_STAGES = ["Waiting", "Fabricating", "Ready To Load", "Hand Over", "Completed"];
 
@@ -102,7 +103,7 @@ function DealColumn({
         const customActions = (
           <>
             {(stage === "Ready To Load" || stage === "Hand Over") && (() => {
-              const job = logisticsJobs ? logisticsJobs.find(j => j.dealId === deal.id || j.leadId === deal.id || j.leadId === deal.originalLeadId) : null;
+              const job = logisticsJobs ? logisticsJobs.find(j => matchesEntity(j, deal)) : null;
               if (job && job.status === "Completed") {
                 return (
                   <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Delivery Completed">
@@ -286,11 +287,13 @@ export default function Deals({
           if (nextStage === "Completed") {
             if (onSaveInvoice && finalInvId) {
               const invId = finalInvId;
-              const linkedQuote = (quotations || []).find(q => q.leadId === deal.id || q.leadId === deal.originalLeadId);
+              const linkedQuote = (quotations || []).find(q => matchesEntity(q, deal));
               const finalAmount = (deal.value || 0) * 0.25;
               onSaveInvoice({
                 id: invId,
                 leadId: deal.id,
+                linkedJobNo: deal.jobNo || deal.linkedJobNo || '',
+                jobNo: deal.jobNo || deal.linkedJobNo || '',
                 quotationId: linkedQuote?._firestoreId || linkedQuote?.id || '',
                 customerName: deal.name || 'Direct Customer',
                 company: deal.company || '',

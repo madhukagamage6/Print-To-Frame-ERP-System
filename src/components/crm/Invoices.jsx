@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Search, FileText, Check, DollarSign, Calendar, Printer, Edit2, 
-  Trash2, X, ChevronRight, AlertCircle, Building2, User, Layers, Download, MessageSquare, Clock 
+  Trash2, X, ChevronRight, AlertCircle, Building2, User, Layers, Download, MessageSquare, Clock, ArrowLeft 
 } from 'lucide-react';
 import { updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { toast } from '../../utils/toast';
@@ -14,6 +14,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [mobileView, setMobileView] = useState('list');
   const [deleteId, setDeleteId] = useState(null);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -467,7 +468,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
       {/* Main Grid split */}
       <div className="flex-1 flex lg:flex-row flex-col gap-6 overflow-hidden min-h-0">
         {/* Left Side: Invoice List */}
-        <div className="w-full lg:w-1/3 flex flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full">
+        <div className={`w-full lg:w-1/3 flex flex-col border border-outline-variant/60 bg-surface-container/60 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.15)] h-full ${mobileView === 'detail' ? 'hidden lg:flex' : 'flex'}`}>
           <div className="bg-surface-container-low/80 p-3.5 px-4 border-b border-outline-variant/60 flex justify-between items-center text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-shrink-0">
             <span className="flex items-center gap-2">
               <FileText size={14} className="text-primary" />
@@ -494,7 +495,10 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                 return (
                   <div
                     key={inv.id}
-                    onClick={() => setSelectedInvoice(inv)}
+                    onClick={() => {
+                      setSelectedInvoice(inv);
+                      setMobileView('detail');
+                    }}
                     className={`p-4 cursor-pointer transition-all flex items-center justify-between gap-3 ${
                       isSelected 
                         ? 'bg-primary/10 border-l-4 border-primary shadow-inner' 
@@ -508,8 +512,13 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                         <span className="text-[9px] font-bold text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded uppercase">
                           {inv.type === 'Final' ? '25% Final' : '75% Advance'}
                         </span>
+                        {(inv.linkedJobNo || inv.jobNo) && (
+                          <span className="text-[9px] font-bold font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                            #{inv.linkedJobNo || inv.jobNo}
+                          </span>
+                        )}
                         {isOverdue && (
-                          <span className="text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase">
+                          <span className="text-[9px] font-bold text-status-danger-on bg-status-danger/15 border border-status-danger/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase">
                             <Clock size={9} /> Overdue
                           </span>
                         )}
@@ -528,7 +537,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                           {inv.date}
                         </span>
                         {inv.dueDate && (
-                          <span className={isOverdue ? "text-rose-400 font-bold" : ""}>
+                          <span className={isOverdue ? "text-status-danger-on font-bold" : ""}>
                             Due: {inv.dueDate}
                           </span>
                         )}
@@ -540,7 +549,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                         <p className="font-black text-xs sm:text-sm text-on-surface font-mono">
                           LKR {Number(inv.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        <p className={`text-[9px] font-bold uppercase tracking-wider ${isPaid ? 'text-emerald-400' : isOverdue ? 'text-rose-400' : 'text-amber-400'}`}>
+                        <p className={`text-[9px] font-bold uppercase tracking-wider ${isPaid ? 'text-status-success-on' : isOverdue ? 'text-status-danger-on' : 'text-status-warning-on'}`}>
                           {isPaid ? 'Settled' : isOverdue ? 'Overdue' : 'Pending'}
                         </p>
                       </div>
@@ -554,10 +563,19 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
         </div>
 
         {/* Right Side: Invoice Detail & Draft Inspector */}
-        <div className="w-full lg:w-2/3 h-full">
+        <div className={`w-full lg:w-2/3 h-full ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
           {selectedInvoice ? (
             <div className="bg-surface-container/70 h-full border border-outline-variant/60 rounded-3xl p-6 sm:p-8 shadow-[0_4px_25px_rgba(0,0,0,0.2)] flex flex-col overflow-hidden">
               
+              {/* Mobile Back Button */}
+              <button
+                type="button"
+                onClick={() => setMobileView('list')}
+                className="lg:hidden flex items-center gap-1.5 text-xs font-bold text-primary mb-4 p-2 px-3 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/20 w-fit transition-colors"
+              >
+                <ArrowLeft size={14} /> Back to Invoices
+              </button>
+
               {/* Header Info */}
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 pb-5 border-b border-outline-variant/60 flex-shrink-0">
                 <div className="flex items-center space-x-3.5">
@@ -573,6 +591,11 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                       <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20 uppercase">
                         {selectedInvoice.type === 'Final' ? '25% Settlement' : '75% Advance'}
                       </span>
+                      {(selectedInvoice.linkedJobNo || selectedInvoice.jobNo) && (
+                        <span className="text-[10px] font-bold font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                          #{selectedInvoice.linkedJobNo || selectedInvoice.jobNo}
+                        </span>
+                      )}
                       {selectedInvoice.status !== 'Paid' && selectedInvoice.dueDate && selectedInvoice.dueDate < todayStr && (
                         <span className="text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-md uppercase">
                           Overdue
@@ -626,7 +649,7 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                 </div>
                 <div className="p-3 bg-surface-container-low rounded-2xl border border-outline-variant/50">
                   <p className="text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">Due Date</p>
-                  <p className={`text-sm font-black font-mono mt-0.5 ${selectedInvoice.status !== 'Paid' && selectedInvoice.dueDate && selectedInvoice.dueDate < todayStr ? 'text-rose-400' : 'text-primary'}`}>
+                  <p className={`text-sm font-black font-mono mt-0.5 ${selectedInvoice.status !== 'Paid' && selectedInvoice.dueDate && selectedInvoice.dueDate < todayStr ? 'text-status-danger-on' : 'text-primary'}`}>
                     {selectedInvoice.dueDate || '—'}
                   </p>
                 </div>
@@ -642,7 +665,10 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                 <div className="text-[10px] text-on-surface-variant font-mono flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-primary" />
                   <span>Reference:</span>
-                  <span className="font-bold text-on-surface">{selectedInvoice.leadId || selectedInvoice.linkedJobNo || 'Direct'}</span>
+                  <span className="font-bold text-on-surface">
+                    {(selectedInvoice.linkedJobNo || selectedInvoice.jobNo) ? `Job #${selectedInvoice.linkedJobNo || selectedInvoice.jobNo}` : ''}
+                    {selectedInvoice.leadId ? ` (Lead: ${selectedInvoice.leadId})` : ((selectedInvoice.linkedJobNo || selectedInvoice.jobNo) ? '' : 'Direct')}
+                  </span>
                 </div>
 
                 <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap">

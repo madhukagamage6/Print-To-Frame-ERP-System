@@ -11,19 +11,19 @@ import { SYSTEM_ROLES } from '../../constants/roles';
 
 // ── Action Definitions with metadata ──────────────────────────────────────────
 const ACTION_DEFS = [
-  { key: 'view',   label: 'View',   icon: Eye,      desc: 'Browse & view data',       badge: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
-  { key: 'create', label: 'Create', icon: Plus,     desc: 'Create new entries',        badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' },
-  { key: 'edit',   label: 'Edit',   icon: Edit2,    desc: 'Update existing records',   badge: 'bg-amber-500/20 text-amber-400 border-amber-500/40' },
-  { key: 'delete', label: 'Delete', icon: Trash2,   desc: 'Permanently remove items',  badge: 'bg-rose-500/20 text-rose-400 border-rose-500/40' },
-  { key: 'export', label: 'Export', icon: Download, desc: 'Export & download CSV data',badge: 'bg-purple-500/20 text-purple-400 border-purple-500/40' },
+  { key: 'view',   label: 'View',   icon: Eye,      desc: 'Browse & view data',       badge: 'bg-status-ready/15 text-status-ready-on border-status-ready/30' },
+  { key: 'create', label: 'Create', icon: Plus,     desc: 'Create new entries',        badge: 'bg-status-success/15 text-status-success-on border-status-success/30' },
+  { key: 'edit',   label: 'Edit',   icon: Edit2,    desc: 'Update existing records',   badge: 'bg-status-warning/15 text-status-warning-on border-status-warning/30' },
+  { key: 'delete', label: 'Delete', icon: Trash2,   desc: 'Permanently remove items',  badge: 'bg-status-danger/15 text-status-danger-on border-status-danger/30' },
+  { key: 'export', label: 'Export', icon: Download, desc: 'Export & download CSV data',badge: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' },
 ];
 
 // ── Standard Presets ────────────────────────────────────────────────────────
 const PRESETS = [
-  { id: 'full', label: 'Full Access', short: 'Full', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25', values: { view: true, create: true, edit: true, delete: true, export: true } },
-  { id: 'write', label: 'Read & Write', short: 'Write', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30 hover:bg-blue-500/25', values: { view: true, create: true, edit: true, delete: false, export: false } },
-  { id: 'view', label: 'View Only', short: 'View', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25', values: { view: true, create: false, edit: false, delete: false, export: false } },
-  { id: 'ops', label: 'Operations', short: 'Ops', color: 'bg-purple-500/15 text-purple-400 border-purple-500/30 hover:bg-purple-500/25', values: { view: true, create: true, edit: true, delete: true, export: false } },
+  { id: 'full', label: 'Full Access', short: 'Full', color: 'bg-status-success/15 text-status-success-on border-status-success/30 hover:bg-status-success/25', values: { view: true, create: true, edit: true, delete: true, export: true } },
+  { id: 'write', label: 'Read & Write', short: 'Write', color: 'bg-status-ready/15 text-status-ready-on border-status-ready/30 hover:bg-status-ready/25', values: { view: true, create: true, edit: true, delete: false, export: false } },
+  { id: 'view', label: 'View Only', short: 'View', color: 'bg-status-warning/15 text-status-warning-on border-status-warning/30 hover:bg-status-warning/25', values: { view: true, create: false, edit: false, delete: false, export: false } },
+  { id: 'ops', label: 'Operations', short: 'Ops', color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/25', values: { view: true, create: true, edit: true, delete: true, export: false } },
   { id: 'none', label: 'No Access', short: 'None', color: 'bg-surface-container-high/50 text-on-surface-variant/40 border-outline-variant/40 hover:text-on-surface-variant', values: { view: false, create: false, edit: false, delete: false, export: false } },
 ];
 

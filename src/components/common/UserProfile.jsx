@@ -6,11 +6,13 @@ import {
   Smartphone, AlertCircle, RefreshCw, ExternalLink,
   Map, MessageSquare, Calculator
 } from 'lucide-react';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { COLLECTIONS } from '../../services/firestoreSync';
 import { toast } from '../../utils/toast';
 import { logActivity } from '../../services/auditLog';
 import { PageHeader, StatusBadge, ImageCropModal } from '../common/ui';
+import { toDateObj } from '../../utils/dateUtils';
 
 const AVATAR_PRESETS = [
   { id: 'craftsman', label: 'Master Framer', bg: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40', icon: Hammer },
@@ -126,6 +128,64 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
       const userDocRef = doc(db, 'users', String(currentUser.identifier).trim().toLowerCase());
       await setDoc(userDocRef, updatedProfile, { merge: true });
 
+      // Cross-Collection Profile Sync (Finding 9)
+      try {
+        if (isPartner) {
+          const partnersCol = collection(db, COLLECTIONS.PARTNERS);
+          const emailQuery = (currentUser.email || currentUser.identifier || '').trim().toLowerCase();
+          const partnerQueries = [];
+          if (emailQuery) {
+            partnerQueries.push(getDocs(query(partnersCol, where('email', '==', emailQuery))));
+          }
+          if (currentUser.partnerId) {
+            partnerQueries.push(getDocs(query(partnersCol, where('partnerId', '==', currentUser.partnerId))));
+          }
+          const results = await Promise.all(partnerQueries);
+          const matchedDocIds = new Set();
+          results.forEach(snap => snap.docs.forEach(d => matchedDocIds.add(d.id)));
+
+          const partnerUpdate = {
+            name: formData.name.trim() || currentUser.name,
+            contactPerson: formData.name.trim() || currentUser.name,
+            photoURL: formData.photoURL || '',
+          };
+          if (formData.contactNumber.trim()) partnerUpdate.phone = formData.contactNumber.trim();
+          if (formData.location.trim()) partnerUpdate.address = formData.location.trim();
+          if (formData.company.trim()) partnerUpdate.company = formData.company.trim();
+
+          for (const docId of matchedDocIds) {
+            await updateDoc(doc(db, COLLECTIONS.PARTNERS, docId), partnerUpdate);
+          }
+        } else if (isCustomer) {
+          const customersCol = collection(db, COLLECTIONS.CUSTOMERS);
+          const emailQuery = (currentUser.email || currentUser.identifier || '').trim().toLowerCase();
+          const custQueries = [];
+          if (emailQuery) {
+            custQueries.push(getDocs(query(customersCol, where('email', '==', emailQuery))));
+          }
+          const nicVal = (currentUser.nic || currentUser.clientNIC || '').trim();
+          if (nicVal) {
+            custQueries.push(getDocs(query(customersCol, where('nic', '==', nicVal))));
+          }
+          const results = await Promise.all(custQueries);
+          const matchedDocIds = new Set();
+          results.forEach(snap => snap.docs.forEach(d => matchedDocIds.add(d.id)));
+
+          const customerUpdate = {
+            name: formData.name.trim() || currentUser.name,
+            photoURL: formData.photoURL || '',
+          };
+          if (formData.contactNumber.trim()) customerUpdate.phone = formData.contactNumber.trim();
+          if (formData.location.trim()) customerUpdate.address = formData.location.trim();
+
+          for (const docId of matchedDocIds) {
+            await updateDoc(doc(db, COLLECTIONS.CUSTOMERS, docId), customerUpdate);
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Cross-collection directory sync notice:', syncErr);
+      }
+
       // Update in-memory user
       if (onUpdateUser) {
         onUpdateUser({
@@ -199,7 +259,7 @@ export default function UserProfile({ currentUser, onUpdateUser, onSignOut, setA
           { label: "Account Role", value: currentUser?.role || "Employee", color: "cyan" },
           { label: "Account Status", value: currentUser?.isApproved ? "Active" : "Pending", color: currentUser?.isApproved ? "emerald" : "warning" },
           { label: "Security Level", value: isAdmin ? "Super Admin" : "Authorized", color: isAdmin ? "amber" : "neutral" },
-          { label: "Member Since", value: currentUser?.createdAt ? new Date(currentUser.createdAt).getFullYear() : "2024", color: "neutral" }
+          { label: "Member Since", value: toDateObj(currentUser?.createdAt)?.getFullYear() || "2024", color: "neutral" }
         ]}
       />
 

@@ -481,14 +481,17 @@ export default function Leads({
       return;
     }
 
-    // Generate a unique ID for the Deal
+    // Generate a unique ID for the Deal and master Job Number
     const dealId = `D-${String(Date.now()).slice(-6)}`;
+    const jobNo = convertedLead.jobNo || `PTF-${String(Date.now()).slice(-4)}`;
     const now = new Date().toISOString();
 
     // Create the new deal record starting in Waiting stage of Deals pipeline
     const newDeal = {
       ...convertedLead,
       id: dealId,
+      jobNo: jobNo,
+      linkedJobNo: jobNo,
       isDeal: true,
       stage: 'Waiting',
       stageEnteredAt: now,
@@ -566,7 +569,6 @@ export default function Leads({
 
     // Create a fabrication project job (Pending status)
     if (setProjects) {
-      const jobNo = `PTF-${String(Date.now()).slice(-4)}`;
       const newJob = {
         jobNo: jobNo,
         clientNIC: convertedLead.nic || `AUTO-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -580,8 +582,14 @@ export default function Leads({
         flexReceived: false,
         value: convertedLead.value || 0,
         totalSqFt: convertedLead.totalSqFt || 0,
+        leadId: convertedLead.id,
+        dealId: dealId,
+        customerName: convertedLead.name || "",
+        customerPhone: convertedLead.phone || "",
+        company: convertedLead.company || "",
       };
       setProjects(prev => [newJob, ...prev]);
+
       try {
         await addDocument(COLLECTIONS.PROJECTS, newJob, jobNo);
       } catch(err) {

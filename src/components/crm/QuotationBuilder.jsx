@@ -5,6 +5,7 @@ import { generateStructuredQuotation } from '../../services/gemini';
 import { addDocument, updateDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import GoogleDrivePickerModal from '../common/GoogleDrivePickerModal';
 import { ModalWrapper } from '../common/ui';
+import { matchesEntity } from '../../utils/entityUtils';
 
 // WhatsApp renders *text* as bold and _text_ as italic client-side — this
 // converts those same markers to HTML purely for the in-app chat-bubble
@@ -20,9 +21,9 @@ function whatsAppMarkupToHtml(text) {
 
 const STATUS_STYLES = {
   Draft: 'text-on-surface-variant bg-surface-container-high border-outline-variant',
-  Sent: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  Accepted: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-  Rejected: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+  Sent: 'text-status-ready-on bg-status-ready/10 border-status-ready/30',
+  Accepted: 'text-status-success-on bg-status-success/10 border-status-success/30',
+  Rejected: 'text-status-danger-on bg-status-danger/10 border-status-danger/30',
   Invoiced: 'text-primary bg-primary/10 border-primary/30',
 };
 
@@ -43,21 +44,16 @@ const lineTotal = (item) => {
 };
 
 export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoice, currentUser }) {
-  // A Lead converted to a Deal gets a brand new id — matching must work from
-  // BOTH sides of that split: from the Deal's own card (originalLeadId points
-  // back to the lead the quote was saved under) and from the ORIGINAL LEAD's
-  // own card (convertedDealId points forward to the deal, needed for
-  // anything created later, under the deal's id, while still viewing the
-  // original lead record).
-  const relatedRecordIds = useMemo(
-    () => [lead.id, lead._firestoreId, lead.originalLeadId, lead.convertedDealId].filter(Boolean),
-    [lead.id, lead._firestoreId, lead.originalLeadId, lead.convertedDealId]
-  );
+  // matchesEntity (src/utils/entityUtils.js) resolves ID fragmentation across
+  // the Lead -> Deal conversion lifecycle from both directions — the Deal's
+  // originalLeadId pointing back, and the Lead's convertedDealId pointing
+  // forward to what it became — so a quote/invoice created on either side of
+  // that split is still found regardless of which record is currently open.
   const leadQuotes = useMemo(() =>
     (allQuotations || [])
-      .filter(q => relatedRecordIds.includes(q.leadId))
+      .filter(q => matchesEntity(q, lead))
       .sort((a, b) => (Number(b.version) || 1) - (Number(a.version) || 1)),
-    [allQuotations, relatedRecordIds]
+    [allQuotations, lead]
   );
 
   const latestQuote = leadQuotes[0] || null;
@@ -228,6 +224,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     onSaveInvoice({
       id: invId,
       leadId: lead.id || lead._firestoreId,
+      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+      jobNo: lead.jobNo || lead.linkedJobNo || '',
       quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: lead.name || 'Direct Customer',
       company: lead.company || '',
@@ -266,6 +264,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     onSaveInvoice({
       id: invId,
       leadId: lead.id || lead._firestoreId,
+      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+      jobNo: lead.jobNo || lead.linkedJobNo || '',
       quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: lead.name || 'Direct Customer',
       company: lead.company || '',
