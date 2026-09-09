@@ -5,6 +5,7 @@ node_modules
 dist
 dist-electron
 *.log
+*.code-workspace
 node-v22.14.0-win-x64/
 *.zip
 
