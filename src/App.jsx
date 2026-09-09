@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
-import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId, deriveReceiptId } from "./services/firestoreSync";
+import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId, deriveReceiptId, createDocumentIfAbsent } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
 import { toDateObj } from "./utils/dateUtils";
 import { UserAvatar } from "./components/common/ui";
@@ -418,8 +418,8 @@ function App() {
         notes: notes || '',
         createdBy: currentUser?.email || currentUser?.identifier || 'unknown',
       };
-      await addDocument(COLLECTIONS.RECEIPTS, cleanReceipt, receiptId);
-      setReceipts(prev => [{ _firestoreId: receiptId, ...cleanReceipt }, ...prev]);
+      await createDocumentIfAbsent(COLLECTIONS.RECEIPTS, receiptId, cleanReceipt);
+      setReceipts(prev => (prev.some(r => (r._firestoreId || r.id) === receiptId) ? prev : [{ _firestoreId: receiptId, ...cleanReceipt }, ...prev]));
       await logActivity(
         currentUser?.email || currentUser?.identifier || 'unknown',
         currentUser?.name || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Unknown'),
@@ -430,6 +430,14 @@ function App() {
       toast.success(`Receipt ${receiptId} generated!`);
       return cleanReceipt;
     } catch (err) {
+      if (err.message === 'ALREADY_EXISTS') {
+        // Two "Generate Receipt" clicks raced (e.g. the card was closed and
+        // reopened before the real-time listener caught up) — the
+        // transaction in createDocumentIfAbsent already refused the second
+        // write, so just surface it and let the listener refresh the UI.
+        toast.error(`A receipt already exists for ${invoiceId}.`);
+        return;
+      }
       console.error("Failed to save receipt to Firestore:", err);
       toast.error("Failed to save receipt to database: " + err.message);
     }

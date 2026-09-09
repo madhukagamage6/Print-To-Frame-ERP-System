@@ -126,6 +126,47 @@ export async function addDocument(collectionName, data, customId) {
   }
 }
 
+// ── Create Document If Absent (collision-safe) ───────────────
+/**
+ * Creates a document at a known custom id ONLY if it doesn't already exist,
+ * checked and written inside a single Firestore transaction. Unlike
+ * addDocument(collectionName, data, customId) — which does a plain setDoc
+ * and would silently overwrite an existing document with the same id —
+ * this is for cases where the id is deterministically derived (e.g. a
+ * receipt id derived from its invoice id) and a second, in-flight call for
+ * the same id must be rejected rather than clobbering the first: two
+ * "Generate Receipt" clicks racing before the caller's own in-memory list
+ * has refreshed (e.g. the card was closed before the real-time listener
+ * caught up, then reopened and clicked again) must not both succeed.
+ * @param {string} collectionName
+ * @param {string} docId
+ * @param {object} data
+ * @throws {Error} with message 'ALREADY_EXISTS' if the document is already present
+ * @returns {Promise<string>} the document id
+ */
+export async function createDocumentIfAbsent(collectionName, docId, data) {
+  const docRef = doc(db, collectionName, docId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(docRef);
+      if (snap.exists()) {
+        throw new Error('ALREADY_EXISTS');
+      }
+      transaction.set(docRef, {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    return docId;
+  } catch (error) {
+    if (error.message !== 'ALREADY_EXISTS') {
+      handleFirestoreError(error, OperationType.CREATE, `${collectionName}/${docId}`);
+    }
+    throw error;
+  }
+}
+
 // ── Update Document ──────────────────────────────────────────
 /**
  * Update fields on an existing document.

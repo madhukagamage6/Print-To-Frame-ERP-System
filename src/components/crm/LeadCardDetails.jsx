@@ -25,6 +25,7 @@ import QuotationBuilder from './QuotationBuilder';
 import { downsampleAudio } from '../../utils/audioProcessing';
 import { toDateObj } from '../../utils/dateUtils';
 import { buildInvoiceHtml, openInvoicePrintWindow } from '../../utils/invoiceTemplate';
+import { buildReceiptHtml } from '../../utils/receiptTemplate';
 
 export default function LeadCardDetails({ 
   lead, 
@@ -729,6 +730,11 @@ export default function LeadCardDetails({
     openInvoicePrintWindow(html);
   };
 
+  const printReceipt = (receipt) => {
+    if (!receipt) return;
+    const html = buildReceiptHtml(receipt);
+    openInvoicePrintWindow(html);
+  };
 
   const handleConvertClick = () => {
     const missing = [];
@@ -1550,10 +1556,15 @@ export default function LeadCardDetails({
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     {advanceInvoice?.status === 'Paid' && (
                       advanceReceipt ? (
-                        <div className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1">
-                          <Receipt size={11} className="flex-shrink-0" />
+                        <button
+                          type="button"
+                          onClick={() => printReceipt(advanceReceipt)}
+                          title="Print this receipt"
+                          className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1 cursor-pointer transition-colors"
+                        >
+                          <Printer size={11} className="flex-shrink-0" />
                           <span>{advanceReceipt.id}</span>
-                        </div>
+                        </button>
                       ) : receiptFormFor === 'advance' ? (
                         <div className="col-span-1 p-2 bg-surface-container-high/60 border border-outline rounded-xl space-y-1.5">
                           <input
@@ -1596,10 +1607,15 @@ export default function LeadCardDetails({
                     )}
                     {finalInvoice?.status === 'Paid' && (
                       finalReceipt ? (
-                        <div className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1">
-                          <Receipt size={11} className="flex-shrink-0" />
+                        <button
+                          type="button"
+                          onClick={() => printReceipt(finalReceipt)}
+                          title="Print this receipt"
+                          className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 hover:bg-emerald-400/10 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1 cursor-pointer transition-colors"
+                        >
+                          <Printer size={11} className="flex-shrink-0" />
                           <span>{finalReceipt.id}</span>
-                        </div>
+                        </button>
                       ) : receiptFormFor === 'final' ? (
                         <div className="col-span-1 p-2 bg-surface-container-high/60 border border-outline rounded-xl space-y-1.5">
                           <input

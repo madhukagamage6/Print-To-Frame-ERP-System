@@ -10,6 +10,7 @@ import DeleteModal from '../common/DeleteModal';
 import { PageHeader, FilterBar, StatusBadge, ModalWrapper } from '../common/ui';
 import { exportToCsv } from '../../utils/csvExport';
 import { buildInvoiceHtml, openInvoicePrintWindow } from '../../utils/invoiceTemplate';
+import { buildReceiptHtml } from '../../utils/receiptTemplate';
 
 export default function Invoices({ invoices = [], setInvoices, onMarkPaid, currentUser, receipts = [], onGenerateReceipt }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -469,10 +470,14 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                     const existingReceipt = receipts.find(r => r.invoiceId === (selectedInvoice.id || selectedInvoice._firestoreId));
                     if (existingReceipt) {
                       return (
-                        <div className="flex-1 sm:flex-initial bg-surface-container-high text-emerald-400 border border-emerald-400/30 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-2">
-                          <Receipt size={15} />
-                          <span>Receipt Generated — {existingReceipt.id}</span>
-                        </div>
+                        <button
+                          onClick={() => openInvoicePrintWindow(buildReceiptHtml(existingReceipt))}
+                          title="Print this receipt"
+                          className="flex-1 sm:flex-initial bg-surface-container-high text-emerald-400 hover:bg-emerald-400/10 border border-emerald-400/30 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all active:scale-95"
+                        >
+                          <Printer size={15} />
+                          <span>Print Receipt — {existingReceipt.id}</span>
+                        </button>
                       );
                     }
                     return (
