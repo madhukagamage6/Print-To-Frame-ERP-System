@@ -71,9 +71,12 @@ export default function LogisticsCardDetails({
   }, [projects, job.linkedJobNo]);
 
   // Compute COD and linked invoices
-  const { hasUnpaid, totalBalanceDue, matchedInvoices } = useMemo(() => {
-    return calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer);
-  }, [invoices, job.linkedJobNo, job.customer]);
+  const { hasUnpaid, totalBalanceDue, matchedInvoices, advanceInvoice, finalInvoice, primaryInvoice } = useMemo(() => {
+    return calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer, {
+      leadId: job.leadId || linkedProject?.leadId,
+      invoiceId: job.invoiceId
+    });
+  }, [invoices, job.linkedJobNo, job.customer, job.leadId, job.invoiceId, linkedProject?.leadId]);
 
   const [formData, setFormData] = useState({
     subType: job.subType || '',
@@ -141,103 +144,288 @@ export default function LogisticsCardDetails({
     toast.success(`Logistics Task ${job.id} updated!`);
   };
 
-  // View & Print Assigned Job Invoice
-  const printOfficialInvoice = () => {
-    const inv = matchedInvoices.length > 0 ? matchedInvoices[0] : null;
-    const invNo = inv?.id || inv?._firestoreId || `INV-${job.id}`;
-    const invDate = inv?.date || new Date().toISOString().split('T')[0];
-    const totalAmount = inv ? Number(inv.amount || inv.totalValue || 0) : (totalBalanceDue || 0);
-    const isPaid = inv ? inv.status === 'Paid' : !hasUnpaid;
+  // View & Print Assigned Job Invoice from Database
+  const printOfficialInvoice = (targetInvoice = null) => {
+    const inv = targetInvoice || primaryInvoice || (matchedInvoices.length > 0 ? matchedInvoices[0] : null);
+
+    if (!inv) {
+      toast.error(`No invoice allocated in database for job #${job.linkedJobNo || job.id} yet.`, {
+        description: 'Please allocate or create the advance / final settlement invoice in Quotations, Deals, or Fabrication first.'
+      });
+      return;
+    }
+
+    const invoiceNo = inv.id || inv._firestoreId;
+    if (!invoiceNo) {
+      toast.error('Allocated invoice does not have a valid invoice reference.');
+      return;
+    }
+
+    const isFinal = inv.type === 'Final';
+    const isPaid = inv.status === 'Paid';
+    const dateStr = inv.date || new Date().toISOString().split('T')[0];
+    const invoiceAmount = Number(inv.amount || 0);
+    const totalContractValue = Number(inv.totalValue) || (isFinal ? (invoiceAmount > 0 ? invoiceAmount / 0.25 : 0) : (invoiceAmount > 0 ? invoiceAmount / 0.75 : 0));
+    const advanceAmount = isFinal ? totalContractValue * 0.75 : invoiceAmount;
+    const balanceAmount = isFinal ? invoiceAmount : totalContractValue * 0.25;
+    const badgeText = isFinal ? "25% Final Settlement Invoice" : "75% Advance Invoice";
+    const lineItemTitle = isFinal ? "Final Settlement Payment (25%)" : "Custom Framing Advance Payment (75%)";
+
+    const clientHeader = inv.company 
+      ? `<strong>${inv.company}</strong><br/><span style="color:#64748b;">Attn: ${inv.customerName || formData.customer || 'Valued Client'}</span>`
+      : `<strong>${inv.customerName || formData.customer || 'Valued Client'}</strong>`;
 
     const html = `
       <html>
         <head>
-          <title>${invNo} — Print To Frame</title>
+          <title>${invoiceNo} — Print To Frame</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
-            body { font-family: 'Outfit', sans-serif; color: #0f172a; padding: 40px; margin: 0; background: #ffffff; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #00daf3; padding-bottom: 20px; }
-            .brand { font-size: 24px; font-weight: 800; color: #0f172a; }
-            .badge { display: inline-block; padding: 6px 14px; border-radius: 8px; font-weight: 800; font-size: 11px; text-transform: uppercase; }
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+            body {
+              font-family: 'Outfit', sans-serif;
+              color: #0f172a;
+              margin: 0;
+              padding: 40px;
+              background-color: #ffffff;
+            }
+            .header-container {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #00daf3;
+              padding-bottom: 24px;
+              margin-bottom: 28px;
+            }
+            .logo {
+              font-size: 22px;
+              font-weight: 800;
+              color: #0b0e14;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            .meta-box {
+              text-align: right;
+            }
+            .meta-box p {
+              margin: 3px 0;
+              font-size: 13px;
+              color: #475569;
+            }
+            .meta-box .invoice-id {
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 18px;
+              font-weight: 700;
+              color: #0b0e14;
+            }
+            .badge {
+              display: inline-block;
+              padding: 4px 12px;
+              border-radius: 6px;
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              margin-bottom: 6px;
+            }
             .badge-unpaid { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
             .badge-paid { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
-            .section { margin-top: 24px; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
-            .mono { font-family: 'JetBrains Mono', monospace; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
-            th { background: #f1f5f9; font-weight: 800; font-size: 11px; text-transform: uppercase; color: #475569; }
-            .total-row { font-size: 16px; font-weight: 800; border-top: 2px solid #0f172a; }
-            .bank-box { margin-top: 25px; padding: 15px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 12px; }
-            @media print { body { padding: 15px; } }
+            .bill-to-section {
+              margin-bottom: 28px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-left: 4px solid #00daf3;
+              border-radius: 8px;
+              padding: 16px 20px;
+            }
+            .section-title {
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.15em;
+              color: #64748b;
+              margin-top: 0;
+              margin-bottom: 6px;
+            }
+            .bill-to-content {
+              font-size: 14px;
+              line-height: 1.5;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 28px;
+            }
+            th {
+              background-color: #0b0e14;
+              padding: 12px 16px;
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.08em;
+              color: #ffffff;
+              text-align: left;
+            }
+            td {
+              padding: 12px 16px;
+              border-bottom: 1px solid #e2e8f0;
+              font-size: 13px;
+              line-height: 1.5;
+            }
+            .mono-text {
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .totals-container {
+              display: flex;
+              justify-content: flex-end;
+              margin-bottom: 30px;
+            }
+            .totals-table {
+              width: 380px;
+              margin-bottom: 0;
+            }
+            .totals-table td {
+              padding: 6px 16px;
+              border: none;
+            }
+            .totals-table tr.grand-total td {
+              border-top: 2px solid #00daf3;
+              font-size: 15px;
+              font-weight: 800;
+              color: #0b0e14;
+              padding-top: 12px;
+            }
+            .bank-box {
+              margin-top: 20px;
+              padding: 14px 18px;
+              border-radius: 8px;
+              background: #eff6ff;
+              border: 1px solid #bfdbfe;
+              font-size: 12px;
+              color: #1e3a8a;
+              line-height: 1.6;
+            }
+            .signatures {
+              margin-top: 35px;
+              display: flex;
+              justify-content: space-between;
+              font-size: 11px;
+              color: #475569;
+              border-top: 1px dashed #cbd5e1;
+              padding-top: 20px;
+            }
+            @media print {
+              body { padding: 15px; }
+              .no-print { display: none; }
+            }
           </style>
         </head>
         <body>
-          <div class="header">
+          <div class="header-container">
             <div>
-              <div class="brand">PRINT TO FRAME</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Custom Framing & Fabrication Specialists • Kadawatha Hub</div>
-              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Hotline: +94 77 123 4567 • Email: orders@printtoframe.lk</div>
+              <div class="logo">
+                <img src="${window.location.origin}/logo-light.png" alt="Print To Frame" style="height: 30px; width: auto; margin-right: 8px;" />
+                Print To Frame Pvt Ltd
+              </div>
+              <p style="margin: 6px 0 0 0; font-size: 12px; color: #64748b;">
+                Premium Steel Framing & Gallery Canvas Wraps<br/>
+                Kadawatha Hub, Sri Lanka • Hotline: +94 71 141 9027 • Email: orders@printtoframe.lk
+              </p>
             </div>
-            <div style="text-align: right;">
+            <div class="meta-box">
               <span class="badge ${isPaid ? 'badge-paid' : 'badge-unpaid'}">
-                ${isPaid ? 'PAID & SETTLED' : 'PAYMENT DUE / COD'}
+                ${badgeText} • ${isPaid ? 'PAID & SETTLED' : 'PAYMENT DUE / COD'}
               </span>
-              <div class="mono" style="font-size: 18px; font-weight: 800; margin-top: 8px;">${invNo}</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Date: ${invDate}</div>
-              ${job.linkedJobNo ? `<div class="mono" style="font-size: 11px; color: #0284c7; margin-top: 2px;">Job Ref: ${job.linkedJobNo}</div>` : ''}
+              <div class="invoice-id" style="margin-top: 6px;">${invoiceNo}</div>
+              <p>Date: ${dateStr}${inv.dueDate ? ` | Due: ${inv.dueDate}` : ''}</p>
+              ${(inv.linkedJobNo || job.linkedJobNo) ? `<p class="mono-text" style="font-size: 11px; color: #0284c7; font-weight: 700; margin-top: 2px;">Job Ref: #${inv.linkedJobNo || job.linkedJobNo}</p>` : ''}
             </div>
           </div>
 
-          <div class="section">
-            <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 6px;">Billed To / Delivery Client</div>
-            <div style="font-size: 16px; font-weight: 700;">${stripEmojis(formData.customer) || 'Valued Client'}</div>
-            <div style="font-size: 13px; color: #475569; margin-top: 4px;">Destination: ${stripEmojis(formData.location) || 'Kadawatha Hub'}</div>
-            ${formData.customerPhone ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Phone: ${formData.customerPhone}</div>` : ''}
+          <div class="bill-to-section">
+            <h4 class="section-title">Invoiced Client & Delivery Destination</h4>
+            <div class="bill-to-content">${clientHeader}</div>
+            <div style="font-size: 12px; color: #475569; margin-top: 4px;">
+              <strong>Delivery Location:</strong> ${stripEmojis(formData.location) || 'Colombo Hub'}
+              ${formData.customerPhone ? `<br/><strong>Contact Phone:</strong> ${formData.customerPhone}` : ''}
+            </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th>Description</th>
-                <th>Order Ref</th>
-                <th style="text-align: right;">Amount (LKR)</th>
+                <th>Description / Order Specification</th>
+                <th style="text-align: center; width: 80px;">Qty</th>
+                <th style="text-align: right; width: 160px;">Amount (LKR)</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <strong>${stripEmojis(formData.subType) || 'Custom Steel Frame'}</strong><br/>
-                  <span style="font-size: 11px; color: #64748b;">${stripEmojis(formData.manifest) || 'Specialist fabrication with gallery finish'}</span>
-                </td>
-                <td class="mono">${job.linkedJobNo || job.id}</td>
-                <td style="text-align: right;" class="mono"><strong>${totalAmount.toLocaleString()}</strong></td>
-              </tr>
-              <tr class="total-row">
-                <td colspan="2">TOTAL AMOUNT DUE</td>
-                <td style="text-align: right;" class="mono">LKR ${totalAmount.toLocaleString()}</td>
-              </tr>
+              ${inv.lineItems && inv.lineItems.length > 0 ? inv.lineItems.map(item => `
+                <tr>
+                  <td>
+                    <strong>${item.description || 'Fabrication Item'}</strong>
+                    ${item.unit ? `<span style="font-size:11px; color:#64748b; margin-left:6px;">(${item.unit})</span>` : ''}
+                  </td>
+                  <td style="text-align: center;" class="mono-text">${item.qty || 1}</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">${(Number(item.qty || 1) * Number(item.unitPrice || 0) * (isFinal ? 0.25 : 0.75)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td>
+                    <strong>${lineItemTitle}</strong><br/>
+                    <span style="font-size: 12px; color: #64748b; margin-top: 4px; display: block;">
+                      ${inv.aiDraft ? inv.aiDraft.replace(/#\s*Invoice\n+/i, '').replace(/- /g, '• ') : (stripEmojis(formData.manifest) || 'Custom steel framing fabrication')}
+                    </span>
+                  </td>
+                  <td style="text-align: center;" class="mono-text">1</td>
+                  <td style="text-align: right; font-weight: 600;" class="mono-text">${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                </tr>
+              `}
             </tbody>
           </table>
 
+          <div class="totals-container">
+            <table class="totals-table">
+              <tr>
+                <td style="color:#64748b;">Contract Value:</td>
+                <td style="text-align: right;" class="mono-text">LKR ${totalContractValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td style="color:#64748b;">${isFinal ? 'Advance Paid (75%):' : 'Balance Due on Delivery:'}</td>
+                <td style="text-align: right;" class="mono-text">LKR ${isFinal ? advanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr class="grand-total">
+                <td>${isFinal ? 'Final Settlement Due:' : 'Advance Amount Due:'}</td>
+                <td style="text-align: right;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+              </tr>
+            </table>
+          </div>
+
           <div class="bank-box">
-            <strong>Payment Method:</strong> Cash on Delivery (COD), Company Cheque, or Direct Bank Transfer.<br/>
-            <strong>Commercial Bank:</strong> Print To Frame (Pvt) Ltd • Account No: 1000-2345-6789 • Kadawatha Branch
+            <strong>Payment Terms & Bank Details:</strong><br/>
+            • <strong>Cash on Delivery (COD):</strong> Collect exact amount upon handover.<br/>
+            • <strong>Bank Transfer:</strong> Nation Trust Bank - Head Office (500) | A/C: 205001028941 | Name: Madhuka Gamage | Swift: N T B E L K E L K<br/>
+            • <strong>Commercial Bank:</strong> Print To Frame (Pvt) Ltd | A/C: 1000-2345-6789 | Kadawatha Branch
           </div>
 
-          <div style="margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; color: #475569;">
-            <div>________________________________<br/>Authorized Dispatcher</div>
-            <div>________________________________<br/>Customer Confirmation & Stamp</div>
+          <div class="signatures">
+            <div>________________________________<br/>Authorized Dispatcher / Fleet Driver</div>
+            <div>________________________________<br/>Client Confirmation & Stamp</div>
           </div>
 
-          <script>window.onload = function() { window.print(); }</script>
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
         </body>
       </html>
     `;
 
-    const printWin = window.open('', '_blank', 'height=800,width=850');
-    printWin.document.write(html);
-    printWin.document.close();
+    const printWin = window.open('', '_blank', 'height=850,width=850');
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+    }
   };
+
 
   // Printable Delivery Waybill / Gate Pass
   const printWaybill = () => {
@@ -416,25 +604,94 @@ export default function LogisticsCardDetails({
                     <span className="text-base sm:text-lg font-black font-mono block">
                       {hasUnpaid 
                         ? `COLLECT LKR ${totalBalanceDue.toLocaleString()}` 
-                        : "ALL INVOICES SETTLED — NO CASH TO COLLECT"}
+                        : (matchedInvoices.length > 0 ? "ALL INVOICES SETTLED — NO CASH TO COLLECT" : "NO INVOICE ALLOCATED IN DATABASE")}
                     </span>
-                    {matchedInvoices.length > 0 && (
+                    {matchedInvoices.length > 0 ? (
                       <span className="text-xs opacity-80 block mt-0.5">
-                        Matched {matchedInvoices.length} billing document(s) for this job
+                        Matched {matchedInvoices.length} allocated database invoice(s) for this job
+                      </span>
+                    ) : (
+                      <span className="text-xs opacity-80 block mt-0.5 text-status-warning-on">
+                        No billing document generated in DB yet for #{job.linkedJobNo || job.id}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={printOfficialInvoice}
-                  className="px-4 py-2.5 bg-surface-container-high border border-outline-variant rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container-highest transition-all flex items-center justify-center space-x-2 shrink-0 min-h-[44px] shadow-sm"
-                >
-                  <Receipt size={14} className="text-primary" />
-                  <span>View / Print Invoice</span>
-                </button>
+                {primaryInvoice ? (
+                  <button
+                    type="button"
+                    onClick={() => printOfficialInvoice(primaryInvoice)}
+                    className="px-4 py-2.5 bg-surface-container-high border border-outline-variant rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container-highest transition-all flex items-center justify-center space-x-2 shrink-0 min-h-[44px] shadow-sm"
+                    title={`Print allocated invoice ${primaryInvoice.id}`}
+                  >
+                    <Receipt size={14} className="text-primary" />
+                    <span>Print Invoice ({primaryInvoice.id})</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => printOfficialInvoice(null)}
+                    className="px-4 py-2.5 bg-surface-container-high/60 border border-outline-variant/60 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container-highest transition-all flex items-center justify-center space-x-2 shrink-0 min-h-[44px]"
+                    title="No invoice allocated in database"
+                  >
+                    <Receipt size={14} className="opacity-50" />
+                    <span>No Invoice Allocated</span>
+                  </button>
+                )}
               </div>
+
+              {/* Allocated Invoices List from Database */}
+              {matchedInvoices.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-outline-variant/40 space-y-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
+                    <span>Allocated Database Invoices ({matchedInvoices.length})</span>
+                    <span className="font-mono text-[9px] opacity-75">Linked Job #{job.linkedJobNo || job.id}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {matchedInvoices.map(inv => {
+                      const isInvPaid = inv.status === 'Paid';
+                      const isInvFinal = inv.type === 'Final';
+                      const invAmount = Number(inv.amount || inv.totalValue || 0);
+                      return (
+                        <div 
+                          key={inv.id || inv._firestoreId}
+                          className="p-3 bg-surface-container rounded-xl border border-outline-variant/60 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                              <span className="font-mono font-bold text-on-surface text-[11px]">{inv.id}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                isInvFinal ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" : "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                              }`}>
+                                {isInvFinal ? '25% Final' : '75% Advance'}
+                              </span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                                isInvPaid ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              }`}>
+                                {isInvPaid ? 'Paid' : 'Unpaid'}
+                              </span>
+                            </div>
+                            <div className="font-mono text-[11px] text-on-surface font-semibold">
+                              LKR {invAmount.toLocaleString()}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => printOfficialInvoice(inv)}
+                            className="px-2.5 py-1.5 bg-surface-container-high hover:bg-surface-variant text-primary border border-outline-variant rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors shrink-0"
+                            title={`Print invoice ${inv.id}`}
+                          >
+                            <Printer size={12} />
+                            <span>Print</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </DetailFieldGroup>
 
@@ -672,11 +929,11 @@ export default function LogisticsCardDetails({
             </button>
             <button
               type="button"
-              onClick={printOfficialInvoice}
+              onClick={() => printOfficialInvoice(primaryInvoice)}
               className="px-4 py-2.5 bg-surface-container-high border border-outline-variant rounded-xl text-on-surface font-bold text-xs hover:bg-surface-variant transition-all flex items-center space-x-1.5 active:scale-95 min-h-[44px]"
             >
               <Receipt size={14} className="text-secondary" />
-              <span>Print Invoice</span>
+              <span>{primaryInvoice ? `Print Invoice (${primaryInvoice.id})` : 'Print Invoice'}</span>
             </button>
           </div>
         }

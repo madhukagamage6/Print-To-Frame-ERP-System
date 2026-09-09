@@ -222,6 +222,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     onSaveInvoice({
       id: invId,
       leadId: lead.id || lead._firestoreId,
+      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+      jobNo: lead.jobNo || lead.linkedJobNo || '',
       quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: lead.name || 'Direct Customer',
       company: lead.company || '',
@@ -260,6 +262,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
     onSaveInvoice({
       id: invId,
       leadId: lead.id || lead._firestoreId,
+      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+      jobNo: lead.jobNo || lead.linkedJobNo || '',
       quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
       customerName: lead.name || 'Direct Customer',
       company: lead.company || '',

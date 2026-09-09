@@ -93,7 +93,10 @@ function LogisticsColumn({
     >
       {items.map((job) => {
         // Calculate COD for card badge
-        const { hasUnpaid, totalBalanceDue } = calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer);
+        const { hasUnpaid, totalBalanceDue, primaryInvoice } = calculateCODFromInvoices(invoices, job.linkedJobNo, job.customer, {
+          leadId: job.leadId,
+          invoiceId: job.invoiceId
+        });
 
         const badges = (
           <>
@@ -112,16 +115,22 @@ function LogisticsColumn({
                 </span>
               )}
 
-              {/* COD / Payment Status Badge */}
+              {/* COD / Payment Status Badge with matching DB Invoice Code */}
               {hasUnpaid ? (
                 <span className="text-[9px] font-bold text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 flex items-center">
                   <DollarSign size={9} className="mr-0.5 text-amber-400" />
                   COD: LKR {totalBalanceDue.toLocaleString()}
+                  {primaryInvoice?.id && (
+                    <span className="ml-1 opacity-80 font-mono">({primaryInvoice.id})</span>
+                  )}
                 </span>
               ) : (
                 <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 flex items-center">
                   <CheckCircle2 size={9} className="mr-0.5 text-emerald-400" />
                   Settled
+                  {primaryInvoice?.id && (
+                    <span className="ml-1 opacity-80 font-mono">({primaryInvoice.id})</span>
+                  )}
                 </span>
               )}
 

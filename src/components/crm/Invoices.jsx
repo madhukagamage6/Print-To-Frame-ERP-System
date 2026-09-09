@@ -512,6 +512,11 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                         <span className="text-[9px] font-bold text-primary/90 bg-primary/10 px-1.5 py-0.5 rounded uppercase">
                           {inv.type === 'Final' ? '25% Final' : '75% Advance'}
                         </span>
+                        {(inv.linkedJobNo || inv.jobNo) && (
+                          <span className="text-[9px] font-bold font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                            #{inv.linkedJobNo || inv.jobNo}
+                          </span>
+                        )}
                         {isOverdue && (
                           <span className="text-[9px] font-bold text-status-danger-on bg-status-danger/15 border border-status-danger/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase">
                             <Clock size={9} /> Overdue
@@ -586,6 +591,11 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                       <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20 uppercase">
                         {selectedInvoice.type === 'Final' ? '25% Settlement' : '75% Advance'}
                       </span>
+                      {(selectedInvoice.linkedJobNo || selectedInvoice.jobNo) && (
+                        <span className="text-[10px] font-bold font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                          #{selectedInvoice.linkedJobNo || selectedInvoice.jobNo}
+                        </span>
+                      )}
                       {selectedInvoice.status !== 'Paid' && selectedInvoice.dueDate && selectedInvoice.dueDate < todayStr && (
                         <span className="text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-md uppercase">
                           Overdue
@@ -655,7 +665,10 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                 <div className="text-[10px] text-on-surface-variant font-mono flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-primary" />
                   <span>Reference:</span>
-                  <span className="font-bold text-on-surface">{selectedInvoice.leadId || selectedInvoice.linkedJobNo || 'Direct'}</span>
+                  <span className="font-bold text-on-surface">
+                    {(selectedInvoice.linkedJobNo || selectedInvoice.jobNo) ? `Job #${selectedInvoice.linkedJobNo || selectedInvoice.jobNo}` : ''}
+                    {selectedInvoice.leadId ? ` (Lead: ${selectedInvoice.leadId})` : ((selectedInvoice.linkedJobNo || selectedInvoice.jobNo) ? '' : 'Direct')}
+                  </span>
                 </div>
 
                 <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap">

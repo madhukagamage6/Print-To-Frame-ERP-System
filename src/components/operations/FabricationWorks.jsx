@@ -687,8 +687,11 @@ export default function FabricationWorks({
       onSaveInvoice({
         id: finalInvId,
         linkedJobNo: targetJob.jobNo,
+        jobNo: targetJob.jobNo,
+        leadId: targetJob.leadId || '',
         customerName: custName,
         company: cust?.businessName || "",
+        phone: targetJob.phone || cust?.phone || "",
         date: now.split("T")[0],
         amount: (Number(targetJob.value) || 0) * 0.25,
         totalValue: Number(targetJob.value) || 0,

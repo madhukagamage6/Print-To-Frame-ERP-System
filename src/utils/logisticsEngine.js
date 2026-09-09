@@ -100,29 +100,72 @@ export function formatDispatchMessage({
 }
 
 /**
- * Search and compute outstanding balance from invoices linked to a job or customer.
+ * Search and compute outstanding balance and find allocated invoices linked to a job or customer.
+ * Strictly prioritizes linkedJobNo matching so invoices allocated to other jobs are never mixed in.
+ *
  * @param {Array} invoices Full list of ERP invoices
  * @param {string} linkedJobNo Associated fabrication or deal jobNo (e.g. PTF-1234)
  * @param {string} customerName Customer or business name
- * @returns {{ hasUnpaid: boolean, totalBalanceDue: number, matchedInvoices: Array }}
+ * @param {Object} [options] Additional context (e.g. leadId, invoiceId)
+ * @returns {{ 
+ *   hasUnpaid: boolean, 
+ *   totalBalanceDue: number, 
+ *   matchedInvoices: Array, 
+ *   advanceInvoice: Object|null, 
+ *   finalInvoice: Object|null, 
+ *   primaryInvoice: Object|null 
+ * }}
  */
-export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', customerName = '') {
+export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', customerName = '', options = {}) {
   if (!Array.isArray(invoices) || invoices.length === 0) {
-    return { hasUnpaid: false, totalBalanceDue: 0, matchedInvoices: [] };
+    return { 
+      hasUnpaid: false, 
+      totalBalanceDue: 0, 
+      matchedInvoices: [],
+      advanceInvoice: null,
+      finalInvoice: null,
+      primaryInvoice: null
+    };
   }
 
   const cleanJobNo = String(linkedJobNo || '').trim().toLowerCase();
   const cleanCustName = String(customerName || '').trim().toLowerCase();
+  const cleanLeadId = String(options.leadId || '').trim().toLowerCase();
+  const cleanInvoiceId = String(options.invoiceId || '').trim().toLowerCase();
 
-  const matched = invoices.filter(inv => {
-    const invJobNo = String(inv.linkedJobNo || inv.jobNo || inv.leadId || '').trim().toLowerCase();
-    const invCust = String(inv.customerName || inv.company || '').trim().toLowerCase();
+  // 1. First priority: Direct match on linkedJobNo, jobNo, leadId, or invoiceId
+  let matched = [];
+  if (cleanJobNo || cleanLeadId || cleanInvoiceId) {
+    matched = invoices.filter(inv => {
+      const invId = String(inv.id || inv._firestoreId || '').trim().toLowerCase();
+      const invJobNo = String(inv.linkedJobNo || inv.jobNo || '').trim().toLowerCase();
+      const invLeadId = String(inv.leadId || '').trim().toLowerCase();
 
-    const jobMatch = cleanJobNo && invJobNo && (invJobNo.includes(cleanJobNo) || cleanJobNo.includes(invJobNo));
-    const custMatch = cleanCustName && invCust && (invCust.includes(cleanCustName) || cleanCustName.includes(invCust));
+      if (cleanInvoiceId && invId === cleanInvoiceId) return true;
+      if (cleanJobNo && invJobNo && (invJobNo === cleanJobNo || invJobNo.includes(cleanJobNo) || cleanJobNo.includes(invJobNo))) return true;
+      if (cleanLeadId && invLeadId && (invLeadId === cleanLeadId || invLeadId.includes(cleanLeadId) || cleanLeadId.includes(invLeadId))) return true;
+      return false;
+    });
+  }
 
-    return jobMatch || custMatch;
-  });
+  // 2. Second priority: If no direct job match found, match by customer name
+  // But do NOT include invoices that explicitly belong to a different jobNo!
+  if (matched.length === 0 && cleanCustName) {
+    matched = invoices.filter(inv => {
+      const invCust = String(inv.customerName || inv.company || '').trim().toLowerCase();
+      const invJobNo = String(inv.linkedJobNo || inv.jobNo || '').trim();
+
+      // If this invoice explicitly has another linkedJobNo, do not steal it
+      if (cleanJobNo && invJobNo && invJobNo.toLowerCase() !== cleanJobNo) {
+        return false;
+      }
+      return invCust && (invCust === cleanCustName || invCust.includes(cleanCustName) || cleanCustName.includes(invCust));
+    });
+  }
+
+  // Identify Advance vs Final invoices
+  const advanceInvoice = matched.find(inv => inv.type === 'Advance' || String(inv.id || '').includes('INV-ADV')) || null;
+  const finalInvoice = matched.find(inv => inv.type === 'Final' || String(inv.id || '').includes('INV-FIN')) || null;
 
   const unpaidInvoices = matched.filter(inv => {
     const status = String(inv.status || 'Unpaid').toLowerCase();
@@ -134,9 +177,22 @@ export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', custom
     return sum + val;
   }, 0);
 
+  // Primary invoice for logistics delivery:
+  // Prefer unpaid final settlement invoice (since drivers collect remaining balance at delivery),
+  // then any unpaid invoice, then final invoice, then advance invoice, then first matched invoice.
+  const primaryInvoice = unpaidInvoices.find(inv => inv.type === 'Final') 
+    || unpaidInvoices[0] 
+    || finalInvoice 
+    || advanceInvoice 
+    || (matched.length > 0 ? matched[0] : null);
+
   return {
     hasUnpaid: totalBalanceDue > 0,
     totalBalanceDue,
-    matchedInvoices: matched
+    matchedInvoices: matched,
+    advanceInvoice,
+    finalInvoice,
+    primaryInvoice
   };
 }
+
