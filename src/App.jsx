@@ -413,7 +413,7 @@ function App() {
       // one carries the post-conversion deal id (or vice versa) — match
       // siblings against either, same convention used for quotations/
       // logistics jobs tied to a converted deal.
-      const relatedIds = new Set([leadId, targetLead?.originalLeadId].filter(Boolean));
+      const relatedIds = new Set([leadId, targetLead?.originalLeadId, targetLead?.convertedDealId].filter(Boolean));
       const siblingInvoices = invoices.filter(inv => relatedIds.has(inv.leadId));
       const advanceInvoice = siblingInvoices.find(inv => inv.type !== 'Final');
       const finalInvoice = siblingInvoices.find(inv => inv.type === 'Final');

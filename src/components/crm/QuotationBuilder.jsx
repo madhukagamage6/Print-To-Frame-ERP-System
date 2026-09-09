@@ -43,14 +43,21 @@ const lineTotal = (item) => {
 };
 
 export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoice, currentUser }) {
-  // A Lead converted to a Deal gets a brand new id — its quote was saved
-  // under the ORIGINAL lead's id, so it must still be matched via
-  // originalLeadId or it looks like no quote was ever made for this deal.
+  // A Lead converted to a Deal gets a brand new id — matching must work from
+  // BOTH sides of that split: from the Deal's own card (originalLeadId points
+  // back to the lead the quote was saved under) and from the ORIGINAL LEAD's
+  // own card (convertedDealId points forward to the deal, needed for
+  // anything created later, under the deal's id, while still viewing the
+  // original lead record).
+  const relatedRecordIds = useMemo(
+    () => [lead.id, lead._firestoreId, lead.originalLeadId, lead.convertedDealId].filter(Boolean),
+    [lead.id, lead._firestoreId, lead.originalLeadId, lead.convertedDealId]
+  );
   const leadQuotes = useMemo(() =>
     (allQuotations || [])
-      .filter(q => q.leadId === lead.id || q.leadId === lead._firestoreId || q.leadId === lead.originalLeadId)
+      .filter(q => relatedRecordIds.includes(q.leadId))
       .sort((a, b) => (Number(b.version) || 1) - (Number(a.version) || 1)),
-    [allQuotations, lead.id, lead._firestoreId, lead.originalLeadId]
+    [allQuotations, relatedRecordIds]
   );
 
   const latestQuote = leadQuotes[0] || null;

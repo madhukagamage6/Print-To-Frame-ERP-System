@@ -155,16 +155,23 @@ export default function LeadCardDetails({
   // Advance and Final are tracked as two independent invoice documents, each
   // with its own live Firestore status — never a single cached boolean on the
   // lead, which is exactly what let marking one accidentally mark both.
-  // A Lead converted to a Deal gets a brand new id, but an invoice created
-  // before conversion still carries the ORIGINAL lead's id — match either,
-  // same convention used for this card's own logistics-job lookup below.
+  // A Lead converted to a Deal gets a brand new id — matching must work from
+  // BOTH sides of that split: from the Deal's own card (which knows the
+  // original lead via originalLeadId), and from the ORIGINAL LEAD's own card
+  // (which only knows the deal it became via convertedDealId — the Final
+  // invoice is typically created later, under the Deal's id, so viewing from
+  // the Lead's side needs this forward pointer or it never finds it).
+  const relatedRecordIds = useMemo(
+    () => [lead.id, lead.originalLeadId, lead.convertedDealId].filter(Boolean),
+    [lead.id, lead.originalLeadId, lead.convertedDealId]
+  );
   const advanceInvoice = useMemo(
-    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type !== 'Final'),
-    [invoices, lead.id, lead.originalLeadId]
+    () => invoices.find(inv => relatedRecordIds.includes(inv.leadId) && inv.type !== 'Final'),
+    [invoices, relatedRecordIds]
   );
   const finalInvoice = useMemo(
-    () => invoices.find(inv => (inv.leadId === lead.id || inv.leadId === lead.originalLeadId) && inv.type === 'Final'),
-    [invoices, lead.id, lead.originalLeadId]
+    () => invoices.find(inv => relatedRecordIds.includes(inv.leadId) && inv.type === 'Final'),
+    [invoices, relatedRecordIds]
   );
 
   // UI state
@@ -742,7 +749,7 @@ export default function LeadCardDetails({
       day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    const activeQuote = (allQuotations || []).find(q => q.leadId === lead.id || q.leadId === lead._firestoreId || q.leadId === lead.originalLeadId);
+    const activeQuote = (allQuotations || []).find(q => relatedRecordIds.includes(q.leadId) || q.leadId === lead._firestoreId);
     const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
     const html = `
@@ -1806,7 +1813,7 @@ export default function LeadCardDetails({
 
               <div className="p-5 bg-surface-container/50 rounded-2xl border border-outline space-y-3">
                 {(() => {
-                  const dealJob = (logisticsJobs || []).find(j => j.dealId === lead.id || j.leadId === lead.id || j.leadId === lead.originalLeadId);
+                  const dealJob = (logisticsJobs || []).find(j => j.dealId === lead.id || relatedRecordIds.includes(j.leadId));
                   if (dealJob) {
                     return (
                       <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant space-y-2">
