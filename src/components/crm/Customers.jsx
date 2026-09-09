@@ -83,12 +83,14 @@ export default function Customers({ customers = [], setCustomers, users = [], se
     onClientPrefillConsumedRef.current = onClientPrefillConsumed;
   }, [onClientPrefillConsumed]);
 
-  // Tracks that the record about to be created here completes a User Management
-  // approval, so handleCreateProfile knows to send the activation email once the
-  // real customer record exists. Business Client requests only ever come from
-  // self-registration (no separate public-application path the way partners
-  // have), so there's never a password to relay — just a confirmation.
-  const [pendingClientApprovalEmail, setPendingClientApprovalEmail] = useState(false);
+  // Carries prefillClient's tempPassword (present when App.jsx's approvePending
+  // just created a brand-new Firebase Auth account for this Business Client —
+  // e.g. a partner_application-style admin-side approval, not self-registration)
+  // through to handleCreateProfile's success, mirroring Partners.jsx's
+  // pendingApprovalEmail. A self-registered approval passes no tempPassword
+  // (the person already knows the password they set when they signed up), so
+  // it gets client_activation_confirmed instead of a credential relay.
+  const [pendingClientApprovalEmail, setPendingClientApprovalEmail] = useState(null);
 
   useEffect(() => {
     if (!prefillClient) return;
@@ -100,14 +102,14 @@ export default function Customers({ customers = [], setCustomers, users = [], se
       businessName: prefillClient.businessName || prev.businessName,
       type: 'Business',
     }));
-    setPendingClientApprovalEmail(true);
+    setPendingClientApprovalEmail({ tempPassword: prefillClient.tempPassword || null });
     setShowCreateModal(true);
     onClientPrefillConsumedRef.current?.();
   }, [prefillClient]);
 
   const closeCreateModal = () => {
     setShowCreateModal(false);
-    setPendingClientApprovalEmail(false);
+    setPendingClientApprovalEmail(null);
   };
 
   // AI WhatsApp draft state
@@ -214,8 +216,8 @@ export default function Customers({ customers = [], setCustomers, users = [], se
     setCustomers(prev => [...prev, newCustomer]);
     setSelectedCustomer(newCustomer);
     setShowCreateModal(false);
-    const wasApproval = pendingClientApprovalEmail;
-    setPendingClientApprovalEmail(false);
+    const approvalEmail = pendingClientApprovalEmail;
+    setPendingClientApprovalEmail(null);
     setNewProfile({
       nic: '',
       name: '',
@@ -234,17 +236,24 @@ export default function Customers({ customers = [], setCustomers, users = [], se
       toast.error("Failed to sync customer profile to DB");
     }
 
-    // This completed a User Management approval — the person already has a
-    // login (set during self-registration), so this is a confirmation, not a
-    // credential relay.
-    if (wasApproval && newCustomer.email) {
+    // This completed a User Management approval — a password-application
+    // approval relays the temp password it just created (client_approval); a
+    // self-registered approval already has one, so it gets a lighter
+    // activation confirmation instead (client_activation_confirmed).
+    if (approvalEmail && newCustomer.email) {
+      const { tempPassword } = approvalEmail;
       try {
-        await sendTemplatedEmail(newCustomer.email, 'client_activation_confirmed', {
-          recipientName: newCustomer.name,
-          companyName: newCustomer.businessName || newCustomer.name,
-          loginEmail: newCustomer.email,
-          senderName: currentUser?.name,
-        });
+        await sendTemplatedEmail(
+          newCustomer.email,
+          tempPassword ? 'client_approval' : 'client_activation_confirmed',
+          {
+            recipientName: newCustomer.name,
+            companyName: newCustomer.businessName || newCustomer.name,
+            loginEmail: newCustomer.email,
+            tempPassword: tempPassword || undefined,
+            senderName: currentUser?.name,
+          }
+        );
       } catch (mailErr) {
         toast.error(`${newCustomer.name} is active, but the confirmation email failed to send: ${mailErr.message}`);
       }
