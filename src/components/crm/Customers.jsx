@@ -252,23 +252,37 @@ export default function Customers({ customers = [], setCustomers, users = [], se
   };
 
   const getCustomerStats = (customer) => {
-    if (!dataStore) return { deals: [], projects: [], invoices: [] };
+    if (!dataStore || !customer) return { deals: [], projects: [], invoices: [] };
     
-    // Match by email, phone, or name
-    const matches = (dataStore.leads || []).filter(l => 
-      (l.email && l.email === customer.email) ||
-      (l.phone && l.phone === customer.phone) ||
-      (l.name && l.name === customer.name)
-    );
+    const custNic = customer.nic ? String(customer.nic).trim().toLowerCase() : null;
+    const custEmail = customer.email ? String(customer.email).trim().toLowerCase() : null;
+    const custPhone = customer.phone ? String(customer.phone).replace(/\D/g, '') : null;
+    const custName = customer.name ? String(customer.name).trim().toLowerCase() : null;
+    const custId = customer.id || customer._firestoreId;
 
-    const invoices = (dataStore.invoices || []).filter(inv => 
-      inv.customerName === customer.name || 
-      (inv.leadId && matches.some(m => m.id === inv.leadId))
-    );
+    // Match leads/deals: prioritize primary customerId or NIC, then normalized email/phone, finally name
+    const matches = (dataStore.leads || []).filter(l => {
+      if (custId && (l.customerId === custId || l.clientNIC === customer.nic)) return true;
+      if (custNic && l.clientNIC && String(l.clientNIC).trim().toLowerCase() === custNic) return true;
+      if (custEmail && l.email && String(l.email).trim().toLowerCase() === custEmail) return true;
+      if (custPhone && l.phone && String(l.phone).replace(/\D/g, '') === custPhone) return true;
+      return !!(custName && l.name && String(l.name).trim().toLowerCase() === custName);
+    });
 
-    const projects = (dataStore.projects || []).filter(proj => 
-      proj.clientNIC === customer.nic || proj.customerName === customer.name
-    );
+    const matchIds = new Set(matches.flatMap(m => [m.id, m._firestoreId, m.originalLeadId].filter(Boolean)));
+
+    const invoices = (dataStore.invoices || []).filter(inv => {
+      if (custId && inv.customerId === custId) return true;
+      if (custNic && inv.clientNIC && String(inv.clientNIC).trim().toLowerCase() === custNic) return true;
+      if (inv.leadId && matchIds.has(inv.leadId)) return true;
+      return !!(custName && inv.customerName && String(inv.customerName).trim().toLowerCase() === custName);
+    });
+
+    const projects = (dataStore.projects || []).filter(proj => {
+      if (custNic && proj.clientNIC && String(proj.clientNIC).trim().toLowerCase() === custNic) return true;
+      if (custId && (proj.customerId === custId || matchIds.has(proj.leadId))) return true;
+      return !!(custName && proj.customerName && String(proj.customerName).trim().toLowerCase() === custName);
+    });
 
     return { deals: matches, projects, invoices };
   };

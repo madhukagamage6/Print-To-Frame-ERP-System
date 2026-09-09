@@ -113,7 +113,7 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
                !(m.readBy || []).map(r => String(r).toLowerCase()).includes(myId)
       ).length;
 
-      counts[u.identifier] = unread;
+      counts[uId] = unread;
     });
 
     const total = Object.values(counts).reduce((acc, curr) => acc + curr, 0);
@@ -183,6 +183,32 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
           }).catch(e => console.warn("Read sync error:", e));
         }
       }
+    }
+  }, [currentUser, messages]);
+
+  // 5b. Action: Mark All Messages as Read across all conversations
+  const markAllAsRead = useCallback(async () => {
+    if (!currentUser?.identifier) return;
+
+    const myId = String(currentUser.identifier).trim().toLowerCase();
+    const unreadMsgs = messages.filter((m) => {
+      const fromId = String(m.fromId || '').trim().toLowerCase();
+      const readBy = (m.readBy || []).map(r => String(r).toLowerCase());
+      return fromId !== myId && !readBy.includes(myId);
+    });
+
+    if (unreadMsgs.length) {
+      await Promise.all(
+        unreadMsgs.map((m) => {
+          const readBy = m.readBy || [];
+          if (!readBy.map(r => String(r).toLowerCase()).includes(myId)) {
+            return updateDocument(COLLECTIONS.MESSAGES, m._firestoreId, {
+              readBy: [...readBy, myId]
+            }).catch(e => console.warn("Read sync error:", e));
+          }
+          return Promise.resolve();
+        })
+      );
     }
   }, [currentUser, messages]);
 
@@ -280,7 +306,7 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
       if (!uId || uId === myId) return;
 
       const conv = map.get(uId);
-      const unreadCount = unreadCounts[u.identifier] || 0;
+      const unreadCount = unreadCounts[uId] || (u.identifier ? unreadCounts[u.identifier] : 0) || 0;
 
       result.push({
         user: resolveUserProfile(u),
@@ -319,6 +345,7 @@ export function MessagingProvider({ children, currentUser, users = [], activeTab
     setActiveChatContactId,
     sendDirectMessage,
     markChatAsRead,
+    markAllAsRead,
     resolveUserProfile,
     getChannelId
   };
