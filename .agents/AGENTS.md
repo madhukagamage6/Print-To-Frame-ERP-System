@@ -17,3 +17,9 @@ Whenever the user asks to "save this as an artifact" or generate a document/repo
    - Set `RequestFeedback: true` on the artifact if applicable.
    - NEVER auto-accept or self-approve the plan.
    - DO NOT begin writing code, modifying files, or executing the plan until the user reviews, comments, and explicitly gives approval to proceed.
+
+## Clarifications & Ambiguity Resolution
+1. Whenever there is uncertainty, ambiguity, or missing detail in requirements or technical direction:
+   - Ask the question directly in the conversation chat.
+   - STOP and wait for the user's response and clarification instead of guessing or making assumptions.
+   - Getting clarity upfront is always preferred over making assumptions and having to revise code after implementation.
