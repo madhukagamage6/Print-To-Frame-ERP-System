@@ -394,6 +394,11 @@ export default function FabricationWorks({
 
   // QA Inspection Gate Modal state
   const [inspectingJob, setInspectingJob] = useState(null);
+  // Closes the double-click race window on "Approve & Complete" — the modal
+  // only closes (via setInspectingJob(null)) after the async invoice
+  // generation/save completes, so a rapid second click before that could
+  // otherwise trigger a second Final invoice for the same job.
+  const [isApprovingQA, setIsApprovingQA] = useState(false);
   const [qaForm, setQaForm] = useState({
     squareness: true,
     welds: true,
@@ -650,7 +655,7 @@ export default function FabricationWorks({
 
   // Confirm QA Passed & Mark as Completed
   const handlePassQA = async () => {
-    if (!inspectingJob) return;
+    if (!inspectingJob || isApprovingQA) return;
     // The 4-point checklist must actually gate this action — previously
     // every checkbox was recorded but never checked, so a job could be
     // approved and invoiced with every point left unchecked (representing
@@ -660,6 +665,15 @@ export default function FabricationWorks({
       toast.error('All 4 QA checks must pass before approving — use "Fail & Send to Revision" instead.');
       return;
     }
+    setIsApprovingQA(true);
+    try {
+      await handlePassQAInner();
+    } finally {
+      setIsApprovingQA(false);
+    }
+  };
+
+  const handlePassQAInner = async () => {
     const targetJob = inspectingJob;
     const now = new Date().toISOString();
 
@@ -1169,12 +1183,12 @@ export default function FabricationWorks({
               </button>
               <button
                 onClick={handlePassQA}
-                disabled={!qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension}
+                disabled={isApprovingQA || !qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension}
                 title={!qaForm.squareness || !qaForm.welds || !qaForm.coating || !qaForm.canvasTension ? 'All 4 QA checks must pass first' : undefined}
                 className="px-5 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs hover:bg-emerald-600 transition-all flex items-center shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 disabled:active:scale-100"
               >
                 <Check size={14} className="mr-1.5" />
-                <span>Approve & Complete</span>
+                <span>{isApprovingQA ? 'Approving...' : 'Approve & Complete'}</span>
               </button>
             </div>
           </div>

@@ -24,6 +24,7 @@ import {
 import QuotationBuilder from './QuotationBuilder';
 import { downsampleAudio } from '../../utils/audioProcessing';
 import { toDateObj } from '../../utils/dateUtils';
+import { buildInvoiceHtml, openInvoicePrintWindow } from '../../utils/invoiceTemplate';
 
 export default function LeadCardDetails({ 
   lead, 
@@ -654,27 +655,18 @@ export default function LeadCardDetails({
   // Redesigned Print Invoice PDF Styling (Clean, Premium, Modern, Matching Both 75% Advance and 25% Final)
   const printInvoice = (invoiceType = 'Advance') => {
     const isFinal = invoiceType === 'Final';
-    const clientHeader = formData.company 
-      ? `<strong>${formData.company}</strong><br/><span style="color:#64748b;">Attn: ${formData.name}</span>`
-      : `<strong>${formData.name}</strong>`;
-    
-    // Print the REAL persisted invoice number whenever one exists, so the
-    // number on the PDF always matches the one saved in Firestore and shown
-    // in the Invoices module — never mint an independent one here. Only
+
+    // Print the REAL persisted invoice's own fields whenever one exists, so
+    // the document always matches what's saved in Firestore and shown in the
+    // Invoices module — never mint independent numbers/amounts here. Only
     // before the invoice has actually been converted/saved (via the
-    // Line-Item Quote panel) does this fall back to an explicit draft
-    // placeholder, which is never mistaken for a real invoice number.
+    // Line-Item Quote panel) does this fall back to computed draft values,
+    // clearly marked with a DRAFT- id that's never mistaken for a real one.
     const realInvoice = isFinal ? finalInvoice : advanceInvoice;
-    const invoiceNo = realInvoice?.id || realInvoice?._firestoreId || `DRAFT-${isFinal ? 'FINAL' : 'ADVANCE'}`;
     const totalVal = Number(formData.value || lead.value || 0);
     const advanceAmount = totalVal * 0.75;
     const balanceAmount = totalVal * 0.25;
     const invoiceAmount = isFinal ? balanceAmount : advanceAmount;
-    const badgeText = isFinal ? '25% Final Settlement Invoice' : '75% Advance Invoice';
-    const lineItemTitle = isFinal ? 'Custom Framing Final Settlement Payment (25%)' : 'Custom Framing Advance Payment (75%)';
-    const dateStr = new Date().toLocaleDateString('en-GB', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
 
     // Same "pick the newest, not just the first array match" fix as
     // advanceInvoice/finalInvoice above — multiple quote versions can exist
@@ -685,241 +677,23 @@ export default function LeadCardDetails({
       : matchingQuotes.reduce((latest, q) => (Number(q.version) || 0) > (Number(latest.version) || 0) ? q : latest);
     const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
-    const html = `
-      <html>
-        <head>
-          <title>${invoiceNo}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-            body {
-              font-family: 'Outfit', sans-serif;
-              color: #1e293b;
-              margin: 0;
-              padding: 40px;
-              background-color: #ffffff;
-            }
-            .header-container {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              border-bottom: 2px solid #f1f5f9;
-              padding-bottom: 30px;
-              margin-bottom: 40px;
-            }
-            .logo {
-              font-size: 24px;
-              font-weight: 800;
-              color: #4f46e5;
-              letter-spacing: -0.05em;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-            .logo-icon {
-              background-color: #4f46e5;
-              color: white;
-              width: 32px;
-              height: 32px;
-              border-radius: 8px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 16px;
-            }
-            .meta-box {
-              text-align: right;
-            }
-            .meta-box p {
-              margin: 4px 0;
-              font-size: 13px;
-              color: #64748b;
-            }
-            .meta-box .invoice-id {
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 18px;
-              font-weight: 700;
-              color: #0f172a;
-            }
-            .bill-to-section {
-              margin-bottom: 40px;
-              background: #f8fafc;
-              border: 1px solid #e2e8f0;
-              border-radius: 16px;
-              padding: 24px;
-            }
-            .section-title {
-              font-size: 10px;
-              font-weight: 800;
-              text-transform: uppercase;
-              letter-spacing: 0.1em;
-              color: #94a3b8;
-              margin-top: 0;
-              margin-bottom: 12px;
-            }
-            .bill-to-content {
-              font-size: 15px;
-              line-height: 1.6;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 40px;
-            }
-            th {
-              background-color: #f1f5f9;
-              padding: 16px;
-              font-size: 11px;
-              font-weight: 800;
-              text-transform: uppercase;
-              letter-spacing: 0.05em;
-              color: #475569;
-              text-align: left;
-            }
-            td {
-              padding: 16px;
-              border-bottom: 1px solid #f1f5f9;
-              font-size: 14px;
-              line-height: 1.5;
-            }
-            .mono-text {
-              font-family: 'JetBrains Mono', monospace;
-            }
-            .totals-container {
-              display: flex;
-              justify-content: flex-end;
-              margin-bottom: 60px;
-            }
-            .totals-table {
-              width: 380px;
-              margin-bottom: 0;
-            }
-            .totals-table td {
-              padding: 10px 16px;
-              border: none;
-            }
-            .totals-table tr.grand-total td {
-              border-top: 2px solid #4f46e5;
-              font-size: 18px;
-              font-weight: 800;
-              color: #4f46e5;
-              padding-top: 16px;
-            }
-            .payment-terms {
-              border-top: 1px solid #f1f5f9;
-              padding-top: 30px;
-              font-size: 11px;
-              color: #64748b;
-              text-align: center;
-              line-height: 1.6;
-            }
-            .badge {
-              display: inline-block;
-              padding: 4px 10px;
-              background-color: ${isFinal ? '#ecfdf5' : '#e0f2fe'};
-              color: ${isFinal ? '#047857' : '#0369a1'};
-              border: 1px solid ${isFinal ? '#a7f3d0' : '#bae6fd'};
-              border-radius: 99px;
-              font-size: 10px;
-              font-weight: 800;
-              text-transform: uppercase;
-              margin-top: 8px;
-            }
-            @media print {
-              body { padding: 0; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header-container">
-            <div>
-              <div class="logo">
-                <img src="${window.location.origin}/logo-light.png" alt="Print To Frame" style="height: 32px; width: auto; margin-right: 8px;" />
-                Print To Frame Pvt Ltd
-              </div>
-              <p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b;">Premium Steel Framing & Gallery Canvas Wraps<br/>Kadawatha, Sri Lanka | +94 71 141 9027</p>
-            </div>
-            <div class="meta-box">
-              <span class="badge">${badgeText}</span>
-              <p class="invoice-id" style="margin-top:12px;">${invoiceNo}</p>
-              <p>Date: ${dateStr}</p>
-            </div>
-          </div>
+    const invoiceForPrint = {
+      id: realInvoice?.id || realInvoice?._firestoreId || `DRAFT-${isFinal ? 'FINAL' : 'ADVANCE'}`,
+      type: isFinal ? 'Final' : 'Advance',
+      status: realInvoice?.status,
+      date: realInvoice?.date,
+      dueDate: realInvoice?.dueDate,
+      amount: realInvoice?.amount ?? invoiceAmount,
+      totalValue: realInvoice?.totalValue ?? totalVal,
+      lineItems: lineItemsToPrint || realInvoice?.lineItems,
+      aiDraft: realInvoice?.aiDraft || `Scope: ${formData.jobScope || 'Custom metal framing work'}`,
+      customerName: formData.name,
+      company: formData.company,
+      linkedJobNo: realInvoice?.linkedJobNo,
+    };
 
-          <div class="bill-to-section">
-            <h4 class="section-title">Invoiced Client</h4>
-            <div class="bill-to-content">${clientHeader}</div>
-            ${formData.phone ? `<p style="margin: 6px 0 0 0; font-size:13px; color:#64748b;">Phone: ${formData.phone}</p>` : ''}
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Description / Specification</th>
-                <th style="text-align: center; width: 80px;">Qty</th>
-                <th style="text-align: right; width: 150px;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${lineItemsToPrint ? lineItemsToPrint.map(item => `
-                <tr>
-                  <td>
-                    <strong>${item.description || 'Fabrication Item'}</strong>
-                    ${item.unit ? `<span style="font-size:11px; color:#64748b; margin-left:6px;">(${item.unit})</span>` : ''}
-                  </td>
-                  <td style="text-align: center;" class="mono-text">${item.qty || 1}</td>
-                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${(Number(item.qty || 1) * Number(item.unitPrice || 0) * (isFinal ? 0.25 : 0.75)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-              `).join('') : `
-                <tr>
-                  <td>
-                    <strong>${lineItemTitle}</strong><br/>
-                    <span style="font-size: 12px; color: #64748b; margin-top:4px; display:block;">
-                      Scope: ${formData.jobScope || 'Custom metal framing work'}
-                    </span>
-                  </td>
-                  <td style="text-align: center;" class="mono-text">1</td>
-                  <td style="text-align: right; font-weight: 600;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                </tr>
-              `}
-            </tbody>
-          </table>
-
-          <div class="totals-container">
-            <table class="totals-table">
-              <tr>
-                <td style="color:#64748b;">Contract Value:</td>
-                <td style="text-align: right;" class="mono-text">LKR ${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              </tr>
-              <tr>
-                <td style="color:#64748b;">${isFinal ? 'Advance Paid (75%):' : 'Balance Due on Delivery:'}</td>
-                <td style="text-align: right;" class="mono-text">LKR ${isFinal ? advanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              </tr>
-              <tr class="grand-total">
-                <td>${isFinal ? 'Final Settlement Due:' : 'Advance Amount Due:'}</td>
-                <td style="text-align: right;" class="mono-text">LKR ${invoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              </tr>
-            </table>
-          </div>
-
-          <div class="payment-terms">
-            <p><strong>Bank Details for Transfer:</strong> Nation Trust Bank - Head Office (500) | A/C: 205001028941 | Madhuka Gamage | Swift: N T B E L K E L K</p>
-            <p>Please email payment confirmation slips to billing@print2frame.xyz quoting the Invoice Reference above.</p>
-            <p style="margin-top: 15px; font-size: 9px; color: #94a3b8;">Generated automatically on behalf of Print To Frame ERP. Subject to terms of contract.</p>
-          </div>
-
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWin = window.open('', '', 'height=800,width=800');
-    if (printWin) {
-      printWin.document.write(html);
-      printWin.document.close();
-    }
+    const html = buildInvoiceHtml({ invoice: invoiceForPrint, customerPhone: formData.phone });
+    openInvoicePrintWindow(html);
   };
 
 
@@ -1597,6 +1371,8 @@ export default function LeadCardDetails({
                   allQuotations={allQuotations}
                   onSaveInvoice={onSaveInvoice}
                   currentUser={currentUser}
+                  advanceInvoice={advanceInvoice}
+                  finalInvoice={finalInvoice}
                 />
               </div>
             </div>

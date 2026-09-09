@@ -34,7 +34,8 @@ function DealColumn({
   isAdmin,
   onDelete,
   onCreateDelivery,
-  logisticsJobs = []
+  logisticsJobs = [],
+  movingDealIds
 }) {
   return (
     <KanbanColumn
@@ -156,7 +157,7 @@ function DealColumn({
             metrics={metrics}
             onClick={() => onCardClick(deal)}
             onMoveBack={() => onMoveBack(deal.id)}
-            onMoveForward={() => onMove(deal.id)}
+            onMoveForward={movingDealIds.has(deal.id) ? null : () => onMove(deal.id)}
             onDelete={() => onDelete(deal.id)}
             isAdmin={isAdmin}
             isFirstStage={isFirstStage}
@@ -255,7 +256,27 @@ export default function Deals({
     { key: 'agentId', label: 'Agent', render: (d) => d.agentId || '—' },
   ], []);
 
+  // Closes the double-click race window: a rapid second click on the same
+  // card before the first async move (which awaits an atomic invoice-id
+  // generation) resolves and re-renders could otherwise independently
+  // trigger a second Final-invoice creation for the same deal.
+  const [movingDealIds, setMovingDealIds] = useState(() => new Set());
+
   const handleMoveForward = async (dealId) => {
+    if (movingDealIds.has(dealId)) return;
+    setMovingDealIds(prev => new Set(prev).add(dealId));
+    try {
+      await handleMoveForwardInner(dealId);
+    } finally {
+      setMovingDealIds(prev => {
+        const next = new Set(prev);
+        next.delete(dealId);
+        return next;
+      });
+    }
+  };
+
+  const handleMoveForwardInner = async (dealId) => {
     const dealBeingMoved = leads.find(d => d.id === dealId);
     if (!dealBeingMoved) return;
     const currentIndex = DEALS_STAGES.indexOf(dealBeingMoved.stage);
@@ -590,6 +611,7 @@ export default function Deals({
                 onDelete={setDeleteDealId}
                 onCreateDelivery={handleCreateDeliveryJob}
                 logisticsJobs={logisticsJobs}
+                movingDealIds={movingDealIds}
               />
             ))}
           </div>

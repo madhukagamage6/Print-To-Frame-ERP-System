@@ -43,7 +43,7 @@ const lineTotal = (item) => {
   return afterDiscount * (1 + Number(item.taxPct || 0) / 100);
 };
 
-export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoice, currentUser }) {
+export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoice, currentUser, advanceInvoice = null, finalInvoice = null }) {
   // matchesEntity (src/utils/entityUtils.js) resolves ID fragmentation across
   // the Lead -> Deal conversion lifecycle from both directions — the Deal's
   // originalLeadId pointing back, and the Lead's convertedDealId pointing
@@ -70,6 +70,8 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
   const [showDriveModal, setShowDriveModal] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(false);
+  const [isConvertingAdvance, setIsConvertingAdvance] = useState(false);
+  const [isConvertingFinal, setIsConvertingFinal] = useState(false);
 
   // Sync if latestQuote changes and not dirty
   React.useEffect(() => {
@@ -205,6 +207,13 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
   };
 
   const handleConvertToAdvanceInvoice = async () => {
+    // Hard stop against duplicate generation — nothing else in this flow
+    // ever blocked repeated clicks, which is exactly what produced multiple
+    // Advance invoices (INV-ADV-0006, 0007, 0008...) for the same lead.
+    // Once one exists, this button renders as a static confirmation instead
+    // (see the JSX below) so this guard is a defensive backstop, not the
+    // only protection — but it also covers the in-flight double-click case.
+    if (advanceInvoice || isConvertingAdvance) return;
     if (status !== 'Accepted') {
       toast.error('Mark quotation as Accepted before converting to invoice.');
       return;
@@ -213,38 +222,44 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       toast.error('Invoice save handler unavailable.');
       return;
     }
-    let invId;
+    setIsConvertingAdvance(true);
     try {
-      invId = await generateInvoiceId('Advance');
-    } catch (err) {
-      toast.error('Failed to generate an invoice number: ' + err.message);
-      return;
+      let invId;
+      try {
+        invId = await generateInvoiceId('Advance');
+      } catch (err) {
+        toast.error('Failed to generate an invoice number: ' + err.message);
+        return;
+      }
+      const invoiceDate = new Date().toISOString().split('T')[0];
+      onSaveInvoice({
+        id: invId,
+        leadId: lead.id || lead._firestoreId,
+        linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+        jobNo: lead.jobNo || lead.linkedJobNo || '',
+        quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
+        customerName: lead.name || 'Direct Customer',
+        company: lead.company || '',
+        phone: lead.phone || '',
+        date: invoiceDate,
+        amount: advanceDue,
+        totalValue: grandTotal,
+        advancePaid: 0,
+        balanceDue: balanceDue,
+        type: 'Advance',
+        status: 'Unpaid',
+        aiDraft: lead.jobScope || 'Custom steel framing 75% advance invoice',
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+        lineItems: lineItems.map(({ id, ...rest }) => rest),
+      });
+      toast.success('75% Advance invoice generated & linked!');
+    } finally {
+      setIsConvertingAdvance(false);
     }
-    const invoiceDate = new Date().toISOString().split('T')[0];
-    onSaveInvoice({
-      id: invId,
-      leadId: lead.id || lead._firestoreId,
-      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
-      jobNo: lead.jobNo || lead.linkedJobNo || '',
-      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
-      customerName: lead.name || 'Direct Customer',
-      company: lead.company || '',
-      phone: lead.phone || '',
-      date: invoiceDate,
-      amount: advanceDue,
-      totalValue: grandTotal,
-      advancePaid: 0,
-      balanceDue: balanceDue,
-      type: 'Advance',
-      status: 'Unpaid',
-      aiDraft: lead.jobScope || 'Custom steel framing 75% advance invoice',
-      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      lineItems: lineItems.map(({ id, ...rest }) => rest),
-    });
-    toast.success('75% Advance invoice generated & linked!');
   };
 
   const handleConvertToFinalInvoice = async () => {
+    if (finalInvoice || isConvertingFinal) return;
     if (status !== 'Accepted') {
       toast.error('Mark quotation as Accepted before generating final invoice.');
       return;
@@ -253,35 +268,40 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
       toast.error('Invoice save handler unavailable.');
       return;
     }
-    let invId;
+    setIsConvertingFinal(true);
     try {
-      invId = await generateInvoiceId('Final');
-    } catch (err) {
-      toast.error('Failed to generate an invoice number: ' + err.message);
-      return;
+      let invId;
+      try {
+        invId = await generateInvoiceId('Final');
+      } catch (err) {
+        toast.error('Failed to generate an invoice number: ' + err.message);
+        return;
+      }
+      const invoiceDate = new Date().toISOString().split('T')[0];
+      onSaveInvoice({
+        id: invId,
+        leadId: lead.id || lead._firestoreId,
+        linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
+        jobNo: lead.jobNo || lead.linkedJobNo || '',
+        quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
+        customerName: lead.name || 'Direct Customer',
+        company: lead.company || '',
+        phone: lead.phone || '',
+        date: invoiceDate,
+        amount: balanceDue,
+        totalValue: grandTotal,
+        advancePaid: advanceDue,
+        balanceDue: balanceDue,
+        type: 'Final',
+        status: 'Unpaid',
+        aiDraft: lead.jobScope || 'Custom steel framing 25% final settlement invoice',
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+        lineItems: lineItems.map(({ id, ...rest }) => rest),
+      });
+      toast.success('25% Final Settlement invoice generated & linked!');
+    } finally {
+      setIsConvertingFinal(false);
     }
-    const invoiceDate = new Date().toISOString().split('T')[0];
-    onSaveInvoice({
-      id: invId,
-      leadId: lead.id || lead._firestoreId,
-      linkedJobNo: lead.jobNo || lead.linkedJobNo || '',
-      jobNo: lead.jobNo || lead.linkedJobNo || '',
-      quotationId: activeQuote?._firestoreId || activeQuote?.id || '',
-      customerName: lead.name || 'Direct Customer',
-      company: lead.company || '',
-      phone: lead.phone || '',
-      date: invoiceDate,
-      amount: balanceDue,
-      totalValue: grandTotal,
-      advancePaid: advanceDue,
-      balanceDue: balanceDue,
-      type: 'Final',
-      status: 'Unpaid',
-      aiDraft: lead.jobScope || 'Custom steel framing 25% final settlement invoice',
-      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-      lineItems: lineItems.map(({ id, ...rest }) => rest),
-    });
-    toast.success('25% Final Settlement invoice generated & linked!');
   };
 
   // Plain-text quotation summary for sharing over WhatsApp/SMS — deliberately
@@ -586,20 +606,37 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
 
         {status === 'Accepted' && !isEditing && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleConvertToAdvanceInvoice}
-              className="w-full py-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99]"
-            >
-              <ChevronRight size={13} /> 75% Advance Invoice
-            </button>
-            <button
-              type="button"
-              onClick={handleConvertToFinalInvoice}
-              className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99]"
-            >
-              <ChevronRight size={13} /> 25% Final Settlement
-            </button>
+            {/* Once generated, this becomes a static confirmation, never a
+                repeatable action — viewing/printing the real invoice already
+                happens via the Payment Status panel elsewhere in this card. */}
+            {advanceInvoice ? (
+              <div className="w-full py-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5">
+                <Check size={13} /> Advance Invoice Generated — {advanceInvoice.id || advanceInvoice._firestoreId}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConvertToAdvanceInvoice}
+                disabled={isConvertingAdvance}
+                className="w-full py-2.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-wait"
+              >
+                <ChevronRight size={13} /> {isConvertingAdvance ? 'Generating...' : '75% Advance Invoice'}
+              </button>
+            )}
+            {finalInvoice ? (
+              <div className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5">
+                <Check size={13} /> Final Settlement Generated — {finalInvoice.id || finalInvoice._firestoreId}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConvertToFinalInvoice}
+                disabled={isConvertingFinal}
+                className="w-full py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-wait"
+              >
+                <ChevronRight size={13} /> {isConvertingFinal ? 'Generating...' : '25% Final Settlement'}
+              </button>
+            )}
           </div>
         )}
 
