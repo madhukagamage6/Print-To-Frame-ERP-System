@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
-  Search, FileText, Check, DollarSign, Calendar, Printer, Edit2, 
-  Trash2, X, ChevronRight, AlertCircle, Building2, User, Layers, Download, MessageSquare, Clock, ArrowLeft 
+  Search, FileText, Check, DollarSign, Calendar, Printer, Edit2,
+  Trash2, X, ChevronRight, AlertCircle, Building2, User, Layers, Download, MessageSquare, Clock, ArrowLeft, Receipt
 } from 'lucide-react';
 import { updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
 import { toast } from '../../utils/toast';
@@ -11,12 +11,15 @@ import { PageHeader, FilterBar, StatusBadge, ModalWrapper } from '../common/ui';
 import { exportToCsv } from '../../utils/csvExport';
 import { buildInvoiceHtml, openInvoicePrintWindow } from '../../utils/invoiceTemplate';
 
-export default function Invoices({ invoices = [], setInvoices, onMarkPaid, currentUser }) {
+export default function Invoices({ invoices = [], setInvoices, onMarkPaid, currentUser, receipts = [], onGenerateReceipt }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [mobileView, setMobileView] = useState('list');
   const [deleteId, setDeleteId] = useState(null);
+  const [showReceiptForm, setShowReceiptForm] = useState(false);
+  const [receiptFormData, setReceiptFormData] = useState({ amountReceived: 0, paymentMethod: 'Cash', date: new Date().toISOString().split('T')[0] });
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
@@ -462,8 +465,89 @@ export default function Invoices({ invoices = [], setInvoices, onMarkPaid, curre
                       <span>Mark as Paid</span>
                     </button>
                   )}
+                  {selectedInvoice.status === 'Paid' && (() => {
+                    const existingReceipt = receipts.find(r => r.invoiceId === (selectedInvoice.id || selectedInvoice._firestoreId));
+                    if (existingReceipt) {
+                      return (
+                        <div className="flex-1 sm:flex-initial bg-surface-container-high text-emerald-400 border border-emerald-400/30 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-2">
+                          <Receipt size={15} />
+                          <span>Receipt Generated — {existingReceipt.id}</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <button
+                        onClick={() => {
+                          setReceiptFormData({ amountReceived: Number(selectedInvoice.amount) || 0, paymentMethod: 'Cash', date: new Date().toISOString().split('T')[0] });
+                          setShowReceiptForm(true);
+                        }}
+                        className="flex-1 sm:flex-initial bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all active:scale-95"
+                      >
+                        <Receipt size={15} />
+                        <span>Generate Receipt</span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
+
+              {selectedInvoice.status === 'Paid' && showReceiptForm && !receipts.find(r => r.invoiceId === (selectedInvoice.id || selectedInvoice._firestoreId)) && (
+                <div className="mt-3 p-3 bg-surface-container-high/60 border border-outline rounded-xl grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] uppercase font-bold text-on-surface-variant">Amount</label>
+                    <input
+                      type="number"
+                      value={receiptFormData.amountReceived}
+                      onChange={(e) => setReceiptFormData(prev => ({ ...prev, amountReceived: e.target.value }))}
+                      className="px-2 py-1.5 bg-surface-container rounded-lg text-xs border border-outline-variant"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] uppercase font-bold text-on-surface-variant">Method</label>
+                    <select
+                      value={receiptFormData.paymentMethod}
+                      onChange={(e) => setReceiptFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                      className="px-2 py-1.5 bg-surface-container rounded-lg text-xs border border-outline-variant"
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Card">Card</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] uppercase font-bold text-on-surface-variant">Date</label>
+                    <input
+                      type="date"
+                      value={receiptFormData.date}
+                      onChange={(e) => setReceiptFormData(prev => ({ ...prev, date: e.target.value }))}
+                      className="px-2 py-1.5 bg-surface-container rounded-lg text-xs border border-outline-variant"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isGeneratingReceipt}
+                      onClick={async () => {
+                        if (!onGenerateReceipt) return;
+                        setIsGeneratingReceipt(true);
+                        try {
+                          await onGenerateReceipt(selectedInvoice, receiptFormData);
+                          setShowReceiptForm(false);
+                        } finally {
+                          setIsGeneratingReceipt(false);
+                        }
+                      }}
+                      className="flex-1 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-60"
+                    >
+                      Confirm
+                    </button>
+                    <button type="button" onClick={() => setShowReceiptForm(false)} className="flex-1 py-1.5 bg-surface-container text-on-surface-variant rounded-lg text-xs font-bold cursor-pointer">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="h-full min-h-[350px] flex flex-col items-center justify-center border-2 border-dashed border-outline-variant/60 rounded-3xl text-on-surface-variant bg-surface-container/40 p-8 text-center">

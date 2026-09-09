@@ -185,7 +185,9 @@ export default function Deals({
   setLogisticsJobs,
   invoices = [],
   onSaveInvoice,
-  onMarkInvoicePaid
+  onMarkInvoicePaid,
+  receipts = [],
+  onGenerateReceipt
 }) {
   const [activeDeal, setActiveDeal] = useState(null);
   const [deleteDealId, setDeleteDealId] = useState(null);
@@ -680,6 +682,8 @@ export default function Deals({
           logisticsJobs={logisticsJobs}
           onCreateLogistics={handleCreateDeliveryJob}
           invoices={invoices}
+          receipts={receipts}
+          onGenerateReceipt={onGenerateReceipt}
           isDeal={true}
           onConvert={() => {
             // Conversion should ideally be hidden for active deals, but we provide a no-op just in case

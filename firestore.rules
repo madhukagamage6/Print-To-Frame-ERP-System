@@ -153,6 +153,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Receipts (payment-received records issued against paid invoices) ──
+    match /receipts/{receiptId} {
+      allow read: if checkPermission('receipts', 'view') || checkPermission('receipts', 'read')
+        || (isAuthenticated() && resource.data.customerId == request.auth.token.email)
+        || (isAuthenticated() && resource.data.partnerId == request.auth.token.email);
+      allow create, update: if checkPermission('receipts', 'create') || checkPermission('receipts', 'edit') || checkPermission('receipts', 'write');
+      allow delete: if isAdmin();
+    }
+
     // ── Customers ────────────────────────────────────────
     match /customers/{customerId} {
       allow read: if checkPermission('customers', 'view') || checkPermission('customers', 'read');

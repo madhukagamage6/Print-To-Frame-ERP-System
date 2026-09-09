@@ -33,6 +33,7 @@ export const COLLECTIONS = {
   PROJECTS: 'projects',
   LOGISTICS: 'logistics',
   INVOICES: 'invoices',
+  RECEIPTS: 'receipts',
   QUOTATIONS: 'quotations',
   MESSAGES: 'messages',
   AUDIT_LOG: 'auditLog',
@@ -270,4 +271,23 @@ export async function generateAtomicId(prefix, padLength = 4) {
 export async function generateInvoiceId(type) {
   const prefix = type === 'Final' ? 'INV-FIN' : 'INV-ADV';
   return generateAtomicId(prefix, 4);
+}
+
+/**
+ * Derives a receipt's id directly from the invoice it settles — a receipt
+ * for "INV-ADV-0007" is "REC-ADV-0007". Deliberately NOT generated via
+ * generateAtomicId/a counter: an independently-incremented receipt sequence
+ * would desync from invoice numbers the moment even one invoice or receipt
+ * is created out of lockstep with the other. Correctness here means
+ * "matches the invoice," not "next in a sequence."
+ * @param {string} invoiceId e.g. "INV-ADV-0007" or "INV-FIN-0002"
+ * @returns {string} e.g. "REC-ADV-0007" — or "REC-<invoiceId>" if the
+ *   invoice id doesn't match the expected INV-ADV/INV-FIN shape (an old,
+ *   pre-Phase-10 invoice id format), so this never throws on legacy data.
+ */
+export function deriveReceiptId(invoiceId) {
+  const id = String(invoiceId || '');
+  if (id.startsWith('INV-ADV-')) return `REC-ADV-${id.slice('INV-ADV-'.length)}`;
+  if (id.startsWith('INV-FIN-')) return `REC-FIN-${id.slice('INV-FIN-'.length)}`;
+  return `REC-${id}`;
 }

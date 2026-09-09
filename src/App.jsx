@@ -4,6 +4,7 @@ import {
   Target,
   Kanban,
   FileText,
+  Receipt,
   User,
   Users,
   Map,
@@ -29,7 +30,7 @@ import {
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
-import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId } from "./services/firestoreSync";
+import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId, deriveReceiptId } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
 import { toDateObj } from "./utils/dateUtils";
 import { UserAvatar } from "./components/common/ui";
@@ -39,6 +40,7 @@ const Dashboard = React.lazy(() => import("./components/dashboard/Dashboard"));
 const Leads = React.lazy(() => import("./components/crm/Leads"));
 const Deals = React.lazy(() => import("./components/crm/Deals"));
 const Invoices = React.lazy(() => import("./components/crm/Invoices"));
+const Receipts = React.lazy(() => import("./components/crm/Receipts"));
 const Customers = React.lazy(() => import("./components/crm/Customers"));
 const Partners = React.lazy(() => import("./components/crm/Partners"));
 const FabricationWorks = React.lazy(() => import("./components/operations/FabricationWorks"));
@@ -294,6 +296,7 @@ function App() {
   const [logisticsJobs, setLogisticsJobs] = useState(defaultLogistics);
   const [leads, setLeads] = useState(defaultLeads);
   const [invoices, setInvoices] = useState(defaultInvoices);
+  const [receipts, setReceipts] = useState([]);
   const [quotations, setQuotations] = useState([]);
   // Public "Apply as a Partner" submissions (src/components/public/PartnerRegistration.jsx).
   // Reviewed centrally in User Management (AgentDatabase.jsx) alongside self-registered
@@ -315,6 +318,7 @@ function App() {
     const unsubLogistics = subscribeToCollection(COLLECTIONS.LOGISTICS, setLogisticsJobs);
     const unsubLeads = subscribeToCollection(COLLECTIONS.LEADS, setLeads);
     const unsubInvoices = subscribeToCollection(COLLECTIONS.INVOICES, setInvoices);
+    const unsubReceipts = subscribeToCollection(COLLECTIONS.RECEIPTS, setReceipts);
     const unsubQuotations = subscribeToCollection(COLLECTIONS.QUOTATIONS, setQuotations);
     const unsubPartnerApplications = subscribeToCollection(COLLECTIONS.PARTNER_APPLICATIONS, setPartnerApplications);
 
@@ -325,6 +329,7 @@ function App() {
       unsubLogistics();
       unsubLeads();
       unsubInvoices();
+      unsubReceipts();
       unsubQuotations();
       unsubPartnerApplications();
     };
@@ -376,6 +381,57 @@ function App() {
     } catch (err) {
       console.error("Failed to save invoice to Firestore:", err);
       toast.error("Failed to save invoice to database: " + err.message);
+    }
+  };
+
+  // Receipts — a receipt is derived FROM a paid invoice, never independently
+  // generated. Its id is a direct string transform of the invoice's own id
+  // (deriveReceiptId), not an atomic counter, so it can never drift out of
+  // sync with the invoice it settles. Same hard-stop discipline as invoice
+  // generation: refuses to create a second receipt for the same invoice.
+  const handleGenerateReceipt = async (invoice, { amountReceived, paymentMethod, date, notes } = {}) => {
+    if (!invoice?.id && !invoice?._firestoreId) {
+      toast.error('Cannot generate a receipt: missing invoice reference.');
+      return;
+    }
+    const invoiceId = invoice.id || invoice._firestoreId;
+    if (receipts.some(r => r.invoiceId === invoiceId)) {
+      toast.error(`A receipt already exists for ${invoiceId}.`);
+      return;
+    }
+    const receiptId = deriveReceiptId(invoiceId);
+    try {
+      const cleanReceipt = {
+        id: receiptId,
+        invoiceId,
+        type: invoice.type || 'Advance',
+        leadId: invoice.leadId || '',
+        dealId: invoice.dealId || '',
+        originalLeadId: invoice.originalLeadId || '',
+        convertedDealId: invoice.convertedDealId || '',
+        customerName: invoice.customerName || 'Direct Customer',
+        company: invoice.company || '',
+        partnerId: invoice.partnerId || '',
+        amountReceived: Number(amountReceived ?? invoice.amount) || 0,
+        paymentMethod: paymentMethod || 'Cash',
+        date: date || new Date().toISOString().split('T')[0],
+        notes: notes || '',
+        createdBy: currentUser?.email || currentUser?.identifier || 'unknown',
+      };
+      await addDocument(COLLECTIONS.RECEIPTS, cleanReceipt, receiptId);
+      setReceipts(prev => [{ _firestoreId: receiptId, ...cleanReceipt }, ...prev]);
+      await logActivity(
+        currentUser?.email || currentUser?.identifier || 'unknown',
+        currentUser?.name || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Unknown'),
+        'RECEIPT_GENERATED',
+        'Receipts',
+        `Receipt ${receiptId} generated against invoice ${invoiceId} for ${cleanReceipt.customerName}. Amount: LKR ${cleanReceipt.amountReceived}`
+      );
+      toast.success(`Receipt ${receiptId} generated!`);
+      return cleanReceipt;
+    } catch (err) {
+      console.error("Failed to save receipt to Firestore:", err);
+      toast.error("Failed to save receipt to database: " + err.message);
     }
   };
 
@@ -1015,12 +1071,13 @@ function App() {
               )}
 
               {/* Databases Group */}
-              {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices')) && (
+              {(canAccess(currentUser?.role, 'customers') || canAccess(currentUser?.role, 'agents') || canAccess(currentUser?.role, 'partners') || canAccess(currentUser?.role, 'invoices') || canAccess(currentUser?.role, 'receipts')) && (
                 <NavGroup title="Databases" isOpen={navGroupsOpen.databases} onToggle={() => toggleGroup("databases")} collapsed={effectivelyCollapsed}>
                   {canAccess(currentUser?.role, 'customers') && <NavLink icon={User} label="Customers" id="customers" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
                   {canAccess(currentUser?.role, 'agents') && <NavLink icon={Users} label="User Management" id="agents" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
                   {canAccess(currentUser?.role, 'partners') && <NavLink icon={Building} label="Partners" id="partners" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
                   {canAccess(currentUser?.role, 'invoices') && <NavLink icon={FileText} label="Invoices" id="invoices" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
+                  {canAccess(currentUser?.role, 'receipts') && <NavLink icon={Receipt} label="Receipts" id="receipts" activeTab={activeTab} setActiveTab={setActiveTab} collapsed={effectivelyCollapsed} onNavigate={() => setMobileMenuOpen(false)} />}
                 </NavGroup>
               )}
 
@@ -1192,6 +1249,8 @@ function App() {
               setQuotations={setQuotations}
               onMarkInvoicePaid={handleMarkInvoicePaid}
               invoices={invoices}
+              receipts={receipts}
+              onGenerateReceipt={handleGenerateReceipt}
             />
           )}
 
@@ -1211,14 +1270,25 @@ function App() {
               quotations={quotations}
               onSaveInvoice={handleSaveInvoice}
               onMarkInvoicePaid={handleMarkInvoicePaid}
+              receipts={receipts}
+              onGenerateReceipt={handleGenerateReceipt}
             />
           )}
 
           {activeTab === "invoices" && canAccess(currentUser?.role, 'invoices') && (
-            <Invoices 
-              invoices={invoices} 
-              setInvoices={setInvoices} 
+            <Invoices
+              invoices={invoices}
+              setInvoices={setInvoices}
               onMarkPaid={handleMarkInvoicePaid}
+              currentUser={currentUser}
+              receipts={receipts}
+              onGenerateReceipt={handleGenerateReceipt}
+            />
+          )}
+
+          {activeTab === "receipts" && canAccess(currentUser?.role, 'receipts') && (
+            <Receipts
+              receipts={receipts}
               currentUser={currentUser}
             />
           )}

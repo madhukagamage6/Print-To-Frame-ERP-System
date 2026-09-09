@@ -51,6 +51,7 @@ const MODULE_CATEGORIES = [
     name: 'Databases & Tools',
     modules: [
       { id: 'invoices', label: 'Invoices', desc: 'Advance receipts & settlement billing ledger' },
+      { id: 'receipts', label: 'Receipts', desc: 'Payment-received records issued against paid invoices' },
       { id: 'partners', label: 'Partners', desc: 'Creative agencies & referral partners' },
       { id: 'calculator', label: 'Cost Calculator', desc: 'Algorithmic steel framing pricing & BOM' },
     ]

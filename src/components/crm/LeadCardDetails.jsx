@@ -4,7 +4,7 @@ import {
   Trash2, Play, Check, Calculator, MapPin, 
   FileSpreadsheet, Sparkles, Printer, Save, Clock,
   Music, Volume2, RefreshCw, CheckCircle2, AlertCircle, Loader2, Truck,
-  PhoneCall, Mic, Square, Radio, RotateCcw
+  PhoneCall, Mic, Square, Radio, RotateCcw, Receipt
 } from 'lucide-react';
 import { toast } from '../../utils/toast';
 import { calculateCost, determineTier } from '../../services/pricingEngine';
@@ -40,7 +40,9 @@ export default function LeadCardDetails({
   isDeal = false,
   logisticsJobs = [],
   onCreateLogistics,
-  invoices = []
+  invoices = [],
+  receipts = [],
+  onGenerateReceipt
 }) {
   const defaultFormData = {
     name: lead.name || '',
@@ -101,9 +103,40 @@ export default function LeadCardDetails({
     () => latestByCreatedAt(invoices.filter(inv => relatedRecordIds.includes(inv.leadId) && inv.type === 'Final')),
     [invoices, relatedRecordIds]
   );
+  const advanceReceipt = useMemo(
+    () => receipts.find(r => r.invoiceId === (advanceInvoice?.id || advanceInvoice?._firestoreId)) || null,
+    [receipts, advanceInvoice]
+  );
+  const finalReceipt = useMemo(
+    () => receipts.find(r => r.invoiceId === (finalInvoice?.id || finalInvoice?._firestoreId)) || null,
+    [receipts, finalInvoice]
+  );
 
   // UI state
   const [convertError, setConvertError] = useState('');
+  const [receiptFormFor, setReceiptFormFor] = useState(null); // 'advance' | 'final' | null
+  const [receiptFormData, setReceiptFormData] = useState({ amountReceived: 0, paymentMethod: 'Cash', date: new Date().toISOString().split('T')[0] });
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
+
+  const openReceiptForm = (kind, invoice) => {
+    setReceiptFormFor(kind);
+    setReceiptFormData({
+      amountReceived: Number(invoice?.amount) || 0,
+      paymentMethod: 'Cash',
+      date: new Date().toISOString().split('T')[0],
+    });
+  };
+
+  const submitReceiptForm = async (invoice) => {
+    if (!onGenerateReceipt || !invoice) return;
+    setIsGeneratingReceipt(true);
+    try {
+      await onGenerateReceipt(invoice, receiptFormData);
+      setReceiptFormFor(null);
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  };
 
   // AI Call Recording Analyzer states
   const [audioFile, setAudioFile] = useState(null);
@@ -1507,6 +1540,107 @@ export default function LeadCardDetails({
                   <p className="text-[9px] text-on-surface-variant/80 leading-snug pt-0.5">
                     Accept the quote and convert it to an invoice in the Line-Item Quote panel to enable payment tracking here.
                   </p>
+                )}
+
+                {/* Generate Receipt — only once the matching invoice is Paid.
+                    Hard stop: once a receipt exists for an invoice, show a
+                    static confirmation, never a re-clickable button — same
+                    pattern used for invoice re-generation in QuotationBuilder. */}
+                {(advanceInvoice?.status === 'Paid' || finalInvoice?.status === 'Paid') && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {advanceInvoice?.status === 'Paid' && (
+                      advanceReceipt ? (
+                        <div className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1">
+                          <Receipt size={11} className="flex-shrink-0" />
+                          <span>{advanceReceipt.id}</span>
+                        </div>
+                      ) : receiptFormFor === 'advance' ? (
+                        <div className="col-span-1 p-2 bg-surface-container-high/60 border border-outline rounded-xl space-y-1.5">
+                          <input
+                            type="number"
+                            value={receiptFormData.amountReceived}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, amountReceived: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                            placeholder="Amount"
+                          />
+                          <select
+                            value={receiptFormData.paymentMethod}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                          >
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Card">Card</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={receiptFormData.date}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, date: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                          />
+                          <div className="flex gap-1">
+                            <button type="button" disabled={isGeneratingReceipt} onClick={() => submitReceiptForm(advanceInvoice)} className="flex-1 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-bold cursor-pointer disabled:opacity-60">Confirm</button>
+                            <button type="button" onClick={() => setReceiptFormFor(null)} className="flex-1 py-1.5 bg-surface-container text-on-surface-variant rounded-lg text-[9px] font-bold cursor-pointer">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openReceiptForm('advance', advanceInvoice)}
+                          className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Receipt size={11} /> Generate Receipt
+                        </button>
+                      )
+                    )}
+                    {finalInvoice?.status === 'Paid' && (
+                      finalReceipt ? (
+                        <div className="py-2 bg-surface-container-high/50 text-emerald-400 border border-emerald-400/30 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 text-center px-1">
+                          <Receipt size={11} className="flex-shrink-0" />
+                          <span>{finalReceipt.id}</span>
+                        </div>
+                      ) : receiptFormFor === 'final' ? (
+                        <div className="col-span-1 p-2 bg-surface-container-high/60 border border-outline rounded-xl space-y-1.5">
+                          <input
+                            type="number"
+                            value={receiptFormData.amountReceived}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, amountReceived: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                            placeholder="Amount"
+                          />
+                          <select
+                            value={receiptFormData.paymentMethod}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                          >
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Card">Card</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={receiptFormData.date}
+                            onChange={(e) => setReceiptFormData(prev => ({ ...prev, date: e.target.value }))}
+                            className="w-full px-2 py-1 bg-surface-container rounded-lg text-[10px] border border-outline-variant"
+                          />
+                          <div className="flex gap-1">
+                            <button type="button" disabled={isGeneratingReceipt} onClick={() => submitReceiptForm(finalInvoice)} className="flex-1 py-1.5 bg-emerald-500 text-white rounded-lg text-[9px] font-bold cursor-pointer disabled:opacity-60">Confirm</button>
+                            <button type="button" onClick={() => setReceiptFormFor(null)} className="flex-1 py-1.5 bg-surface-container text-on-surface-variant rounded-lg text-[9px] font-bold cursor-pointer">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openReceiptForm('final', finalInvoice)}
+                          className="w-full py-2 bg-surface-container-highest/60 border border-outline hover:border-emerald-400/40 text-on-surface hover:text-emerald-400 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Receipt size={11} /> Generate Receipt
+                        </button>
+                      )
+                    )}
+                  </div>
                 )}
               </div>
             </div>
