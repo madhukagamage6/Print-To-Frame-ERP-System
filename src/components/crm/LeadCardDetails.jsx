@@ -23,6 +23,7 @@ import {
 } from '../common/ui';
 import QuotationBuilder from './QuotationBuilder';
 import { downsampleAudio } from '../../utils/audioProcessing';
+import { toDateObj } from '../../utils/dateUtils';
 
 export default function LeadCardDetails({ 
   lead, 
@@ -75,12 +76,28 @@ export default function LeadCardDetails({
     () => [lead.id, lead.originalLeadId, lead.convertedDealId].filter(Boolean),
     [lead.id, lead.originalLeadId, lead.convertedDealId]
   );
+  // A lead/deal used for repeated testing or re-quoting can end up with
+  // MORE THAN ONE Advance (or Final) invoice on file — nothing here (or
+  // anywhere else this session) prevents creating a second one. .find()
+  // returns whichever happens to be first in Firestore's snapshot order,
+  // which is not guaranteed to be creation order — that's exactly what let
+  // a stale, previously-generated invoice number print instead of the
+  // one just created. Always take the most recently created match.
+  const latestByCreatedAt = (candidates) => {
+    if (candidates.length <= 1) return candidates[0] || null;
+    return candidates.reduce((latest, inv) => {
+      if (!latest) return inv;
+      const latestTime = toDateObj(latest.createdAt)?.getTime() ?? -Infinity;
+      const invTime = toDateObj(inv.createdAt)?.getTime() ?? -Infinity;
+      return invTime > latestTime ? inv : latest;
+    }, null);
+  };
   const advanceInvoice = useMemo(
-    () => invoices.find(inv => relatedRecordIds.includes(inv.leadId) && inv.type !== 'Final'),
+    () => latestByCreatedAt(invoices.filter(inv => relatedRecordIds.includes(inv.leadId) && inv.type !== 'Final')),
     [invoices, relatedRecordIds]
   );
   const finalInvoice = useMemo(
-    () => invoices.find(inv => relatedRecordIds.includes(inv.leadId) && inv.type === 'Final'),
+    () => latestByCreatedAt(invoices.filter(inv => relatedRecordIds.includes(inv.leadId) && inv.type === 'Final')),
     [invoices, relatedRecordIds]
   );
 
@@ -659,7 +676,13 @@ export default function LeadCardDetails({
       day: 'numeric', month: 'long', year: 'numeric'
     });
 
-    const activeQuote = (allQuotations || []).find(q => relatedRecordIds.includes(q.leadId) || q.leadId === lead._firestoreId);
+    // Same "pick the newest, not just the first array match" fix as
+    // advanceInvoice/finalInvoice above — multiple quote versions can exist
+    // for the same lead, and .find() isn't guaranteed to land on the latest.
+    const matchingQuotes = (allQuotations || []).filter(q => relatedRecordIds.includes(q.leadId) || q.leadId === lead._firestoreId);
+    const activeQuote = matchingQuotes.length <= 1
+      ? (matchingQuotes[0] || null)
+      : matchingQuotes.reduce((latest, q) => (Number(q.version) || 0) > (Number(latest.version) || 0) ? q : latest);
     const lineItemsToPrint = activeQuote?.lineItems && activeQuote.lineItems.length > 0 ? activeQuote.lineItems : null;
 
     const html = `

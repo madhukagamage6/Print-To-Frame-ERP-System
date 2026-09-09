@@ -31,6 +31,7 @@ import { initAuth, logout, emailLogin, emailRegister, db } from "./services/fire
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
 import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
+import { toDateObj } from "./utils/dateUtils";
 import { UserAvatar } from "./components/common/ui";
 
 // Components
@@ -415,8 +416,21 @@ function App() {
       // logistics jobs tied to a converted deal.
       const relatedIds = new Set([leadId, targetLead?.originalLeadId, targetLead?.convertedDealId].filter(Boolean));
       const siblingInvoices = invoices.filter(inv => relatedIds.has(inv.leadId));
-      const advanceInvoice = siblingInvoices.find(inv => inv.type !== 'Final');
-      const finalInvoice = siblingInvoices.find(inv => inv.type === 'Final');
+      // A lead/deal can end up with more than one Advance (or Final) invoice
+      // on file (repeated testing, re-quoting, nothing enforces uniqueness) —
+      // .find() would return whichever happens to be first in Firestore's
+      // snapshot order, not necessarily the real current one. Picking a
+      // stale invoice here can wrongly flip isFullyPaid (e.g. an old,
+      // already-Paid Advance masking a genuinely-unpaid current one), so
+      // always take the most recently created match.
+      const latestByCreatedAt = (candidates) => candidates.reduce((latest, inv) => {
+        if (!latest) return inv;
+        const latestTime = toDateObj(latest.createdAt)?.getTime() ?? -Infinity;
+        const invTime = toDateObj(inv.createdAt)?.getTime() ?? -Infinity;
+        return invTime > latestTime ? inv : latest;
+      }, null);
+      const advanceInvoice = latestByCreatedAt(siblingInvoices.filter(inv => inv.type !== 'Final'));
+      const finalInvoice = latestByCreatedAt(siblingInvoices.filter(inv => inv.type === 'Final'));
       const paidNow = (inv) => !inv ? false : ((inv._firestoreId || inv.id) === invDocId ? true : inv.status === 'Paid');
       const isFullyPaid = Boolean(advanceInvoice) && Boolean(finalInvoice) && paidNow(advanceInvoice) && paidNow(finalInvoice);
       const isAdvance = targetInvoice.type !== 'Final';

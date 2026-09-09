@@ -6,6 +6,7 @@
  */
 
 import { matchesEntity } from './entityUtils';
+import { toDateObj } from './dateUtils';
 
 export const FLEET_VEHICLES = [
   { id: 'lorry_ge1234', name: 'Lorry (WP GE 1234)', type: 'Lorry', capacity: '14.5ft Bed' },
@@ -173,9 +174,19 @@ export function calculateCODFromInvoices(invoices = [], linkedJobNo = '', custom
     });
   }
 
-  // Identify Advance vs Final invoices
-  const advanceInvoice = matched.find(inv => inv.type === 'Advance' || String(inv.id || '').includes('INV-ADV')) || null;
-  const finalInvoice = matched.find(inv => inv.type === 'Final' || String(inv.id || '').includes('INV-FIN')) || null;
+  // Identify Advance vs Final invoices. More than one of either type can
+  // exist for the same job/lead (repeated testing, re-quoting — nothing
+  // enforces uniqueness), so pick the most recently created match rather
+  // than whichever happens to be first in Firestore's snapshot order —
+  // otherwise a driver's COD screen can show a stale, superseded invoice.
+  const latestByCreatedAt = (candidates) => candidates.reduce((latest, inv) => {
+    if (!latest) return inv;
+    const latestTime = toDateObj(latest.createdAt)?.getTime() ?? -Infinity;
+    const invTime = toDateObj(inv.createdAt)?.getTime() ?? -Infinity;
+    return invTime > latestTime ? inv : latest;
+  }, null);
+  const advanceInvoice = latestByCreatedAt(matched.filter(inv => inv.type === 'Advance' || String(inv.id || '').includes('INV-ADV')));
+  const finalInvoice = latestByCreatedAt(matched.filter(inv => inv.type === 'Final' || String(inv.id || '').includes('INV-FIN')));
 
   const unpaidInvoices = matched.filter(inv => {
     const status = String(inv.status || 'Unpaid').toLowerCase();
