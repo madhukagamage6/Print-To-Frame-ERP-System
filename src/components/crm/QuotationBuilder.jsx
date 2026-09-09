@@ -5,6 +5,7 @@ import { generateStructuredQuotation } from '../../services/gemini';
 import { addDocument, updateDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import GoogleDrivePickerModal from '../common/GoogleDrivePickerModal';
 import { ModalWrapper } from '../common/ui';
+import { matchesEntity } from '../../utils/entityUtils';
 
 // WhatsApp renders *text* as bold and _text_ as italic client-side — this
 // converts those same markers to HTML purely for the in-app chat-bubble
@@ -20,9 +21,9 @@ function whatsAppMarkupToHtml(text) {
 
 const STATUS_STYLES = {
   Draft: 'text-on-surface-variant bg-surface-container-high border-outline-variant',
-  Sent: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  Accepted: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-  Rejected: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+  Sent: 'text-status-ready-on bg-status-ready/10 border-status-ready/30',
+  Accepted: 'text-status-success-on bg-status-success/10 border-status-success/30',
+  Rejected: 'text-status-danger-on bg-status-danger/10 border-status-danger/30',
   Invoiced: 'text-primary bg-primary/10 border-primary/30',
 };
 
@@ -48,9 +49,9 @@ export default function QuotationBuilder({ lead, allQuotations = [], onSaveInvoi
   // originalLeadId or it looks like no quote was ever made for this deal.
   const leadQuotes = useMemo(() =>
     (allQuotations || [])
-      .filter(q => q.leadId === lead.id || q.leadId === lead._firestoreId || q.leadId === lead.originalLeadId)
+      .filter(q => matchesEntity(q, lead))
       .sort((a, b) => (Number(b.version) || 1) - (Number(a.version) || 1)),
-    [allQuotations, lead.id, lead._firestoreId, lead.originalLeadId]
+    [allQuotations, lead]
   );
 
   const latestQuote = leadQuotes[0] || null;

@@ -126,11 +126,11 @@ export default function AdminPanel({ dataStore, currentUser }) {
                 </div>
                 <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
                   <span className="text-on-surface-variant">Unpaid Receivables</span>
-                  <span className="font-mono font-bold text-rose-400">LKR {invoicedGap.toLocaleString()}</span>
+                  <span className="font-mono font-bold text-status-danger-on">LKR {invoicedGap.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-surface-container-low rounded-xl border border-outline-variant/40">
                   <span className="text-on-surface-variant">Framing Commission Accruals</span>
-                  <span className="font-mono font-bold text-amber-400">LKR {partnerOwed.toLocaleString()}</span>
+                  <span className="font-mono font-bold text-status-warning-on">LKR {partnerOwed.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -174,7 +174,7 @@ export default function AdminPanel({ dataStore, currentUser }) {
               <HardDrive size={14} className="text-primary" />
               Database Collection Collections & Data Exports
             </span>
-            <span className="text-[10px] text-emerald-400 font-bold uppercase">Firestore Healthy</span>
+            <span className="text-[10px] text-status-success-on bg-status-success/15 px-2 py-0.5 rounded-full border border-status-success/30 font-bold uppercase">Firestore Healthy</span>
           </div>
 
           <div className="divide-y divide-outline-variant/30 text-xs">

@@ -11,8 +11,8 @@ import {
   Shield,
   ChevronRight,
 } from "lucide-react";
-import { CircleCheckBig } from "lucide-react"; // mapped to dt
 import { pricingTiers, calculateCost, determineTier } from "../../services/pricingEngine";
+import { PageHeader } from "../common/ui";
 
 const ct = (val) => {
   if (val === undefined || val === null) return "—";
@@ -114,32 +114,20 @@ const CostCalculator = () => {
   const tierInfo = pricingTiers[activeTier] || {};
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col overflow-y-auto custom-scrollbar pb-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mb-1">
-            Cost Calculator
-          </h1>
-          <p className="text-on-surface-variant text-sm">
-            Algorithmic steel framing pricing, BOM estimation, QA, and margin calculator.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 bg-surface-container px-4 py-3 rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] self-start">
-          <div className="flex flex-col mr-3 border-r border-outline-variant pr-3">
-            <MetricLabel>Active Tier</MetricLabel>
-            <span className="text-sm font-extrabold text-primary">
-              {tierInfo.range || "—"}
-            </span>
-          </div>
-          <div className="p-2 bg-primary/20 text-primary rounded-xl">
-            <Layers size={16} />
-          </div>
-        </div>
-      </div>
+    <div className="min-h-[calc(100vh-140px)] flex flex-col pb-8">
+      <PageHeader
+        title="Cost Calculator"
+        subtitle="Algorithmic steel framing pricing, BOM estimation, QA, and margin calculator."
+        metrics={[
+          { label: "Active Tier", value: tierInfo.range || "—", color: "cyan" },
+          { label: "Base Rate / SqFt", value: `Rs. ${(tierInfo.rate || 0).toLocaleString()}`, color: "emerald" },
+          { label: "Calculated Area", value: `${sqFt} SqFt`, color: "purple" }
+        ]}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
         {/* Job Config Card */}
-        <div className="lg:col-span-8 bg-surface-container rounded-2xl border border-outline-variant shadow-[0_4px_20px_rgba(0,218,243,0.05)] p-6">
+        <div className="lg:col-span-8 bg-surface-container rounded-2xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2.5 bg-primary text-on-primary rounded-xl">
               <Ruler size={18} />
@@ -242,7 +230,7 @@ const CostCalculator = () => {
       {sqFt > 0 && pricing.finalAmount !== undefined ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Client Quotation Breakdown */}
-          <div className="bg-surface-container rounded-2xl border border-outline-variant border-t-4 border-t-primary shadow-[0_4px_20px_rgba(0,218,243,0.05)] overflow-hidden flex flex-col">
+          <div className="bg-surface-container rounded-2xl border border-outline-variant border-t-4 border-t-primary shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
             <div className="p-6 pb-4 border-b border-outline-variant/50">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -336,7 +324,7 @@ const CostCalculator = () => {
 
           {/* Internal Profit Analysis */}
           <div className="flex flex-col gap-4">
-            <div className="bg-surface-container rounded-2xl border border-outline-variant border-t-4 border-t-secondary shadow-[0_4px_20px_rgba(0,218,243,0.05)] overflow-hidden flex flex-col">
+            <div className="bg-surface-container rounded-2xl border border-outline-variant border-t-4 border-t-secondary shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
               <div className="p-6 pb-4 border-b border-outline-variant/50">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -426,7 +414,7 @@ const CostCalculator = () => {
             </div>
 
             {/* Explanatory Info Card */}
-            <div className="bg-primary/10 rounded-2xl border border-primary/30 p-4 flex items-start gap-3 shadow-[0_4px_20px_rgba(0,218,243,0.05)]">
+            <div className="bg-primary/10 rounded-2xl border border-primary/30 p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow">
               <div className="p-2 bg-primary/100 text-on-surface rounded-xl shrink-0">
                 <Info size={15} />
               </div>
