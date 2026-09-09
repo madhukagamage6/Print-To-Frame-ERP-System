@@ -31,7 +31,7 @@ import DeleteModal from '../common/DeleteModal';
 import FrameBlueprintPreview from '../common/FrameBlueprintPreview';
 import FabricationCardDetails from './FabricationCardDetails';
 import { PageHeader, FilterBar, StatusBadge, KanbanColumn, KanbanCard, ModalWrapper } from '../common/ui';
-import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import { stripEmojis, sanitizeTechnicalScope } from '../../utils/validation';
 
 const STAGES = ["Pending", "Ongoing", "Ready For Inspection", "Revision", "Completed"];
@@ -371,6 +371,23 @@ export default function FabricationWorks({
     let nextStatusStr = null;
     const now = new Date().toISOString();
 
+    // Firestore's atomic ID generator is async, so it must be resolved
+    // BEFORE entering the synchronous setProjects updater below — decide
+    // here, outside the updater, whether this move will complete the job
+    // and needs an invoice number.
+    const jobBeingMoved = projects.find(j => j.jobNo === jobNo);
+    const willComplete = jobBeingMoved
+      && STAGES[STAGES.indexOf(jobBeingMoved.status || "Pending") + 1] === "Completed"
+      && (Number(jobBeingMoved.value) || 0) > 0;
+    let finalInvId = null;
+    if (willComplete && onSaveInvoice) {
+      try {
+        finalInvId = await generateInvoiceId('Final');
+      } catch (err) {
+        toast.error('Failed to generate an invoice number: ' + err.message);
+      }
+    }
+
     setProjects(
       projects.map((job) => {
         if (job.jobNo !== jobNo) return job;
@@ -380,8 +397,8 @@ export default function FabricationWorks({
           updatedJobObj = { ...job, status: nextStatusStr, stageEnteredAt: now };
 
           // Item 17: Auto-linkage from Completed Job to Final 25% Invoice
-          if (nextStatusStr === "Completed" && onSaveInvoice && (Number(job.value) || 0) > 0) {
-            const invId = `FIN-${String(Date.now()).slice(-6)}`;
+          if (nextStatusStr === "Completed" && onSaveInvoice && finalInvId && (Number(job.value) || 0) > 0) {
+            const invId = finalInvId;
             const cust = customers?.find(c => c.nic === job.clientNIC);
             const custName = cust?.name || cust?.businessName || job.customerName || "Direct Customer";
             

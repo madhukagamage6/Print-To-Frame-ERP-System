@@ -139,6 +139,13 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
 
+    // ── Sequential-ID counters (e.g. invoice numbering) ──────
+    // Holds only a single incrementing integer per prefix — no business
+    // data — written via a Firestore transaction from generateInvoiceId().
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // ── Invoices ─────────────────────────────────────────
     match /invoices/{invoiceId} {
       allow read: if checkPermission('invoices', 'view') || checkPermission('invoices', 'read') || (isAuthenticated() && resource.data.customerId == request.auth.token.email) || (isAuthenticated() && resource.data.partnerId == request.auth.token.email);

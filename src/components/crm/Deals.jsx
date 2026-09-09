@@ -8,7 +8,7 @@ import DeleteModal from '../common/DeleteModal';
 import LeadCardDetails from './LeadCardDetails';
 import { PageHeader, FilterBar, KanbanColumn, KanbanCard, StatusBadge } from '../common/ui';
 import SortableTable from '../common/ui/SortableTable';
-import { addDocument, updateDocument, deleteDocument, COLLECTIONS } from '../../services/firestoreSync';
+import { addDocument, updateDocument, deleteDocument, COLLECTIONS, generateInvoiceId } from '../../services/firestoreSync';
 import { exportToCsv } from '../../utils/csvExport';
 
 const DEALS_STAGES = ["Waiting", "Fabricating", "Ready To Load", "Hand Over", "Completed"];
@@ -259,6 +259,21 @@ export default function Deals({
     let nextStageStr = null;
     const now = new Date().toISOString();
 
+    // Firestore's atomic ID generator is async, so it must be resolved
+    // BEFORE entering the synchronous setLeads updater below — decide here,
+    // outside the updater, whether this move will complete the deal.
+    const dealBeingMoved = leads.find(d => d.id === dealId);
+    const willComplete = dealBeingMoved
+      && DEALS_STAGES[DEALS_STAGES.indexOf(dealBeingMoved.stage) + 1] === "Completed";
+    let finalInvId = null;
+    if (willComplete && onSaveInvoice) {
+      try {
+        finalInvId = await generateInvoiceId('Final');
+      } catch (err) {
+        toast.error('Failed to generate an invoice number: ' + err.message);
+      }
+    }
+
     setLeads(prev => prev.map(deal => {
       if (deal.id === dealId) {
         const currentIndex = DEALS_STAGES.indexOf(deal.stage);
@@ -266,11 +281,11 @@ export default function Deals({
           const nextStage = DEALS_STAGES[currentIndex + 1];
           nextStageStr = nextStage;
           updatedDealObj = { ...deal, stage: nextStage, stageEnteredAt: now };
-          
+
           // Commission trigger: If next stage is Completed, calculate agent commission
           if (nextStage === "Completed") {
-            if (onSaveInvoice) {
-              const invId = `FIN-${String(Date.now()).slice(-6)}`;
+            if (onSaveInvoice && finalInvId) {
+              const invId = finalInvId;
               const linkedQuote = (quotations || []).find(q => q.leadId === deal.id || q.leadId === deal.originalLeadId);
               const finalAmount = (deal.value || 0) * 0.25;
               onSaveInvoice({

@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { initAuth, logout, emailLogin, emailRegister, db } from "./services/firebase";
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, onSnapshot } from "firebase/firestore";
-import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS } from "./services/firestoreSync";
+import { subscribeToCollection, addDocument, updateDocument, batchWrite, COLLECTIONS, generateInvoiceId } from "./services/firestoreSync";
 import { toast } from "./utils/toast";
 import { UserAvatar } from "./components/common/ui";
 
@@ -332,7 +332,7 @@ function App() {
   // Invoices Firestore Sync Handlers
   const handleSaveInvoice = async (invoiceData) => {
     try {
-      const docId = invoiceData.id || `INV-${String(Date.now()).slice(-6)}`;
+      const docId = invoiceData.id || await generateInvoiceId(invoiceData.type === 'Final' ? 'Final' : 'Advance');
       const cleanInvoice = {
         ...invoiceData,
         id: docId,
