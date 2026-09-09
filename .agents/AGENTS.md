@@ -21,5 +21,6 @@ Whenever the user asks to "save this as an artifact" or generate a document/repo
 ## Clarifications & Ambiguity Resolution
 1. Whenever there is uncertainty, ambiguity, or missing detail in requirements or technical direction:
    - Ask the question directly in the conversation chat.
-   - STOP and wait for the user's response and clarification instead of guessing or making assumptions.
+   - Always provide your own recommendations, proposed options, or technical thoughts alongside the questions so the user can review and consider them.
+   - STOP and wait for the user's response and decision instead of guessing or making assumptions.
    - Getting clarity upfront is always preferred over making assumptions and having to revise code after implementation.
